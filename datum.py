@@ -27,8 +27,8 @@
      osd = datum.DatumFromName ('Ordnance Survey of Great Britain 36')
      print osd.toWGS84deg(12.3,54.3) 
 
-   (c) Quentin Stafford-Fraser <quentin@uk.research.att.com>
-       AT&T Laboratories Cambridge 2001
+   (c) 2003 Quentin Stafford-Fraser <www.qandr.org/quentin>
+       
    Partly derived from some python code by Joseph Newman
    which in turn came from C code by Alan Jones
 

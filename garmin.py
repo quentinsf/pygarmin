@@ -22,7 +22,7 @@
    For the latest information about PyGarmin, please see
    http://pygarmin.sourceforge.net/
 
-   (c) 2001 Quentin Stafford-Fraser <quentin@uk.research.att.com>
+   (c) 2003 Quentin Stafford-Fraser <www.qandr.org/quentin>
    (c) 2000 James A. H. Skillen <jahs@jahs.net>
    (c) 2001 Raymond Penners <raymond@dotsphinx.com>
    (c) 2001 Tom Grydeland <Tom.Grydeland@phys.uit.no>

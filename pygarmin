@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 """
-   app
+   pygarmin
 
-   This is a user application for communicating with Garmin GPS receivers.
+   This is a console user application for communicating with Garmin
+   GPS receivers.
 
    This is released under the Gnu General Public Licence. A copy of
    this can be found at http://www.opensource.org/licenses/gpl-license.html
@@ -13,8 +14,6 @@
    (c) 2000 James A. H. Skillen <jahs@skillen.org.uk>
    
 """
-
-# Need a better name for this!
 
 import garmin, os, sys, getopt, string
 
@@ -84,12 +83,16 @@ class GarminApp(GnuApp):
         self.opts = {"i" : ("info        ", "", "Show product information"),
                      "p" : ("protocols   ", "", "Show product communication protocols"),
                      "h" : ("help        ", "", "This page"),
-                     "w" : ("getwaypoints", "", "Download waypoints from the GPS")}
+                     "w" : ("getwaypoints", "", "Download waypoints from the GPS"),
+                     "r" : ("getroutes   ", "", "Download routes from the GPS"),
+                     "t" : ("gettracks   ", "", "Download tracks from the GPS")}
 
         self.longopts = {"info" : "i",
                          "protocols" : "p",
                          "help" : "h",
-                         "getwaypoints": "w"}
+                         "getwaypoints": "w",
+                         "getroutes" : "r",
+                         "gettracks" : "t"}
 
         self.usage = "Usage: %s [OPTIONS] DEVICE" % sys.argv[0]
         self.description = "Communicate with a Garmin GPS connected to DEVICE."
@@ -139,6 +142,24 @@ class GarminApp(GnuApp):
         ws = self.gps.getWaypoints()
         for w in ws:
             print w
+        print
+
+    def getroutes(self, arg):
+        print "*** Downloaded Routes ***"
+        rs = self.gps.getRoutes()
+        for r in rs:
+            for pt in r:
+                print pt
+            print
+        print
+
+    def gettracks(self, arg):
+        print "*** Downloaded Tracks ***"
+        ts = self.gps.getTracks()
+        for t in ts:
+            for pt in t:
+                print pt
+            print
         print
 
 def main():

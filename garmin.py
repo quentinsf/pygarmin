@@ -239,8 +239,8 @@ class A001:
       protocols = []
       for i in range(0, 2*num, 2):
          protocols.append(tup[i]+"%03d"%tup[i+1])
-      if debug:
-         print protocols
+      if debug > 0:
+         print "protocols reported by A001:", protocols
       return protocols
       
 # Commands  ---------------------------------------------------
@@ -478,6 +478,11 @@ class Waypoint(DataPoint):
                                                  degrees(self.slat),
                                                  degrees(self.slon),
                                                  id(self))
+
+   def __str__(self):
+      return "%s (%3.5f, %3.5f)" % (self.ident,
+                                    degrees(self.slat),
+                                    degrees(self.slon))
    
 class D100(Waypoint):
    pass
@@ -972,10 +977,15 @@ class SerialLink(P000):
       are available."""
       
       buffer = []
+      c = 0
       while len(buffer) != n:
          data = self.f.read(n-len(buffer))
          map(buffer.append, data)
-      return string.join(buffer, "")
+         c = c + 1
+      data = string.join(buffer, "")
+      if debug > 1:
+         print "read() called", c, "times, returning", repr(data)
+      return data
 
    def write(self, data):
       self.f.write(data)

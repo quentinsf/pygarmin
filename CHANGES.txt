@@ -1,5 +1,7 @@
 PyGarmin Change Log
 
+Added a datum-conversion module.
+
 Added Raymond Penners' Win32SerialLink stuff and timeout stuff
 
 0.4

@@ -1421,7 +1421,8 @@ class SerialLink(P000):
 
    def close(self):
       """Close the serial port"""
-      self.ser.close()
+      if "ser" in self.__dict__:
+         self.ser.close()
 
 class Garmin:
    """

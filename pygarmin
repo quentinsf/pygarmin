@@ -120,13 +120,20 @@ The default command is to display the product information.
 
         for cmd in self.args:
             if cmd in ('info', 'protocols', 'waypoints', 'routes', 'tracks'):
-                self.__getattribute__(cmd)()
+                try:
+                    getattr(self, cmd)()
+                except:
+                    c, e = sys.exc_info()[0:2]
+                    print "%s: %s" % (c, e)
+                    sys.exit(-1)
 
     def device(self, arg):
-        links = {'posix' : garmin.UnixSerialLink,
-                 'nt' : garmin.Win32SerialLink}
-        phys = links[os.name](arg)
-        self.gps = garmin.Garmin(phys)
+        try:
+            self.gps = garmin.Garmin(garmin.SerialLink(arg))
+        except:
+            c, e = sys.exc_info()[0:2]
+            print "%s: %s" % (c, e)
+            sys.exit(-1)
 
 ### commands
 

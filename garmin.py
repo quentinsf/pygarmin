@@ -1403,7 +1403,8 @@ class UnixSerialLink(SerialLink):
       return string.join(data,'')
 
    def __del__(self):
-      self.f.close()
+      if self.__dict__.has_key("f"):
+         self.f.close()
 
 # Win32 Serial Link ==================================================
 

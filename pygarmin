@@ -13,7 +13,7 @@
 
    (c) 2000 James A. H. Skillen <jahs@skillen.org.uk>
    (c) 2001 Raymond Penners <raymond@dotsphinx.com>
-   
+
 """
 
 import garmin, os, sys, getopt, string, xmlwriter
@@ -126,8 +126,12 @@ class Pygarmin(GnuApp):
     def device(self, arg):
         links = {"posix" : garmin.UnixSerialLink,
                  "nt" : garmin.Win32SerialLink}
-        phys = links[os.name](arg)
-        self.gps = garmin.Garmin(phys)
+        try:
+            phys = links[os.name](arg)
+            self.gps = garmin.Garmin(phys)
+        except IOError:
+            print sys.exc_info()[1]
+            sys.exit(1)
 
     def protocols(self, arg):
         print "*** Product Protocols ***"
@@ -155,11 +159,11 @@ class Pygarmin(GnuApp):
                       'xml-abstract': FORMAT_XML_ABSTRACT,
                       'pygarmin': FORMAT_PYGARMIN}
             val = self.options['-f']
-            fmt = fmtmap[val]                        
+            fmt = fmtmap[val]
         else:
             fmt = FORMAT_PYGARMIN
         return fmt
-        
+
     def getwaypoints(self, arg):
         fmt = self.getformat()
         if fmt == FORMAT_XML_PRODUCT:
@@ -175,7 +179,7 @@ class Pygarmin(GnuApp):
         for w in ws:
             print w
         print
-       
+
     def getwaypointsxmlproduct(self):
         x = xmlwriter.XmlWriter()
         ws = self.gps.getWaypoints()

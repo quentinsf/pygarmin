@@ -510,6 +510,15 @@ class Waypoint(DataPoint):
       return "%s (%3.5f, %3.5f)" % (self.ident,
                                     degrees(self.slat),
                                     degrees(self.slon))
+
+   def getDict(self):
+   self.data = {'name': self.ident,
+                'comment': self.cmnt,
+                'latitude': self.slat,
+                'longitude': self.slon
+                }
+   return self.data
+
    
 class D100(Waypoint):
    pass
@@ -520,17 +529,110 @@ class D101(Waypoint):
    dst = 0.0                  # proximity distance (m)
    smbl = 0                   # symbol_type id (0-255)
 
+   def __init__(self, ident="", slat=0L, slon=0L, cmnt="", dst=0L, smbl=0L):
+      self.ident = ident         # text identidier (upper case)
+      self.slat = slat           # lat & long in semicircle terms
+      self.slon = slon       
+      self.cmnt = cmnt           # comment (must be upper case)
+      self.unused = 0L
+      self.dst = dst
+      self.smbl = smbl
+      self.data = {}
+
+   def __repr__(self):
+      return "<Waypoint %s (%3.5f, %3.5f) (at %x)>" % (self.ident,
+                                                       degrees(self.slat),
+                                                       degrees(self.slon),
+                                                       id(self))
+
+   def __str__(self):
+      return "%s (%3.5f, %3.5f)" % (self.ident,
+                                    degrees(self.slat),
+                                    degrees(self.slon))
+
+   def getDict(self):
+      self.data = {'name': self.ident,
+                   'comment': stripnull(self.cmnt),
+                   'latitude': self.slat,
+                   'longitude': self.slon,
+                   'distance': self.dst,
+                   'symbol': self.smbl, 
+                   }
+      return self.data
+
 class D102(Waypoint):
    parts = Waypoint.parts + ("dst", "smbl")
    fmt = "< 6s l l L 40s f h"
    dst = 0.0                  # proximity distance (m)
    smbl = 0                   # symbol_type id
 
+   def __init__(self, ident="", slat=0L, slon=0L, cmnt="", dst=0L, smbl=0L):
+      self.ident = ident         # text identidier (upper case)
+      self.slat = slat           # lat & long in semicircle terms
+      self.slon = slon       
+      self.cmnt = cmnt           # comment (must be upper case)
+      self.unused = 0L
+      self.dst = dst
+      self.smbl = smbl
+      self.data = {}
+
+   def __repr__(self):
+      return "<Waypoint %s (%3.5f, %3.5f) (at %x)>" % (self.ident,
+                                                       degrees(self.slat),
+                                                       degrees(self.slon),
+                                                       id(self))
+
+   def __str__(self):
+      return "%s (%3.5f, %3.5f)" % (self.ident,
+                                    degrees(self.slat),
+                                    degrees(self.slon))
+
+   def getDict(self):
+      self.data = {'name': self.ident,
+                   'comment': stripnull(self.cmnt),
+                   'latitude': self.slat,
+                   'longitude': self.slon,
+                   'distance': self.dst,
+                   'symbol': self.smbl
+                   }
+      return self.data
+
 class D103(Waypoint):
    parts = Waypoint.parts + ("smbl","dspl")
    fmt = "<6s l l L 40s b b"
    smbl = 0                   # D103 symbol id
    dspl = 0                   # D103 display option
+
+   def __init__(self, ident="", slat=0L, slon=0L, cmnt="", dspl=0L, smbl=0L):
+      self.ident = ident         # text identidier (upper case)
+      self.slat = slat           # lat & long in semicircle terms
+      self.slon = slon       
+      self.cmnt = cmnt           # comment (must be upper case)
+      self.unused = 0L
+      self.dspl = dspl
+      self.smbl = smbl
+      self.data = {}
+
+   def __repr__(self):
+      return "<Waypoint %s (%3.5f, %3.5f) (at %x)>" % (self.ident,
+                                                       degrees(self.slat),
+                                                       degrees(self.slon),
+                                                       id(self))
+
+   def __str__(self):
+      return "%s (%3.5f, %3.5f)" % (self.ident,
+                                    degrees(self.slat),
+                                    degrees(self.slon))
+
+   def getDict(self):
+      self.data = {'name': self.ident,
+                   'comment': stripnull(self.cmnt),
+                   'latitude': self.slat,
+                   'longitude': self.slon,
+                   'display': self.dspl,
+                   'symbol': self.smbl
+                   }
+      return self.data
    
 class D104(Waypoint):
    parts = Waypoint.parts + ("dst", "smbl", "dspl")
@@ -539,10 +641,69 @@ class D104(Waypoint):
    smbl = 0                   # symbol_type id
    dspl = 0                   # D104 display option
 
+   def __init__(self, ident="", slat=0L, slon=0L, cmnt="",
+                dst=0L, smbl=0L, dspl=0L):
+      self.ident = ident         # text identidier (upper case)
+      self.slat = slat           # lat & long in semicircle terms
+      self.slon = slon       
+      self.cmnt = cmnt           # comment (must be upper case)
+      self.unused = 0L
+      self.dst = dst             # proximity distance (m)
+      self.smbl = smbl           # symbol_type id
+      self.dspl = dspl           # D104 display option
+
+   def __repr__(self):
+      return "<Waypoint %s (%3.5f, %3.5f) (at %x)>" % (self.ident,
+                                                       degrees(self.slat),
+                                                       degrees(self.slon),
+                                                       id(self))
+
+   def __str__(self):
+      return "%s (%3.5f, %3.5f)" % (self.ident,
+                                    degrees(self.slat),
+                                    degrees(self.slon))
+
+   def getDict(self):
+      self.data = {'name': self.ident,
+                   'comment': stripnull(self.cmnt),
+                   'latitude': self.slat,
+                   'longitude': self.slon,
+                   'distance': self.dst,
+                   'symbol': self.smbl, 
+                   'display': self.dspl
+                   }
+      return self.data
+
 class D105(Waypoint):
    parts = ("slat", "slon", "smbl", "ident")
    fmt = "<l l h s"
    smbl = 0
+
+   def __init__(self, ident="", slat=0L, slon=0L, smbl=0L):
+      self.ident = ident         # text identidier (upper case)
+      self.slat = slat           # lat & long in semicircle terms
+      self.slon = slon       
+      self.unused = 0L
+      self.smbl = smbl
+
+   def __repr__(self):
+      return "<Waypoint %s (%3.5f, %3.5f) (at %x)>" % (self.ident,
+                                                       degrees(self.slat),
+                                                       degrees(self.slon),
+                                                       id(self))
+
+   def __str__(self):
+      return "%s (%3.5f, %3.5f)" % (self.ident,
+                                    degrees(self.slat),
+                                    degrees(self.slon))
+
+   def getDict(self):
+      self.data = {'name': self.ident,
+                   'latitude': self.slat,
+                   'longitude': self.slon,
+                   'symbol': self.smbl
+                   }
+      return self.data
 
 class D106(Waypoint):
    parts = ("wpt_class", "subclass", "slat", "slon", "smbl", "ident", "lnk_ident")
@@ -552,6 +713,39 @@ class D106(Waypoint):
    smbl = 0
    lnk_ident = ""
 
+   def __init__(self, ident="", slat=0L, slon=0L, subclass="",
+                wpt_class=0L, lnk_ident="", smbl=0L):
+      self.ident = ident         # text identidier (upper case)
+      self.slat = slat           # lat & long in semicircle terms
+      self.slon = slon       
+      self.wpt_class = wpt_class   
+      self.unused = 0L
+      self.subclass = subclass          
+      self.lnk_ident = lnk_ident
+      self.smbl = smbl
+
+   def __repr__(self):
+      return "<Waypoint %s (%3.5f, %3.5f) (at %x)>" % (self.ident,
+                                                       degrees(self.slat),
+                                                       degrees(self.slon),
+                                                       id(self))
+
+   def __str__(self):
+      return "%s (%3.5f, %3.5f)" % (self.ident,
+                                    degrees(self.slat),
+                                    degrees(self.slon))
+
+   def getDict(self):
+      self.data = {'name': self.ident,
+                   'class': self.wpt_class,
+                   'subclass': self.subclass,
+                   'latitude': self.slat,
+                   'longitude': self.slon,
+                   'link': self.lnk_ident,
+                   'symbol': self.smbl
+                   }
+      return self.data
+
 class D107(Waypoint):
    parts = Waypoint.parts + ("smbl", "dspl", "dst", "color")
    fmt = "<6s l l L 40s b b f b"
@@ -559,6 +753,42 @@ class D107(Waypoint):
    dspl = 0                   # D103 display option
    dst = 0.0
    color = 0
+
+   def __init__(self, ident="", slat=0L, slon=0L, cmnt="",
+                dst=0L, smbl=0L, dspl=0L, color=0L):
+      self.ident = ident         # text identidier (upper case)
+      self.slat = slat           # lat & long in semicircle terms
+      self.slon = slon       
+      self.cmnt = cmnt           # comment (must be upper case)
+      self.unused = 0L
+      self.dst = dst             # proximity distance (m)
+      self.smbl = smbl           # symbol_type id
+      self.dspl = dspl           # D107 display option
+      self.color = color
+      self.dict = dict
+
+   def __repr__(self):
+      return "<Waypoint %s (%3.5f, %3.5f) (at %x)>" % (self.ident,
+                                                       degrees(self.slat),
+                                                       degrees(self.slon),
+                                                       id(self))
+
+   def __str__(self):
+      return "%s (%3.5f, %3.5f)" % (self.ident,
+                                    degrees(self.slat),
+                                    degrees(self.slon))
+
+   def getDict(self):
+      self.data = {'name': self.ident,
+                   'comment': stripnull(self.cmnt),
+                   'latitude': self.slat,
+                   'longitude': self.slon,
+                   'distance': self.dst,
+                   'symbol': self.smbl, 
+                   'display': self.dspl,
+                   'color': self.color
+                   }
+      return self.data
 
 class D108(Waypoint):
    parts = ("wpt_class", "color", "dspl", "attr", "smbl",
@@ -581,6 +811,7 @@ class D108(Waypoint):
    city = ""
    addr = ""
    cross_road = ""
+
 
 class D150(Waypoint):
    parts = ("ident", "cc", "clss", "lat", "lon", "alt", "city", "state", "name", "cmnt")

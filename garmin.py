@@ -466,6 +466,14 @@ class A903(TransferProtocol):
    "Used by etrex, no documentation as of 2001-05-30"
    pass
 
+class A904(TransferProtocol):
+   "Used by GPS V"
+   pass
+
+class A906(TransferProtocol):
+   "Mentioned in 'Garmin GPS Interface Specification', 2004-02-24"
+   pass
+
 # Most of the following subclasses have a fmt member which is a format
 # string as understood by the struct module, detailing how the class
 # is transmitted on the wire, and a 'parts' member, listing the
@@ -898,7 +906,7 @@ class D109(Waypoint):
    dist = 0.0
    state = ""
    cc = ""
-   ete = 0xffffffff   # Estimated time en route in seconds to next waypoint
+   ete = -1   # Estimated time en route in seconds to next waypoint
    facility = ""
    city = ""
    addr = ""
@@ -1460,7 +1468,7 @@ class Win32SerialLink(SerialLink):
    def settimeout(self, secs):
       SerialLink.settimeout(self, secs)
       # Setup time-outs
-      timeouts = 0xFFFFFFFF, 0, 1000*secs, 0, 1000*secs
+      timeouts = -1, 0, 1000*secs, 0, 1000*secs
       win32file.SetCommTimeouts(self.f, timeouts)
 
    def __del__(self):

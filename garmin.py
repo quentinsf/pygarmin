@@ -590,7 +590,7 @@ class Waypoint(DataPoint):
         self.unused = 0L
 
     def __repr__(self):
-        return "<Waypoint %s (%3.5f, %3.5f) (at %x)>" % (self.ident,
+        return "<Waypoint %s (%3.5f, %3.5f) (at %i)>" % (self.ident,
                                                          degrees(self.slat),
                                                          degrees(self.slon),
                                                          id(self))
@@ -629,7 +629,7 @@ class D101(Waypoint):
         self.data = {}
 
     def __repr__(self):
-        return "<Waypoint %s (%3.5f, %3.5f) (at %x)>" % (self.ident,
+        return "<Waypoint %s (%3.5f, %3.5f) (at %i)>" % (self.ident,
                                                          degrees(self.slat),
                                                          degrees(self.slon),
                                                          id(self))
@@ -666,7 +666,7 @@ class D102(Waypoint):
         self.data = {}
 
     def __repr__(self):
-        return "<Waypoint %s (%3.5f, %3.5f) (at %x)>" % (self.ident,
+        return "<Waypoint %s (%3.5f, %3.5f) (at %i)>" % (self.ident,
                                                          degrees(self.slat),
                                                          degrees(self.slon),
                                                          id(self))
@@ -703,7 +703,7 @@ class D103(Waypoint):
         self.data = {}
 
     def __repr__(self):
-        return "<Waypoint %s (%3.5f, %3.5f) (at %x)>" % (self.ident,
+        return "<Waypoint %s (%3.5f, %3.5f) (at %i)>" % (self.ident,
                                                          degrees(self.slat),
                                                          degrees(self.slon),
                                                          id(self))
@@ -742,7 +742,7 @@ class D104(Waypoint):
         self.dspl = dspl           # D104 display option
 
     def __repr__(self):
-        return "<Waypoint %s (%3.5f, %3.5f) (at %x)>" % (self.ident,
+        return "<Waypoint %s (%3.5f, %3.5f) (at %i)>" % (self.ident,
                                                          degrees(self.slat),
                                                          degrees(self.slon),
                                                          id(self))
@@ -776,7 +776,7 @@ class D105(Waypoint):
         self.smbl = smbl
 
     def __repr__(self):
-        return "<Waypoint %s (%3.5f, %3.5f) (at %x)>" % (self.ident,
+        return "<Waypoint %s (%3.5f, %3.5f) (at %i)>" % (self.ident,
                                                          degrees(self.slat),
                                                          degrees(self.slon),
                                                          id(self))
@@ -814,7 +814,7 @@ class D106(Waypoint):
         self.smbl = smbl
 
     def __repr__(self):
-        return "<Waypoint %s (%3.5f, %3.5f) (at %x)>" % (self.ident,
+        return "<Waypoint %s (%3.5f, %3.5f) (at %i)>" % (self.ident,
                                                          degrees(self.slat),
                                                          degrees(self.slon),
                                                          id(self))
@@ -856,7 +856,7 @@ class D107(Waypoint):
         self.color = color
 
     def __repr__(self):
-        return "<Waypoint %s (%3.5f, %3.5f) (at %x)>" % (self.ident,
+        return "<Waypoint %s (%3.5f, %3.5f) (at %i)>" % (self.ident,
                                                          degrees(self.slat),
                                                          degrees(self.slon),
                                                          id(self))
@@ -913,7 +913,7 @@ class D108(Waypoint):
         self.cmnt = cmnt
 
     def __repr__(self):
-        return "<Waypoint %s (%3.5f, %3.5f) (at %x)>" % (self.ident,
+        return "<Waypoint %s (%3.5f, %3.5f) (at %i)>" % (self.ident,
                                                          degrees(self.slat),
                                                          degrees(self.slon),
                                                          id(self))
@@ -961,7 +961,7 @@ class D109(Waypoint):
         self.cmnt = cmnt
 
     def __repr__(self):
-        return "<Waypoint %s (%3.5f, %3.5f) (at %x)>" % (self.ident,
+        return "<Waypoint %s (%3.5f, %3.5f) (at %i)>" % (self.ident,
                                                          degrees(self.slat),
                                                          degrees(self.slon),
                                                          id(self))
@@ -1092,7 +1092,7 @@ class TrackPoint(DataPoint):
     time = 0L # secs since midnight 31/12/89?
 
     def __repr__(self):
-        return "<Trackpoint (%3.5f, %3.5f) %s (at %x)>" %\
+        return "<Trackpoint (%3.5f, %3.5f) %s (at %i)>" %\
                (degrees(self.slat), degrees(self.slon),
                 time.asctime(time.gmtime(TimeEpoch+self.time)), id(self))
 
@@ -1118,7 +1118,7 @@ class TrackHdr(DataPoint):
     trk_ident = ""
 
     def __repr__(self):
-        return "<TrackHdr %s (at %x)>" % (self.trk_ident,
+        return "<TrackHdr %s (at %i)>" % (self.trk_ident,
                                           id(self))
 
 class D310(TrackHdr):

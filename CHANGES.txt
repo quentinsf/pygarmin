@@ -1,8 +1,14 @@
 PyGarmin Change Log
 
-Added a datum-conversion module.
+0.5
 
+Added a datum-conversion module.
 Added Raymond Penners' Win32SerialLink stuff and timeout stuff
+A900 support
+A800 support (for real-time data)
+Waypoints now have __repr__, __str__ and getDict methods
+The 'pygarmin' app has some facilities to output XML, 
+using the new xmlwriter module.
 
 0.4
 

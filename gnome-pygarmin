@@ -139,6 +139,8 @@ class Preferences:
             device = ""
         text_entry.set_text(device)
 
+        self.widgets.get_widget("preferences").set_modal(TRUE)
+
     def ok(self, widget):
         text_entry = self.widgets.get_widget("device")
         device = text_entry.get_text()

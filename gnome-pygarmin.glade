@@ -34,7 +34,7 @@
   </signal>
   <title>GNOME PyGarmin</title>
   <type>GTK_WINDOW_TOPLEVEL</type>
-  <position>GTK_WIN_POS_NONE</position>
+  <position>GTK_WIN_POS_CENTER</position>
   <modal>False</modal>
   <default_width>400</default_width>
   <default_height>300</default_height>
@@ -478,8 +478,8 @@ This program is free software; you can redistribute it and/or modify it under th
 <widget>
   <class>GnomeDialog</class>
   <name>preferences</name>
-  <type>GTK_WINDOW_TOPLEVEL</type>
-  <position>GTK_WIN_POS_NONE</position>
+  <type>GTK_WINDOW_DIALOG</type>
+  <position>GTK_WIN_POS_CENTER</position>
   <modal>False</modal>
   <allow_shrink>False</allow_shrink>
   <allow_grow>False</allow_grow>

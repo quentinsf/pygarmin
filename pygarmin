@@ -94,7 +94,7 @@ class Pygarmin(GnuApp):
                          "getroutes" : "r",
                          "gettracks" : "t"}
 
-        self.usage = "Usage: %s [OPTIONS] DEVICE" % sys.argv[0]
+        self.usage = "Usage: %s [COMMAND] DEVICE" % sys.argv[0]
         self.description = "Communicate with a Garmin GPS connected to DEVICE."
         self.example = "Example: %s -i /dev/ttyS0" % sys.argv[0]
 

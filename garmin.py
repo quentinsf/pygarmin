@@ -14,7 +14,7 @@
    by any particular model. It can easily be extended to cover any
    models not currently included.
 
-   For documentation, see the source.
+   For documentation, see the source, and the included index.html file.
 
    This is released under the Gnu General Public Licence. A copy of
    this can be found at http://www.opensource.org/licenses/gpl-license.html
@@ -22,7 +22,7 @@
    For the latest information about PyGarmin, please see
    http://pygarmin.sourceforge.net/
 
-   (c) 1999 Quentin Stafford-Fraser <quentin@att.com>
+   (c) 1999 Quentin Stafford-Fraser <quentin@uk.research.att.com>
    (c) 2000 James A. H. Skillen <jahs@skillen.org.uk>
    (c) 2001 Raymond Penners <raymond@dotsphinx.com>
    (c) 2001 Tom Grydeland <Tom.Grydeland@phys.uit.no>
@@ -512,12 +512,12 @@ class Waypoint(DataPoint):
                                     degrees(self.slon))
 
    def getDict(self):
-   self.data = {'name': self.ident,
+      self.data = {'name': self.ident,
                 'comment': self.cmnt,
                 'latitude': self.slat,
                 'longitude': self.slon
                 }
-   return self.data
+      return self.data
 
    
 class D100(Waypoint):
@@ -1394,6 +1394,8 @@ class Garmin:
       return self.pvtLink.getData()
 
 # =================================================================
+# The following is test code. See other included files for more
+# useful applications.
 
 def main():
    if os.name == 'nt':

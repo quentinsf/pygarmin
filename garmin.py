@@ -475,9 +475,9 @@ class Waypoint(DataPoint):
       
    def __repr__(self):
       return "<Waypoint %s (%3.5f, %3.5f) (at %x)>" % (self.ident,
-                                                 degrees(self.slat),
-                                                 degrees(self.slon),
-                                                 id(self))
+                                                       degrees(self.slat),
+                                                       degrees(self.slon),
+                                                       id(self))
 
    def __str__(self):
       return "%s (%3.5f, %3.5f)" % (self.ident,
@@ -947,7 +947,8 @@ def FormatA001(protocols):
       cmnd = eval(protocols[2])
       
       tuples = {"1" : None, "2" : None, "3" : None, "4" : None,
-                "5" : None, "6" : None, "7" : None, "8" : None}
+                "5" : None, "6" : None, "7" : None, "8" : None,
+                "9" : None}
       last_seen = None
       for i in range(3, len(protocols)):
          p = protocols[i]
@@ -971,21 +972,7 @@ class SerialLink(P000):
       self.f = f
 
    def read(self, n):
-      """Apparently, on Win32 a read from the serial device will
-      return the empty string if no data are available. This method
-      mimics the usual Linux style, which is to block until n bytes
-      are available."""
-      
-      buffer = []
-      c = 0
-      while len(buffer) != n:
-         data = self.f.read(n-len(buffer))
-         map(buffer.append, data)
-         c = c + 1
-      data = string.join(buffer, "")
-      if debug > 1:
-         print "read() called", c, "times, returning", repr(data)
-      return data
+      return self.f.read(n)
 
    def write(self, data):
       self.f.write(data)
@@ -1011,7 +998,6 @@ class WindowsSerialLink(SerialLink):
 
    def __init__(self, device):
       """Device should be 'COM1' up to 'COM9'"""
-
       from Serial import Serial
 
       d = Serial.PortDict()
@@ -1024,6 +1010,19 @@ class WindowsSerialLink(SerialLink):
       f = Serial.Port(d)
       f.open()
       SerialLink.__init__(self, f)
+
+   def read(self, n):
+      """Apparently, on Win32 a read from the serial device will
+      return the empty string if no data are available. This method
+      mimics the usual Linux style, which is to block until n bytes
+      are available."""
+      
+      buffer = []
+      while len(buffer) != n:
+         data = self.f.read(n-len(buffer))
+         map(buffer.append, data)
+      data = string.join(buffer, "")
+      return data
 
 class Garmin:
    def __init__(self, physicalLayer):

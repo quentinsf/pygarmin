@@ -19,23 +19,20 @@ import sys, garmin, libglade, gtk
 from gnome.ui import *
 from gnome import config
 
-class GnomeGarmin:
+class GnomePygarmin:
     def __init__(self):
-        self.pygarmin_widgets = libglade.GladeXML("gnome-pygarmin.glade",
-                                                "gnome-pygarmin")
-        self.prefs_widgets = None
-        self.about_widgets = None
-        self.gps = None
-
+        self.widgets = libglade.GladeXML("gnome-pygarmin.glade",
+                                         "gnome-pygarmin")
         signals = {"on_wpt_upload_clicked"     : self.waypoints_upload,
                    "on_wpt_download_clicked"   : self.waypoints_download,
                    "on_exit1_activate"         : self.exit,
                    "on_gnome-pygarmin_destroy" : self.exit,
                    "on_about1_activate"        : self.about,
                    "on_preferences1_activate"  : self.prefs}
-        self.pygarmin_widgets.signal_autoconnect(signals)
+        self.widgets.signal_autoconnect(signals)
 
-        device = config.get_string("/gnome-pygarmin/preferences/device")
+        self.gps = None
+        device = config.get_string("/gnome-pygarmin/Preferences/serial_device")
         self.init_gps(device)
 
     def init_gps(self, device):
@@ -47,7 +44,9 @@ class GnomeGarmin:
                 phys = garmin.UnixSerialLink(device)
                 self.gps = garmin.Garmin(phys)
             except:
-                GnomeErrorDialog(str(sys.exc_info()[1]))
+                msg = str(sys.exc_info()[1])
+                if msg:
+                    GnomeErrorDialog(str(sys.exc_info()[1]))
                 self.prefs(None)
 
     def waypoints_upload(self, widget):
@@ -58,7 +57,7 @@ class GnomeGarmin:
             self.init_gps()
             return
         wpts = self.gps.getWaypoints()
-        wpt_list = self.pygarmin_widgets.get_widget("wpt_list")
+        wpt_list = self.widgets.get_widget("wpt_list")
         wpt_list.clear()
 
         for w in wpts:
@@ -70,33 +69,50 @@ class GnomeGarmin:
         config.sync()
         gtk.mainquit()
 
-    def about(self, widget):
-        self.about_widgets = libglade.GladeXML("gnome-pygarmin.glade",
-                                               "about")
-
     def prefs(self, widget):
-        self.prefs_widgets = libglade.GladeXML("gnome-pygarmin.glade",
-                                               "preferences")
-        signals = {"on_prefs-ok_clicked" : self.prefs_ok}
-        self.prefs_widgets.signal_autoconnect(signals)
+        Preferences(self)
 
-        text_entry = self.prefs_widgets.get_widget("device")
-        device = config.get_string("/gnome-pygarmin/preferences/device")
+    def about(self, widget):
+        libglade.GladeXML("gnome-pygarmin.glade",
+                          "about")
+
+class Preferences:
+    def __init__(self, pygarmin):
+        self.pygarmin = pygarmin
+        self.widgets = libglade.GladeXML("gnome-pygarmin.glade",
+                                         "preferences")
+        signals = {"on_prefs-ok_clicked" : self.ok,
+                   "on_prefs-apply_clicked" : self.apply,
+                   "on_prefs-cancel_clicked" : self.cancel}
+        self.widgets.signal_autoconnect(signals)
+
+        text_entry = self.widgets.get_widget("device")
+        device = config.get_string("/gnome-pygarmin/Preferences/serial_device")
         if device == None:
             device = ""
         text_entry.set_text(device)
 
-    def prefs_ok(self, widget):
-        text_entry = self.prefs_widgets.get_widget("device")
+    def ok(self, widget):
+        text_entry = self.widgets.get_widget("device")
         device = text_entry.get_text()
-        config.set_string("/gnome-pygarmin/preferences/device", device)
-        self.init_gps(device)
-        prefs = self.prefs_widgets.get_widget("preferences")
-        prefs.close()
+        self.pygarmin.init_gps(device)
+        config.set_string("/gnome-pygarmin/Preferences/serial_device", device)
+        self.cancel(None)
+
+    def apply(self, widget):
+        text_entry = self.widgets.get_widget("device")
+        device = text_entry.get_text()
+        self.pygarmin.init_gps(device)
+        self.cancel(None)
+
+    def cancel(self, widget):
+        preferences = self.widgets.get_widget("preferences")
+        preferences.close()
 
 def main(argv):
-    app = GnomeGarmin()
+    app = GnomePygarmin()
     gtk.mainloop()
+    del app
     return 0
 
 if __name__ == "__main__":

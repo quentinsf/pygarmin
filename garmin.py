@@ -996,31 +996,15 @@ class SerialLink(P000):
 class UnixSerialLink(SerialLink):
 
    def __init__(self, device):
-      import termios
-      from TERMIOS import *
+      from tty import *
       
       f = open(device, "w+", 0)
       fd = f.fileno()
+      setraw(fd)
+      mode = tcgetattr(fd)
+      mode[ISPEED] = mode[OSPEED] = B9600
+      tcsetattr(fd, TCSAFLUSH, mode)
 
-      iflag, oflag, cflag, lflag, ispeed, ospeed, cc = termios.tcgetattr(fd)
-
-      cflag = cflag & ~PARENB
-      cflag = cflag & ~CSTOPB
-      cflag = cflag & ~CSIZE
-      cflag = cflag | CS8
-      cflag = cflag | CLOCAL | CREAD
-
-      lflag = lflag & ~(ICANON | ECHO | ECHOE | ISIG )
-
-      iflag = iflag & ~(IXON | IXOFF | IXANY | INLCR | IGNCR | ICRNL \
-                        | IGNBRK | BRKINT | IGNPAR | ISTRIP | IMAXBEL | IUCLC)
-
-      oflag = oflag & ~OPOST
-      
-      ispeed = ospeed = B9600
-
-      termios.tcsetattr(fd, TCSAFLUSH,
-                        [iflag, oflag, cflag, lflag, ispeed, ispeed, cc])
       SerialLink.__init__(self, f)
 
 class WindowsSerialLink(SerialLink):

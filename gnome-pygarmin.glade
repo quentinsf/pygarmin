@@ -2,8 +2,8 @@
 <GTK-Interface>
 
 <project>
-  <name>gnome-garmin</name>
-  <program_name>gnome-garmin</program_name>
+  <name>Gnome Pygarmin</name>
+  <program_name>gnome-pygarmin</program_name>
   <directory></directory>
   <source_directory>src</source_directory>
   <pixmaps_directory>pixmaps</pixmaps_directory>
@@ -26,11 +26,18 @@
 
 <widget>
   <class>GnomeApp</class>
-  <name>app1</name>
-  <title>Gnome Garmin</title>
+  <name>gnome-pygarmin</name>
+  <signal>
+    <name>destroy</name>
+    <handler>on_gnome-pygarmin_destroy</handler>
+    <last_modification_time>Sun, 17 Sep 2000 00:08:28 GMT</last_modification_time>
+  </signal>
+  <title>Gnome Pygarmin</title>
   <type>GTK_WINDOW_TOPLEVEL</type>
   <position>GTK_WIN_POS_NONE</position>
   <modal>False</modal>
+  <default_width>400</default_width>
+  <default_height>300</default_height>
   <allow_shrink>False</allow_shrink>
   <allow_grow>True</allow_grow>
   <auto_shrink>False</auto_shrink>
@@ -75,18 +82,6 @@
 	  <widget>
 	    <class>GtkMenu</class>
 	    <name>file1_menu</name>
-
-	    <widget>
-	      <class>GtkPixmapMenuItem</class>
-	      <name>new_file1</name>
-	      <signal>
-		<name>activate</name>
-		<handler>on_new_file1_activate</handler>
-		<last_modification_time>Thu, 31 Aug 2000 13:58:30 GMT</last_modification_time>
-	      </signal>
-	      <stock_item>GNOMEUIINFO_MENU_NEW_ITEM</stock_item>
-	      <label>_New File</label>
-	    </widget>
 
 	    <widget>
 	      <class>GtkPixmapMenuItem</class>
@@ -214,17 +209,6 @@
 
 	<widget>
 	  <class>GtkMenuItem</class>
-	  <name>view1</name>
-	  <stock_item>GNOMEUIINFO_MENU_VIEW_TREE</stock_item>
-
-	  <widget>
-	    <class>GtkMenu</class>
-	    <name>view1_menu</name>
-	  </widget>
-	</widget>
-
-	<widget>
-	  <class>GtkMenuItem</class>
 	  <name>settings1</name>
 	  <stock_item>GNOMEUIINFO_MENU_SETTINGS_TREE</stock_item>
 
@@ -300,15 +284,6 @@
 	  <child_name>Toolbar:button</child_name>
 	  <name>button1</name>
 	  <tooltip>New File</tooltip>
-	  <label>New</label>
-	  <stock_pixmap>GNOME_STOCK_PIXMAP_NEW</stock_pixmap>
-	</widget>
-
-	<widget>
-	  <class>GtkButton</class>
-	  <child_name>Toolbar:button</child_name>
-	  <name>button2</name>
-	  <tooltip>Open File</tooltip>
 	  <label>Open</label>
 	  <stock_pixmap>GNOME_STOCK_PIXMAP_OPEN</stock_pixmap>
 	</widget>
@@ -316,8 +291,8 @@
 	<widget>
 	  <class>GtkButton</class>
 	  <child_name>Toolbar:button</child_name>
-	  <name>button3</name>
-	  <tooltip>Save File</tooltip>
+	  <name>button2</name>
+	  <tooltip>Open File</tooltip>
 	  <label>Save</label>
 	  <stock_pixmap>GNOME_STOCK_PIXMAP_SAVE</stock_pixmap>
 	</widget>
@@ -462,47 +437,13 @@
 	<xpad>0</xpad>
 	<ypad>0</ypad>
       </widget>
-
-      <widget>
-	<class>Placeholder</class>
-      </widget>
-
-      <widget>
-	<class>GtkLabel</class>
-	<child_name>Notebook:tab</child_name>
-	<name>label2</name>
-	<label>Routes</label>
-	<justify>GTK_JUSTIFY_CENTER</justify>
-	<wrap>False</wrap>
-	<xalign>0.5</xalign>
-	<yalign>0.5</yalign>
-	<xpad>0</xpad>
-	<ypad>0</ypad>
-      </widget>
-
-      <widget>
-	<class>Placeholder</class>
-      </widget>
-
-      <widget>
-	<class>GtkLabel</class>
-	<child_name>Notebook:tab</child_name>
-	<name>label3</name>
-	<label>Tracks</label>
-	<justify>GTK_JUSTIFY_CENTER</justify>
-	<wrap>False</wrap>
-	<xalign>0.5</xalign>
-	<yalign>0.5</yalign>
-	<xpad>0</xpad>
-	<ypad>0</ypad>
-      </widget>
     </widget>
   </widget>
 
   <widget>
     <class>GnomeAppBar</class>
     <child_name>GnomeApp:appbar</child_name>
-    <name>appbar1</name>
+    <name>appbar</name>
     <has_progress>True</has_progress>
     <has_status>True</has_status>
     <child>
@@ -510,6 +451,156 @@
       <expand>True</expand>
       <fill>True</fill>
     </child>
+  </widget>
+</widget>
+
+<widget>
+  <class>GnomeAbout</class>
+  <name>about</name>
+  <modal>True</modal>
+  <copyright>Copyright © 2000 James A. H. Skillen</copyright>
+  <authors>James A. H. Skillen &lt;jahs@skillen.org.uk&gt;
+</authors>
+  <comments>A Gnome application for communicating with Garmin GPS receivers, written in Python.
+This program is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version.</comments>
+</widget>
+
+<widget>
+  <class>GnomeDialog</class>
+  <name>preferences</name>
+  <type>GTK_WINDOW_TOPLEVEL</type>
+  <position>GTK_WIN_POS_NONE</position>
+  <modal>False</modal>
+  <allow_shrink>False</allow_shrink>
+  <allow_grow>False</allow_grow>
+  <auto_shrink>False</auto_shrink>
+  <auto_close>False</auto_close>
+  <hide_on_close>False</hide_on_close>
+
+  <widget>
+    <class>GtkVBox</class>
+    <child_name>GnomeDialog:vbox</child_name>
+    <name>dialog-vbox1</name>
+    <homogeneous>False</homogeneous>
+    <spacing>8</spacing>
+    <child>
+      <padding>4</padding>
+      <expand>True</expand>
+      <fill>True</fill>
+    </child>
+
+    <widget>
+      <class>GtkVBox</class>
+      <name>vbox2</name>
+      <homogeneous>False</homogeneous>
+      <spacing>0</spacing>
+      <child>
+	<padding>0</padding>
+	<expand>True</expand>
+	<fill>True</fill>
+      </child>
+
+      <widget>
+	<class>GtkHBox</class>
+	<name>hbox1</name>
+	<homogeneous>False</homogeneous>
+	<spacing>0</spacing>
+	<child>
+	  <padding>0</padding>
+	  <expand>True</expand>
+	  <fill>True</fill>
+	</child>
+
+	<widget>
+	  <class>GtkLabel</class>
+	  <name>label9</name>
+	  <label>Serial Device</label>
+	  <justify>GTK_JUSTIFY_CENTER</justify>
+	  <wrap>False</wrap>
+	  <xalign>0.5</xalign>
+	  <yalign>0.5</yalign>
+	  <xpad>20</xpad>
+	  <ypad>0</ypad>
+	  <child>
+	    <padding>0</padding>
+	    <expand>False</expand>
+	    <fill>False</fill>
+	  </child>
+	</widget>
+
+	<widget>
+	  <class>GtkEntry</class>
+	  <name>device</name>
+	  <can_focus>True</can_focus>
+	  <editable>True</editable>
+	  <text_visible>True</text_visible>
+	  <text_max_length>0</text_max_length>
+	  <text></text>
+	  <child>
+	    <padding>0</padding>
+	    <expand>True</expand>
+	    <fill>True</fill>
+	  </child>
+	</widget>
+      </widget>
+    </widget>
+
+    <widget>
+      <class>GtkHButtonBox</class>
+      <child_name>GnomeDialog:action_area</child_name>
+      <name>dialog-action_area1</name>
+      <layout_style>GTK_BUTTONBOX_END</layout_style>
+      <spacing>8</spacing>
+      <child_min_width>85</child_min_width>
+      <child_min_height>27</child_min_height>
+      <child_ipad_x>7</child_ipad_x>
+      <child_ipad_y>0</child_ipad_y>
+      <child>
+	<padding>0</padding>
+	<expand>False</expand>
+	<fill>True</fill>
+	<pack>GTK_PACK_END</pack>
+      </child>
+
+      <widget>
+	<class>GtkButton</class>
+	<name>prefs-ok</name>
+	<can_default>True</can_default>
+	<can_focus>True</can_focus>
+	<signal>
+	  <name>clicked</name>
+	  <handler>on_prefs-ok_clicked</handler>
+	  <last_modification_time>Sun, 17 Sep 2000 00:31:13 GMT</last_modification_time>
+	</signal>
+	<stock_button>GNOME_STOCK_BUTTON_OK</stock_button>
+      </widget>
+
+      <widget>
+	<class>GtkButton</class>
+	<name>prefs-apply</name>
+	<can_default>True</can_default>
+	<can_focus>True</can_focus>
+	<signal>
+	  <name>clicked</name>
+	  <handler>on_prefs-apply_clicked</handler>
+	  <last_modification_time>Sun, 17 Sep 2000 00:31:19 GMT</last_modification_time>
+	</signal>
+	<stock_button>GNOME_STOCK_BUTTON_APPLY</stock_button>
+      </widget>
+
+      <widget>
+	<class>GtkButton</class>
+	<name>prefs-cancel</name>
+	<can_default>True</can_default>
+	<can_focus>True</can_focus>
+	<signal>
+	  <name>clicked</name>
+	  <handler>on_prefs-cancel_clicked</handler>
+	  <last_modification_time>Sun, 17 Sep 2000 00:31:23 GMT</last_modification_time>
+	</signal>
+	<stock_button>GNOME_STOCK_BUTTON_CANCEL</stock_button>
+      </widget>
+    </widget>
   </widget>
 </widget>
 

@@ -69,9 +69,9 @@ TimeEpoch = 631065600
 
 class P000:
    " Physical layer for communicating with Garmin "
-   def read(n):
+   def read(self, n):
       pass
-   def write(n):
+   def write(self, n):
       pass
 
 # Link protocols ===================================================
@@ -765,7 +765,6 @@ class D107(Waypoint):
       self.smbl = smbl           # symbol_type id
       self.dspl = dspl           # D107 display option
       self.color = color
-      self.dict = dict
 
    def __repr__(self):
       return "<Waypoint %s (%3.5f, %3.5f) (at %x)>" % (self.ident,
@@ -1007,8 +1006,9 @@ class TimePoint(DataPoint):
    sec = 0           # sec (0-59)
 
    def __str__(self):
-      return "%d-%.2d-%.2d %.2d:%.2d:%.2d UTC" % (self.year, self.month, self.day,
-                                                  self.hour, self.min, self.sec)
+      return "%d-%.2d-%.2d %.2d:%.2d:%.2d UTC" % (
+         self.year, self.month, self.day,
+         self.hour, self.min, self.sec)
 
 class D600(TimePoint):
    pass
@@ -1314,6 +1314,10 @@ class Win32SerialLink:
          raise LinkException, "WriteFile error";
 
 class Garmin:
+   """
+   A representation of the GPS device, which is connected
+   via some physical connection, typically a SerialLink of some sort.
+   """
    def __init__(self, physicalLayer):
       self.link = L000(physicalLayer)      # at least initially
       (self.prod_id, self.soft_ver,
@@ -1342,7 +1346,8 @@ class Garmin:
       self.rteTypes = rteProtos[1:]
       self.trkTypes = trkProtos[1:]
 
-      # Now we set up 'links' through which we can get data of the appropriate types
+      # Now we set up 'links' through which we can get data of the
+      # appropriate types
 
       self.wptLink = wptProtos[0](self.link, self.cmdProto, (self.wptType,))
       self.rteLink = rteProtos[0](self.link, self.cmdProto, self.rteTypes)

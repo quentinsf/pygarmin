@@ -495,7 +495,7 @@ class DataPoint:
          print e
          print "Format: <" + self.fmt   + ">"
          print "Parts:  <" + string.join(self.parts, ", ") + ">"
-         print "Input:  <" + string.join(x, "><") + ">"
+         print "Input:  <" + string.join(bytes, "><") + ">"
 	 raise Exception, e
 
 # Waypoints  ---------------------------------------------------

@@ -23,7 +23,7 @@
    http://pygarmin.sourceforge.net/
 
    (c) 2001 Quentin Stafford-Fraser <quentin@uk.research.att.com>
-   (c) 2000 James A. H. Skillen <jahs@skillen.org.uk>
+   (c) 2000 James A. H. Skillen <jahs@jahs.net>
    (c) 2001 Raymond Penners <raymond@dotsphinx.com>
    (c) 2001 Tom Grydeland <Tom.Grydeland@phys.uit.no>
 
@@ -510,6 +510,24 @@ def degrees(semi):
 def semi(deg):
    return long(deg * ((1L<<31) / 180))
 
+def radian(semi):
+   return semi * math.pi / (1L<<31)
+
+# Distance between two waypoints (in metres)
+# Haversine Formula (from R.W. Sinnott, "Virtues of the Haversine",
+# Sky and Telescope, vol. 68, no. 2, 1984, p. 159):
+def distance(wp1, wp2):
+   R = 63670000
+   rlat1 = radian(wp1.slat)
+   rlon1 = radian(wp1.slon)
+   rlat2 = radian(wp2.slat)
+   rlon2 = radian(wp2.slon)
+   dlon = rlon2 - lon1
+   dlat = rlat2 - lon1
+   a =  math.pow(math.sin(dlat/2),2) + math.cos(rlat1)*math.cos(rlat2)*math.pow(sin(dlon/2),2)
+   c = 2*math.atan2(math.sqrt(a), math.sqrt(1-a))
+   return R*c
+
 class Waypoint(DataPoint):
    parts = ("ident", "slat", "slon", "unused", "cmnt")
    fmt = "< 6s l l L 40s"
@@ -573,7 +591,7 @@ class D101(Waypoint):
 
    def getDict(self):
       self.data = {'name': self.ident,
-                   'comment': stripnull(self.cmnt),
+                   'comment': string.strip(self.cmnt),
                    'latitude': self.slat,
                    'longitude': self.slon,
                    'distance': self.dst,
@@ -610,7 +628,7 @@ class D102(Waypoint):
 
    def getDict(self):
       self.data = {'name': self.ident,
-                   'comment': stripnull(self.cmnt),
+                   'comment': string.strip(self.cmnt),
                    'latitude': self.slat,
                    'longitude': self.slon,
                    'distance': self.dst,
@@ -647,7 +665,7 @@ class D103(Waypoint):
 
    def getDict(self):
       self.data = {'name': self.ident,
-                   'comment': stripnull(self.cmnt),
+                   'comment': string.strip(self.cmnt),
                    'latitude': self.slat,
                    'longitude': self.slon,
                    'display': self.dspl,
@@ -686,7 +704,7 @@ class D104(Waypoint):
 
    def getDict(self):
       self.data = {'name': self.ident,
-                   'comment': stripnull(self.cmnt),
+                   'comment': string.strip(self.cmnt),
                    'latitude': self.slat,
                    'longitude': self.slon,
                    'distance': self.dst,
@@ -800,7 +818,7 @@ class D107(Waypoint):
 
    def getDict(self):
       self.data = {'name': self.ident,
-                   'comment': stripnull(self.cmnt),
+                   'comment': string.strip(self.cmnt),
                    'latitude': self.slat,
                    'longitude': self.slon,
                    'distance': self.dst,
@@ -834,8 +852,56 @@ class D108(Waypoint):
 
    def __init__(self, ident="", slat=0L, slon=0L, alt=1.0e25, dpth=1.0e25,
                 cmnt="", subclass="", wpt_class=0L, lnk_ident="", smbl=18L):
-      self.ident = ident         # text identidier (upper case)
+      self.ident = ident         # text identifier (upper case)
       self.slat = slat           # lat & long in semicircle terms
+      self.slon = slon
+      self.wpt_class = wpt_class
+      self.unused = 0L
+      self.subclass = subclass
+      self.lnk_ident = lnk_ident
+      self.smbl = smbl
+      self.cmnt = cmnt
+
+   def __repr__(self):
+      return "<Waypoint %s (%3.5f, %3.5f) (at %x)>" % (self.ident,
+                                                       degrees(self.slat),
+                                                       degrees(self.slon),
+                                                       id(self))
+
+   def __str__(self):
+      return "%s (%3.5f, %3.5f, %3f) '%s' class %d symbl %d" % (
+         self.ident,
+         degrees(self.slat), degrees(self.slon),
+         self.alt, string.strip(self.cmnt),
+         self.wpt_class, self.smbl)
+
+class D109(Waypoint):
+   parts = ("dtyp", "wpt_class", "dspl_color", "attr", "smbl",
+            "subclass", "slat", "slon", "alt", "dpth", "dist",
+            "state", "cc", "ete", "ident", "cmnt", "facility", "city",
+            "addr", "cross_road")
+   fmt = "<b b b b h 18s l l f f f 2s 2s l s s s s s s"
+   dtyp = 0x01
+   wpt_class = 0
+   dspl_color = 0
+   attr = 0x70
+   smbl = 0
+   subclass = ""
+   alt = 1.0e25
+   dpth = 1.0e25
+   dist = 0.0
+   state = ""
+   cc = ""
+   ete = 0xffffffff   # Estimated time en route in seconds to next waypoint
+   facility = ""
+   city = ""
+   addr = ""
+   cross_road = ""
+
+   def __init__(self, ident="", slat=0L, slon=0L, alt=1.0e25, dpth=1.0e25,
+                cmnt="", subclass="", wpt_class=0L, lnk_ident="", smbl=18L):
+      self.ident = ident
+      self.slat = slat
       self.slon = slon
       self.wpt_class = wpt_class
       self.unused = 0L
@@ -1416,8 +1482,6 @@ class Garmin:
          except KeyError:
             raise Exception, "Couldn't determine product capabilities"
       physicalLayer.settimeout(5)
-
-      # protos = GetProtocols(self.prod_id, self.soft_ver)
 
       (versions, self.linkProto, self.cmdProto, wptProtos, rteProtos,
        trkProtos, prxProtos, almProtos) = protos

@@ -27,7 +27,7 @@
    
 """
 
-import os, string, newstruct, time, sys, termios, TERMIOS
+import os, string, newstruct, time, sys
 struct = newstruct
 
 debug = 0

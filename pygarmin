@@ -12,10 +12,11 @@
    http://pygarmin.sourceforge.net/
 
    (c) 2000 James A. H. Skillen <jahs@skillen.org.uk>
+   (c) 2001 Raymond Penners <raymond@dotsphinx.com>
    
 """
 
-import garmin, os, sys, getopt, string
+import garmin, os, sys, getopt, string, xmlwriter
 
 class GnuApp:
     def __init__(self):
@@ -78,6 +79,8 @@ class GnuApp:
         for k in seq:
             apply(eval("self."+self.opts[k[1:]][0]), (self.options[k],))
 
+FORMAT_PYGARMIN, FORMAT_XML_ABSTRACT, FORMAT_XML_PRODUCT = range(3)
+
 class Pygarmin(GnuApp):
     def __init__(self):
         self.opts = {"i" : ("info        ", "", "Show product information"),
@@ -85,14 +88,16 @@ class Pygarmin(GnuApp):
                      "h" : ("help        ", "", "This page"),
                      "w" : ("getwaypoints", "", "Download waypoints from the GPS"),
                      "r" : ("getroutes   ", "", "Download routes from the GPS"),
-                     "t" : ("gettracks   ", "", "Download tracks from the GPS")}
+                     "t" : ("gettracks   ", "", "Download tracks from the GPS"),
+                     "f" : ("format", "<format>", "Output format (pygarmin, xml-abstract, xml-product)")}
 
         self.longopts = {"info" : "i",
                          "protocols" : "p",
                          "help" : "h",
                          "getwaypoints": "w",
                          "getroutes" : "r",
-                         "gettracks" : "t"}
+                         "gettracks" : "t",
+                         "format" : "f" }
 
         self.usage = "Usage: %s [COMMAND] DEVICE" % sys.argv[0]
         self.description = "Communicate with a Garmin GPS connected to DEVICE."
@@ -137,12 +142,81 @@ class Pygarmin(GnuApp):
                     sys.stdout.write("\n"+p)
         print "\n"
 
+    def format(self, arg):
+        try:
+            self.getformat()
+        except KeyError:
+            sys.stderr.write("Unknown format: '"+self.options['-f']+"'")
+            sys.exit(1)
+
+    def getformat(self):
+        if '-f' in self.options.keys():
+            fmtmap = {'xml-product': FORMAT_XML_PRODUCT,
+                      'xml-abstract': FORMAT_XML_ABSTRACT,
+                      'pygarmin': FORMAT_PYGARMIN}
+            val = self.options['-f']
+            fmt = fmtmap[val]                        
+        else:
+            fmt = self.FORMAT_PYGARMIN
+        return fmt
+        
     def getwaypoints(self, arg):
+        fmt = self.getformat()
+        if fmt == FORMAT_XML_PRODUCT:
+            self.getwaypointsxmlproduct()
+        elif fmt == FORMAT_XML_ABSTRACT:
+            self.getwaypointsxmlabstract()
+        else:
+            self.getwaypointspygarmin()
+
+    def getwaypointspygarmin(self):
         print "*** Downloaded Waypoints ***"
         ws = self.gps.getWaypoints()
         for w in ws:
             print w
         print
+       
+    def getwaypointsxmlproduct(self):
+        x = xmlwriter.XmlWriter()
+        ws = self.gps.getWaypoints()
+        x.tag('gps', 0, {'class': 'garmin',
+                         'id' : self.gps.prod_id,
+                         'info': string.join(self.gps.prod_descs),
+                         'version': self.gps.soft_ver})
+        x.tag('waypoints')
+        for w in ws:
+            wclass = string.split(str(w.__class__), '.')[-1]
+            wname = w.ident
+            x.tag('waypoint', 0,
+                  { 'class': wclass,
+                    'name': wname
+                    })
+            x.tag('coordinates', 1,
+                  { 'latitude' : w.slat,
+                    'longitude' : w.slon,
+                    'format' : 'semicircle' })
+            for attr in w.parts:
+               val = eval("w."+attr)
+               if len(str(val)) > 0:
+                   x.tag('attribute', 1, { 'name': attr, 'value': val})
+            x.tagClose()
+        x.tagClose()
+        x.tagClose()
+
+    def getwaypointsxmlabstract(self):
+        x = xmlwriter.XmlWriter()
+        ws = self.gps.getWaypoints()
+        x.tag('gps', 0, {'class': 'abstract'})
+        x.tag('waypoints')
+        for w in ws:
+            wname = w.ident
+            x.tag('waypoint', 0, { 'name': wname })
+            x.tag('coordinates', 1,
+                  { 'latitude' : garmin.degrees(w.slat),
+                    'longitude' : garmin.degrees(w.slon)})
+            x.tagClose()
+        x.tagClose()
+        x.tagClose()
 
     def getroutes(self, arg):
         print "*** Downloaded Routes ***"

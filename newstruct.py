@@ -5,14 +5,14 @@
    Very quickly hacked layer over the struct module to handle
    null-terminated strings.
 
-   In the format string, an "s" is interpreted as a null-terminated
+   In the format string, an 's' is interpreted as a null-terminated
    string, rather than a string of length 1.
 
    This is released under the Gnu General Public Licence. A copy of
    this can be found at http://www.opensource.org/licenses/gpl-license.html
 
-   (c) 2000 James A. H. Skillen <jahs@skillen.org.uk>
-   
+   (c) 2000 James A. H. Skillen <jahs@jahs.net>
+
 """
 
 from struct import *

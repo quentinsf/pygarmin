@@ -11,184 +11,176 @@
    For the latest information about PyGarmin, please see
    http://pygarmin.sourceforge.net/
 
-   (c) 2000 James A. H. Skillen <jahs@skillen.org.uk>
-   (c) 2001 Raymond Penners <raymond@dotsphinx.com>
+   (c) 2000-2003 James A. H. Skillen <jahs@jahs.net>
+   (c) 2001      Raymond Penners <raymond@dotsphinx.com>
 
 """
 
-import garmin, os, sys, getopt, string, xmlwriter
+import garmin, getopt, os, string, sys, xmlwriter
 
-class GnuApp:
-    def __init__(self):
-        self.opts = {"h" : ("help", "", "This page")}
-        self.longopts = {"help" : "h"}
+class Arguments(list):
+
+    def __init__(self, config={}, usage='', description='', example=''):
+        self.config = config
+        if not self.config.has_key('h'):
+            self.config['h'] = ('help', '', 'This page')
+        self.appname = os.path.basename(sys.argv[0])
+        self.usage = usage % self.appname
+        self.description = description
+        self.example = example % self.appname
         self.options = {}
-        self.usage = ""
-        self.description = ""
-        self.example = ""
 
-    def help(self, arg):
+        shortopts = []
+        longopts = []
+        for k in self.config.keys():
+            option, value, desc = self.config[k]
+            shortopts.append(k)
+            if value:
+                shortopts.append(':')
+                longopts.append(option + '=')
+            else:
+                longopts.append(option)
+
+        try:
+            parsed, leftover = getopt.getopt(sys.argv[1:],
+                                                  string.join(shortopts, ''),
+                                                  longopts)
+        except:
+            print '%s: %s' % (sys.argv[0], sys.exc_info()[1])
+            sys.exit(1)
+
+        for option, value in parsed:
+            if option.startswith('--'):
+                option = option[2:]
+            else:
+                option = self.config[option[1:]][0]
+            self.options[option] = value
+        self.extend(leftover)
+
+    def help(self):
         print self.usage
         print self.description
         print self.example
-
-        seq = self.opts.keys()
+        seq = self.config.keys()
         seq.sort()
         for k in seq:
-            if self.opts[k][1]:
-                print "  -%s, --%s=%s\t%s" % (k, self.opts[k][0], self.opts[k][1], self.opts[k][2])
-            else:
-                print "  -%s, --%s\t%s" % (k, self.opts[k][0], self.opts[k][2])
-
-    def _parse_argv(self):
-        shortopts = []
-        longopts = []
-        for k in self.opts.keys():
-            option, value, desc = self.opts[k]
-            shortopts.append(k)
+            option, value, desc = self.config[k]
             if value:
-                shortopts.append(":")
-                longopts.append(self.opts[k][0]+"=")
+                print '  -%s, --%s=%s\t%s' % (k, option, value, desc)
             else:
-                longopts.append(self.opts[k][0])
+                print '  -%s, --%s\t\t%s' % (k, option, desc)
 
-        try:
-            parsed, self.leftover = getopt.getopt(sys.argv[1:],
-                                                  string.join(shortopts, ""),
-                                                  longopts)
-        except:
-            print "%s: %s" % (sys.argv[0], sys.exc_info()[1])
-            sys.exit(1)
+class Pygarmin(object):
 
-        self.options = {}
-        seq = range(len(parsed))
-        seq.reverse()
-        for i in seq:
-            option, value = parsed[i]
-            if option[:2] == "--":
-                option = "-"+self.longopts[string.strip(option)[2:]]
-            self.options[option] = value
-        self._check_options()
-
-    def _check_options(self):
-        pass
-
-    def _run(self):
-        seq = self.options.keys()
-        seq.sort()
-        for k in seq:
-            apply(eval("self."+self.opts[k[1:]][0]), (self.options[k],))
-
-FORMAT_PYGARMIN, FORMAT_XML_ABSTRACT, FORMAT_XML_PRODUCT = range(3)
-
-class Pygarmin(GnuApp):
     def __init__(self):
-        self.opts = {"i" : ("info        ", "", "Show product information"),
-                     "p" : ("protocols   ", "", "Show product communication protocols"),
-                     "h" : ("help        ", "", "This page"),
-                     "w" : ("getwaypoints", "", "Download waypoints from the GPS"),
-                     "r" : ("getroutes   ", "", "Download routes from the GPS"),
-                     "t" : ("gettracks   ", "", "Download tracks from the GPS"),
-                     "f" : ("format", "<format>", "Output format (pygarmin, xml-abstract, xml-product)")}
+        self.args = Arguments(
+            {'d' : ('debug', 'LEVEL', 'Set debug level, 0-6'),
+             'f' : ('format', 'FORMAT', 'Output format (pygarmin, xml-abstract, xml-product)')},
+            'Usage: %s [OPTIONS] DEVICE [COMMAND] ...',
+"""
+Communicate with a Garmin GPS connected to DEVICE, where COMMAND is one of:
+  info         Show product information
+  protocols    Show product communication protocols
+  waypoints    Download waypoints from the GPS
+  routes       Download routes from the GPS
+  tracks       Download tracks from the GPS
+The default command is to display the product information.
+""",
+            'Example: %s /dev/tts/0 waypoints')
 
-        self.longopts = {"info" : "i",
-                         "protocols" : "p",
-                         "help" : "h",
-                         "getwaypoints": "w",
-                         "getroutes" : "r",
-                         "gettracks" : "t",
-                         "format" : "f" }
+        if self.args.options.has_key('help'):
+            self.args.help()
+            sys.exit(0)
 
-        self.usage = "Usage: %s [COMMAND] DEVICE" % sys.argv[0]
-        self.description = "Communicate with a Garmin GPS connected to DEVICE."
-        self.example = "Example: %s -i /dev/ttyS0" % sys.argv[0]
-
-        self._parse_argv()
-
-    def _check_options(self):
-        if len(self.leftover) != 1:
-            self.help("")
-            sys.exit(1)
-        else:
-            self.device(self.leftover[0])
-
-        if not self.options:
-            print "%s: No command specified!" % sys.argv[0]
+        if len(self.args) == 0:
+            self.args.help()
             sys.exit(1)
 
-    def info(self, arg):
-        print "*** Product Info ***"
-        print string.join(self.gps.prod_descs, "\n")
-        print "GPS Product ID: %i" % self.gps.prod_id
-        print "Software version: %2.2f" % self.gps.soft_ver
-        print
+        if self.args.options.has_key('debug'):
+            garmin.debug = int(self.args.options['debug'])
+
+    def run(self):
+        try:
+            self.device(self.args[0])
+        except IOError:
+            sys.stderr.write(sys.exc_info()[1] + '\n')
+            sys.exit(1)
+
+        if len(self.args) == 1:
+            self.info()
+            sys.exit(0)
+
+        for cmd in self.args:
+            if cmd in ('info', 'protocols', 'waypoints', 'routes', 'tracks'):
+                self.__getattribute__(cmd)()
 
     def device(self, arg):
-        links = {"posix" : garmin.UnixSerialLink,
-                 "nt" : garmin.Win32SerialLink}
-        try:
-            phys = links[os.name](arg)
-            self.gps = garmin.Garmin(phys)
-        except IOError:
-            print sys.exc_info()[1]
-            sys.exit(1)
+        links = {'posix' : garmin.UnixSerialLink,
+                 'nt' : garmin.Win32SerialLink}
+        phys = links[os.name](arg)
+        self.gps = garmin.Garmin(phys)
 
-    def protocols(self, arg):
-        print "*** Product Protocols ***"
+### commands
+
+    def info(self):
+        print '*** Product Info ***'
+        print string.join(self.gps.prod_descs, '\n')
+        print 'GPS Product ID: %i' % self.gps.prod_id
+        print 'Software version: %2.2f' % self.gps.soft_ver
+        print
+
+    def protocols(self):
+        print '*** Product Protocols ***'
         for i in range(len(self.gps.protocols)):
             p = self.gps.protocols[i]
-            if p[0] == "D":
-                sys.stdout.write(", "+p)
+            if p[0] == 'D':
+                sys.stdout.write(', '+p)
             else:
                 if i == 0:
                     sys.stdout.write(p)
                 else:
-                    sys.stdout.write("\n"+p)
-        print "\n"
+                    sys.stdout.write('\n'+p)
+        print '\n'
 
-    def format(self, arg):
-        try:
-            self.getformat()
-        except KeyError:
-            sys.stderr.write("Unknown format: '"+self.options['-f']+"'")
-            sys.exit(1)
-
-    def getformat(self):
-        if '-f' in self.options.keys():
-            fmtmap = {'xml-product': FORMAT_XML_PRODUCT,
-                      'xml-abstract': FORMAT_XML_ABSTRACT,
-                      'pygarmin': FORMAT_PYGARMIN}
-            val = self.options['-f']
-            fmt = fmtmap[val]
+    def waypoints(self):
+        fmtmap = {'xml-product': self.waypointsxmlproduct,
+                  'xml-abstract': self.waypointsxmlabstract,
+                  'pygarmin': self.waypointspygarmin}
+        if self.args.options.has_key('format'):
+            fmt = self.args.options['format']
+            if fmt in fmtmap.keys():
+                fmtmap[fmt]()
+            else:
+                sys.stderr.write("Unknown format: '" + fmt + "'\n")
+                sys.exit(1) # XXX use exception
         else:
-            fmt = FORMAT_PYGARMIN
-        return fmt
+            self.waypointspygarmin()
 
-    def getwaypoints(self, arg):
-        fmt = self.getformat()
-        if fmt == FORMAT_XML_PRODUCT:
-            self.getwaypointsxmlproduct()
-        elif fmt == FORMAT_XML_ABSTRACT:
-            self.getwaypointsxmlabstract()
-        else:
-            self.getwaypointspygarmin()
-
-    def getwaypointspygarmin(self):
-        print "*** Downloaded Waypoints ***"
-        ws = self.gps.getWaypoints()
-        for w in ws:
-            print w
+    def routes(self):
+        print '*** Downloaded Routes ***'
+        rs = self.gps.getRoutes(print_)
         print
 
-    def getwaypointsxmlproduct(self):
+    def tracks(self):
+        print '*** Downloaded Tracks ***'
+        ts = self.gps.getTracks(print_)
+        print
+
+###
+
+    def waypointspygarmin(self):
+        print '*** Downloaded Waypoints ***'
+        ws = self.gps.getWaypoints(print_)
+        print
+
+    def waypointsxmlproduct(self):
         x = xmlwriter.XmlWriter()
-        ws = self.gps.getWaypoints()
         x.tag('gps', 0, {'class': 'garmin',
                          'id' : self.gps.prod_id,
                          'info': string.join(self.gps.prod_descs),
                          'version': self.gps.soft_ver})
         x.tag('waypoints')
-        for w in ws:
+        def cb(w):
             wclass = string.split(str(w.__class__), '.')[-1]
             wname = w.ident
             x.tag('waypoint', 0,
@@ -200,50 +192,35 @@ class Pygarmin(GnuApp):
                     'longitude' : w.slon,
                     'format' : 'semicircle' })
             for attr in w.parts:
-               val = eval("w."+attr)
+               val = eval('w.'+attr)
                if len(str(val)) > 0:
                    x.tag('attribute', 1, { 'name': attr, 'value': val})
             x.tagClose()
+        self.gps.getWaypoints(cb)
         x.tagClose()
         x.tagClose()
 
-    def getwaypointsxmlabstract(self):
+    def waypointsxmlabstract(self):
         x = xmlwriter.XmlWriter()
-        ws = self.gps.getWaypoints()
         x.tag('gps', 0, {'class': 'abstract'})
         x.tag('waypoints')
-        for w in ws:
+        def cb(w):
             wname = w.ident
             x.tag('waypoint', 0, { 'name': wname })
             x.tag('coordinates', 1,
                   { 'latitude' : garmin.degrees(w.slat),
                     'longitude' : garmin.degrees(w.slon)})
             x.tagClose()
+        self.gps.getWaypoints(cb)
         x.tagClose()
         x.tagClose()
 
-    def getroutes(self, arg):
-        print "*** Downloaded Routes ***"
-        rs = self.gps.getRoutes()
-        for r in rs:
-            for pt in r:
-                print pt
-            print
-        print
-
-    def gettracks(self, arg):
-        print "*** Downloaded Tracks ***"
-        ts = self.gps.getTracks()
-        for t in ts:
-            for pt in t:
-                print pt
-            print
-        print
+def print_(x):
+    print x
 
 def main():
     app = Pygarmin()
-    app._run()
-    return 0
+    app.run()
 
-if __name__ == "__main__":
-    sys.exit(main())
+if __name__ == '__main__':
+    main()

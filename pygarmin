@@ -78,7 +78,7 @@ class GnuApp:
         for k in seq:
             apply(eval("self."+self.opts[k[1:]][0]), (self.options[k],))
 
-class GarminApp(GnuApp):
+class Pygarmin(GnuApp):
     def __init__(self):
         self.opts = {"i" : ("info        ", "", "Show product information"),
                      "p" : ("protocols   ", "", "Show product communication protocols"),
@@ -163,7 +163,7 @@ class GarminApp(GnuApp):
         print
 
 def main():
-    app = GarminApp()
+    app = Pygarmin()
     app._run()
     return 0
 

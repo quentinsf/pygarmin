@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 """
-   pygarmin
+   gnome-pygarmin
 
-   This is a Gnome user application for communicating with Garmin
+   This is a GNOME user application for communicating with Garmin
    GPS receivers.
 
    This is released under the Gnu General Public Licence. A copy of
@@ -15,7 +15,8 @@
    
 """
 
-import sys, garmin, libglade, gtk
+import sys, garmin, libglade
+from gtk import *
 from gnome.ui import *
 from gnome import config
 
@@ -28,7 +29,18 @@ class GnomePygarmin:
                    "on_exit1_activate"         : self.exit,
                    "on_gnome-pygarmin_destroy" : self.exit,
                    "on_about1_activate"        : self.about,
-                   "on_preferences1_activate"  : self.prefs}
+                   "on_preferences1_activate"  : self.prefs,
+                   "on_toolbar-open_clicked"   : self.open,
+                   "on_toolbar-save_clicked"   : self.save,
+                   "on_open1_activate"         : self.open,
+                   "on_save1_activate"         : self.save,
+                   "on_save_as1_activate"      : self.save_as,
+                   "on_cut1_activate"          : self.cut,
+                   "on_copy1_activate"         : self.copy,
+                   "on_paste1_activate"        : self.paste,
+                   "on_clear1_activate"        : self.clear,
+                   "on_properties1_activate"   : self.properties}
+
         self.widgets.signal_autoconnect(signals)
 
         self.gps = None
@@ -37,8 +49,9 @@ class GnomePygarmin:
 
     def init_gps(self, device):
         if device == None:
-            GnomeErrorDialog("Please enter the serial device to which your GPS is connected.")
             self.prefs(None)
+            GnomeErrorDialog("Please enter the serial device to which your GPS is connected.",
+                             self.widgets.get_widget("gnome-pygarmin")).set_modal(TRUE)
         else:
             try:
                 phys = garmin.UnixSerialLink(device)
@@ -46,11 +59,13 @@ class GnomePygarmin:
             except:
                 msg = str(sys.exc_info()[1])
                 if msg:
-                    GnomeErrorDialog(str(sys.exc_info()[1]))
-                self.prefs(None)
+                    self.prefs(None)
+                    GnomeErrorDialog(str(sys.exc_info()[1]),
+                                     self.widgets.get_widget("gnome-pygarmin")).set_modal(TRUE)
 
     def waypoints_upload(self, widget):
-        pass
+        GnomeErrorDialog("Not yet implemented!",
+                         self.widgets.get_widget("gnome-pygarmin")).set_modal(TRUE)
 
     def waypoints_download(self, widget):
         if not self.gps:
@@ -67,7 +82,7 @@ class GnomePygarmin:
 
     def exit(self, widget):
         config.sync()
-        gtk.mainquit()
+        mainquit()
 
     def prefs(self, widget):
         Preferences(self)
@@ -75,6 +90,38 @@ class GnomePygarmin:
     def about(self, widget):
         libglade.GladeXML("gnome-pygarmin.glade",
                           "about")
+
+    def open(self, widget):
+        GnomeErrorDialog("Not yet implemented!",
+                         self.widgets.get_widget("gnome-pygarmin")).set_modal(TRUE)
+        
+    def save(self, widget):
+        GnomeErrorDialog("Not yet implemented!",
+                         self.widgets.get_widget("gnome-pygarmin")).set_modal(TRUE)
+
+    def save_as(self, widget):
+        GnomeErrorDialog("Not yet implemented!",
+                         self.widgets.get_widget("gnome-pygarmin")).set_modal(TRUE)
+
+    def cut(self, widget):
+        GnomeErrorDialog("Not yet implemented!",
+                         self.widgets.get_widget("gnome-pygarmin")).set_modal(TRUE)
+
+    def copy(self, widget):
+        GnomeErrorDialog("Not yet implemented!",
+                         self.widgets.get_widget("gnome-pygarmin")).set_modal(TRUE)
+
+    def paste(self, widget):
+        GnomeErrorDialog("Not yet implemented!",
+                         self.widgets.get_widget("gnome-pygarmin")).set_modal(TRUE)
+
+    def clear(self, widget):
+        GnomeErrorDialog("Not yet implemented!",
+                         self.widgets.get_widget("gnome-pygarmin")).set_modal(TRUE)
+
+    def properties(self, widget):
+        GnomeErrorDialog("Not yet implemented!",
+                         self.widgets.get_widget("gnome-pygarmin")).set_modal(TRUE)
 
 class Preferences:
     def __init__(self, pygarmin):
@@ -111,7 +158,7 @@ class Preferences:
 
 def main(argv):
     app = GnomePygarmin()
-    gtk.mainloop()
+    mainloop()
     del app
     return 0
 

@@ -203,7 +203,6 @@ class L002(L000):
    Pid_Rte_Wpt_Data = 39
    Pid_Wpt_Data = 43
 
-
 # Application Protocols =======================================
 
 ProtocolException = "Protocol Error"
@@ -282,37 +281,7 @@ class TransferProtocol:
       self.datatypes = datatypes
 
    def getData(self, cmd, *pids):
-      pids=list(pids)
-      if len(pids) > 1:
-         results = []
-         has_hdr = 1
-      else:
-         has_hdr = 0
-      result = []
-      self.link.sendPacket(self.link.Pid_Command_Data, cmd)
-      data = self.link.expectPacket(self.link.Pid_Records)
-      (numrecords,) = struct.unpack("<h", data)
-      for i in range(numrecords):
-         tp, data = self.link.readPacket()
-         try:
-            index = pids.index(tp)
-         except ValueError:
-            raise ProtocolException, "Expected header or point"
-         p = self.datatypes[index]()
-         p.unpack(data)
-         if has_hdr and index == 0: # i.e. a header
-            if result:
-               results.append(result)
-            result = [p]
-         else:
-            result.append(p)
-      data = self.link.expectPacket(self.link.Pid_Xfer_Cmplt)
-      if has_hdr:
-         if result:
-            results.append(result)
-         return results
-      else:
-         return result
+      pass
 
    def putData(self, cmd, data_pid, records):
       numrecords = len(records)
@@ -321,66 +290,115 @@ class TransferProtocol:
          self.link.sendPacket(data_pid, i.pack())
       self.link.sendPacket(self.link.Pid_Xfer_Cmplt, cmd)
 
-class A100(TransferProtocol):
+class SingleTransferProtocol(TransferProtocol):
+
+   def getData(self, cmd, pid):
+      self.link.sendPacket(self.link.Pid_Command_Data, cmd)
+      data = self.link.expectPacket(self.link.Pid_Records)
+      (numrecords,) = struct.unpack("<h", data)
+
+      result = []
+      for i in range(numrecords):
+         data = self.link.expectPacket(pid)
+         p = self.datatypes[0]()
+         p.unpack(data)
+         result.append(p)
+
+      self.link.expectPacket(self.link.Pid_Xfer_Cmplt)
+      return result
+
+class MultiTransferProtocol(TransferProtocol):
+
+   def getData(self, cmd, hdr_pid, *data_pids):
+      self.link.sendPacket(self.link.Pid_Command_Data, cmd)
+      data = self.link.expectPacket(self.link.Pid_Records)
+      (numrecords,) = struct.unpack("<h", data)
+
+      data_pids = list(data_pids)
+      result = []
+      last = []
+      for i in range(numrecords):
+         tp, data = self.link.readPacket()
+         if tp == hdr_pid:
+            if last:
+               result.append(last)
+               last = []
+            index = 0
+         else:
+            try:
+               index = data_pids.index(tp) + 1
+            except ValueError:
+               raise ProtocolException, "Expected header or point"
+         p = self.datatypes[index]()
+         p.unpack(data)
+         last.append(p)
+
+      self.link.expectPacket(self.link.Pid_Xfer_Cmplt)
+      if last:
+         result.append(last)
+      return result
+
+class A100(SingleTransferProtocol):
    "Waypoint Transfer Protocol"
    def getData(self):
-      return TransferProtocol.getData(self,
-                               self.cmdproto.Cmnd_Transfer_Wpt,
-                               self.link.Pid_Wpt_Data)
+      return SingleTransferProtocol.getData(self,
+                                            self.cmdproto.Cmnd_Transfer_Wpt,
+                                            self.link.Pid_Wpt_Data)
    def putData(self,data):
-      return TransferProtocol.putData(self,
-                               self.cmdproto.Cmnd_Transfer_Wpt,
-                               self.link.Pid_Wpt_Data, data)
+      return SingleTransferProtocol.putData(self,
+                                            self.cmdproto.Cmnd_Transfer_Wpt,
+                                            self.link.Pid_Wpt_Data,
+                                            data)
       
 
-class A200(TransferProtocol):
+class A200(MultiTransferProtocol):
    "Route Transfer Protocol"
    def getData(self):
-      return TransferProtocol.getData(self,
-                                      self.cmdproto.Cmd_Tranfer_Rte,
-                                      self.link.Pid_Rte_Hdr,
-                                      self.link.Pid_Rte_Wpt_Data)
+      return MultiTransferProtocol.getData(self,
+                                           self.cmdproto.Cmd_Tranfer_Rte,
+                                           self.link.Pid_Rte_Hdr,
+                                           self.link.Pid_Rte_Wpt_Data)
 
-class A201(TransferProtocol):
+class A201(MultiTransferProtocol):
    "Route Transfer Protocol"
    def getData(self):
-      return TransferProtocol.getData(self,
-                                      self.cmdproto.Cmnd_Transfer_Rte,
-                                      self.link.Pid_Rte_Hdr,
-                                      self.link.Pid_Rte_Wpt_Data,
-                                      self.link.Pid_Rte_Link_Data)
+      return MultiTransferProtocol.getData(self,
+                                           self.cmdproto.Cmnd_Transfer_Rte,
+                                           self.link.Pid_Rte_Hdr,
+                                           self.link.Pid_Rte_Wpt_Data,
+                                           self.link.Pid_Rte_Link_Data)
 
-class A300(TransferProtocol):
+class A300(SingleTransferProtocol):
    "Track Log Transfer Protocol"
    def getData(self):
-      return TransferProtocol.getData(self,
-                                      self.cmdproto.Cmnd_Transfer_Trk,
-                                      self.link.Pid_Trk_Data)
+      return SingleTransferProtocol.getData(self,
+                                            self.cmdproto.Cmnd_Transfer_Trk,
+                                            self.link.Pid_Trk_Data)
 
-class A301(TransferProtocol):
+class A301(MultiTransferProtocol):
    "Track Log Transfer Protocol"
    def getData(self):
-      return TransferProtocol.getData(self,
-                                      self.cmdproto.Cmnd_Transfer_Trk,
-                                      self.link.Pid_Trk_Hdr,
-                                      self.link.Pid_Trk_Data)
+      return MultiTransferProtocol.getData(self,
+                                           self.cmdproto.Cmnd_Transfer_Trk,
+                                           self.link.Pid_Trk_Hdr,
+                                           self.link.Pid_Trk_Data)
 
-class A400(TransferProtocol):
+class A400(SingleTransferProtocol):
    "Proximity Waypoint Transfer Protocol"
    def getData(self):
-      return TransferProtocol.getData(self,
-                                      self.cmdproto.Cmnd_Transfer_Prx,
-                                      self.link.Pid_Prx_Wpt_Data)
+      return SingleTransferProtocol.getData(self,
+                                            self.cmdproto.Cmnd_Transfer_Prx,
+                                            self.link.Pid_Prx_Wpt_Data)
 
-class A500(TransferProtocol):
+class A500(SingleTransferProtocol):
    "Almanac Transfer Protocol"
    def getData(self):
-      return TransferProtocol.getData(self,
-                                      self.cmdproto.Cmnd_Transfer_Alm,
-                                      self.link.Pid_Prx_Alm_Data)
+      return SingleTransferProtocol.getData(self,
+                                            self.cmdproto.Cmnd_Transfer_Alm,
+                                            self.link.Pid_Prx_Alm_Data)
 
 class A600(TransferProtocol):
-   "WaypointDate & Time Initialization Protocol"
+   "Waypoint Date & Time Initialization Protocol"
    def getData(self):
       self.link.sendPacket(self.link.Pid_Command_Data,
                            self.cmdproto.Cmnd_Transfer_Time)
@@ -425,11 +443,10 @@ class DataPoint:
    
    def unpack(self, bytes):
       # print struct.calcsize(self.fmt), self.fmt
-      # print len(bytes), bytes
+      # print len(bytes), repr(bytes)
       bits = struct.unpack(self.fmt, bytes)
       for i in range(len(self.parts)):
          self.__dict__[self.parts[i]] = bits[i]
-   
 
 # Waypoints  ---------------------------------------------------
 
@@ -454,7 +471,7 @@ class Waypoint(DataPoint):
       self.cmnt = cmnt           # comment (must be upper case)
       self.unused = 0L
       
-   def __str__(self):
+   def __repr__(self):
       return "<Waypoint %s (%3.5f, %3.5f) (at %x)>" % (self.ident,
                                                  degrees(self.slat),
                                                  degrees(self.slon),
@@ -599,8 +616,9 @@ class D155(Waypoint):
 # Route headers  ---------------------------------------------
 
 class RouteHdr(DataPoint):
-   def __str__(self):
-      return "<RouteHdr at %s>" % id(self)
+
+   def __repr__(self):
+      return "<RouteHdr (at %s)>" % id(self)
 
 class D200(RouteHdr):
    parts = ("route_num",)
@@ -615,7 +633,14 @@ class D202(RouteHdr):
    parts = ("ident",)
    fmt="<s"
 
-class D210(RouteHdr):
+# Route links  -----------------------------------------------
+
+class RouteLink(DataPoint):
+
+   def __repr__(self):
+      return "<RouteLink (at %s)" % id(self)
+
+class D210(RouteLink):
    parts = ("clazz", "subclass", "ident")
    fmt = "<h 18s s"
 
@@ -626,7 +651,7 @@ class TrackPoint(DataPoint):
    slon = 0L
    time = 0L # secs since midnight 31/12/89?
 
-   def __str__(self):
+   def __repr__(self):
       return "<Trackpoint (%3.5f, %3.5f) %s (at %x)>" %\
              (degrees(self.slat), degrees(self.slon),
               time.asctime(time.gmtime(TimeEpoch+self.time)), id(self))
@@ -648,10 +673,10 @@ class D301(TrackPoint):
 class TrackHdr(DataPoint):
    trk_ident = ""
 
-   def __str__(self):
+   def __repr__(self):
       return "<TrackHdr %s (at %x)>" % (self.trk_ident,
                                         id(self))
-
+   
 class D310(TrackHdr):
    parts = ("dspl", "color", "trk_ident")
    fmt = "<b b s"
@@ -704,16 +729,24 @@ class D551(Almanac):
 
 # Date & Time  ---------------------------------------------------
 
-class D600(DataPoint):
+class TimePoint(DataPoint):
    # Not sure what the last four bytes are. Not in docs. 
-   parts = ("month", "day", "year", "hour", "min", "sec", "unknown")
-   fmt = "<b b H h b b L"
+   # hmm... eTrex just sends 8 bytes, no trailing 4 bytes
+   parts = ("month", "day", "year", "hour", "min", "sec") #,"unknown")
+   fmt = "<b b H h b b" #L"
    month = 0         # month (1-12)
    day = 0           # day (1-32)
    year = 0          # year
    hour = 0          # hour (0-23)
    min = 0           # min (0-59)
    sec = 0           # sec (0-59)
+
+   def __str__(self):
+      return "%d-%.2d-%.2d %.2d:%.2d:%.2d UTC" % (self.year, self.month, self.day,
+                                                  self.hour, self.min, self.sec)
+
+class D600(TimePoint):
+   pass
 
 # Position   ---------------------------------------------------
 
@@ -905,23 +938,21 @@ def FormatA001(protocols):
       phys = eval(protocols[0])
       link = eval(protocols[1])
       cmnd = eval(protocols[2])
-   except NameError:
-      raise "Protocol", p, "not supported yet!"
       
-   MAP = {"1" : None, "2" : None, "3" : None, "4" : None,
-          "5" : None, "6" : None, "7" : None, "8" : None}
-   last_seen = None
-   for i in range(3, len(protocols)):
-      p = protocols[i]
-      if p[0] == "A":
-         if MAP[p[1]] == None:
-            MAP[p[1]] = []
-         last_seen = MAP[p[1]]
-      try:
+      tuples = {"1" : None, "2" : None, "3" : None, "4" : None,
+                "5" : None, "6" : None, "7" : None, "8" : None}
+      last_seen = None
+      for i in range(3, len(protocols)):
+         p = protocols[i]
+         if p[0] == "A":
+            if tuples[p[1]] == None:
+               tuples[p[1]] = []
+            last_seen = tuples[p[1]]
          last_seen.append(eval(p))
-      except NameError:
-         raise "Protocol", p, "not supported yet!"
-   return (None, link, cmnd, MAP["1"], MAP["2"], MAP["3"], MAP["4"], MAP["5"])
+   except NameError:
+      raise "Protocol %s not supported yet!" % sys.exc_info()[1]
+   return (None, link, cmnd, tuples["1"], tuples["2"], tuples["3"],
+           tuples["4"], tuples["5"])
 
 # ====================================================================
 
@@ -958,18 +989,20 @@ class UnixSerialLink(SerialLink):
 class Garmin:
    def __init__(self, physicalLayer):
       self.link = L000(physicalLayer)      # at least initially
-      print "Requesting product data"
-      (prod_id, soft_ver, prod_descs) = A000(self.link).getProductData()
-      print "GPS Product ID: %d Descriptions: %s Software version: %2.2f" % \
-            (prod_id, prod_descs, soft_ver)
+      (self.prod_id, self.soft_ver,
+       self.prod_descs) = A000(self.link).getProductData()
 
       # Read the protocols supported by the unit from the Big Table.
       # If the unit isn't mentioned there, assume it does A001
       try:
-         protos = GetProtocols(prod_id, soft_ver)
+         protos = GetProtocols(self.prod_id, self.soft_ver)
       except KeyError:
          protocols = A001(self.link).getProtocols()
-         protos = FormatA001(protocols)
+         try:
+            protos = FormatA001(protocols)
+         except:
+            print sys.exc_info()[0]
+            sys.exit(1)
 
       (versions, self.linkProto, self.cmdProto, wptProtos, rteProtos,
        trkProtos, prxProtos, almProtos) = protos
@@ -1007,10 +1040,12 @@ class Garmin:
    def getRoutes(self):
       return self.rteLink.getData()
 
-   # should be getTracks? later models (eTrex) return
-   # more than one list - jahs
-   def getTrack(self):
-      return self.trkLink.getData()
+   def getTracks(self):
+      data = self.trkLink.getData()
+      if isinstance(self.trkLink, SingleTransferProtocol):
+         return [data] # for consistency- compare A300 with A301
+      else:
+         return data
 
    def getProxPoints(self):
       return self.prxLink.getData()
@@ -1027,6 +1062,9 @@ def main():
    serialDevice =  "/dev/ttyS0"
    phys = UnixSerialLink(serialDevice)
    gps = Garmin(phys)
+
+   print "GPS Product ID: %d Descriptions: %s Software version: %2.2f" % \
+         (gps.prod_id, gps.prod_descs, gps.soft_ver)
 
    if 1:
       # show waypoints
@@ -1048,9 +1086,10 @@ def main():
 
    if 0:
       # show track
-      pts = gps.getTrack()
-      for p in pts:
-         print p
+      tracks = gps.getTracks()
+      for t in tracks:
+         for p in t:
+            print p
 
    if 0:
       # show almanac

@@ -1,0 +1,193 @@
+<HTML>
+<HEAD>
+<TITLE>PyGarmin - A Python Interface to Garmin GPS Equipment</TITLE>
+</HEAD>
+
+<BODY BGCOLOR="#E0E0FF">
+<H1>PyGarmin - A Python Interface to Garmin GPS Equipment</H1>
+
+<h2>Introduction</h2>
+
+<p>PyGarmin is a set of <a href="http://www.python.org">Python</a>
+classes which implement the protocol used by <a
+href="http://www.garmin.com">Garmin</A> GPS receivers to talk to each
+other and to other machines. It is based on the official <a
+href="http://www.garmin.com/support/commProtocol.html">protocol
+specification</a>.  PyGarmin is not a complete application - it is
+just a toolkit to help you write applications.  I'm assuming you know
+how to program in Python.</p>
+
+<p>This is a project which is in development. Everything could change
+dramatically, and probably will. Lots of bits are not fully
+implemented yet. Much of it is not really tested. No support. No
+guarantees. And so forth.</p>
+
+<p>Having said all of that, this does allow me to download information
+from my GPS12XL to my Linux box, and it ought to adjust automatically
+to a large number of different Garmin receivers.  If you use PyGarmin,
+it will probably be much quicker than writing your own software from
+scratch.  I haven't yet tested this on any other models. If it works
+on your GPS, let me know. If it doesn't, let me know.  The more info
+you can give me about what went wrong, the more likely I am to fix
+it.</p>
+
+<h2>Basics</h2>
+
+<p><i>Please read this before looking at the code.  The code looks quites
+scary if you don't know what's happening!</i></p>
+
+<p>Almost every model of Garmin receiver implements a slightly
+different protocol. They have many things in common, but there are
+minor differences. For example, some receivers can display icons, and
+they therefore transmit waypoints which have an extra 'symbol' field,
+not used in other models. Others don't use icons, but do store
+altitude. And so forth. You need to get the protocol right for your
+particular model.</p>
+
+<p>This makes matters more complicated, but at least these things are
+well documented by Garmin. The <a href="http://www.garmin.com/support/protocol.html">specification</a> includes a big table
+which details, for each product type, what protocol it uses for basic
+commands, what it uses for downloading waypoints, what it uses for
+downloading routes, and so forth.</p>
+
+<p>I have created Python classes for each of the protocols listed in
+the spec, and for each of the data types. Well, most of them. The big
+table becomes, in Python, a mapping from the Garmin product ID to the
+set of relevant classes. This means that, while there are a large
+number of classes defined in the source, only a few of them will ever
+be used by any given receiver. The classes are all given names based
+on those used in the specification, so look at that if you want to
+know more about them.</p>
+
+<p>The included class <tt>garmin.Garmin</tt> will connect to your GPS,
+read its product ID and software version, and then look up the
+appropriate classes in the table. It creates instances of the protocol
+classes and notes the datatype classes for each type of data used in
+the transmisisons. It also has some friendly methods like
+'getWaypoints', which do what you would expect. But what you get back
+when you call this is a list of objects, each of which is an instance
+of a class derived from garmin.Waypoint, but the precise type of the
+objects will depend on the GPS you're talking to.</p>
+
+<p>OK. Here's a simple Python program:</p>
+<center><table width=90% border=0 bgcolor="#ffeeff" cellpadding=10 cellspacing=0>
+<tr><td>
+<i><font color="#804040">#! /usr/local/bin/python</font></i><br>
+<i><font color="#804040"># Load the module</font></i><br>
+<tt>import garmin</tt><br/>
+<br/>
+<i><font color="#804040"># Create a 'physical layer' connection using serial port</font></i><br>
+<tt>phys = garmin.UnixSerialLink("/dev/ttyS0")</tt><br/>
+<br/>
+<i><font color="#804040"># Create a Garmin object using this connection</font></i><br>
+<tt>gps = garmin.Garmin(phys)</tt><br/>
+<br/>
+<i><font color="#804040"># Get the waypoints from the GPS</font></i><br>
+<i><font color="#804040"># (This may take a little while)</font></i><br>
+<tt>waypoints = gps.getWaypoints()</tt><br/>
+<br/>
+<i><font color="#804040"># Print the waypoints</i></font><br>
+<tt>for w in waypoints:</tt><br/>
+<tt>&nbsp;&nbsp;&nbsp;&nbsp;print w.ident, <br>
+&nbsp;&nbsp;&nbsp;&nbsp;lat = garmin.degrees(w.slat)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;lon = garmin.degrees(w.slon)<br> 
+&nbsp;&nbsp;&nbsp;&nbsp;print lat, lon, w.cmnt</tt><br/>
+</td></tr></table></center>
+
+<p>Simple, eh?  This should work for almost any model, because all
+waypoints will have an identity, a latitude &amp; longitude, and a
+comment field. The latitude and longitude are stored in 'semicircle'
+coordinates (basically degrees, but scaled to fill a signed long
+integer), and so the fields are called 'slat' and 'slon'. The function
+<tt>garmin.degrees()</tt> converts these to degrees.</p>
+
+<h2>More details</h2>
+
+<p>There are 3 levels of protocol documented:</p>
+<center><table border=0 cellpadding=6 cellspacing=2>
+<tr><td bgcolor="#ffffe0" align="center"><b>Application layer</b></td><td>(highest level)</td></tr>
+<tr><td bgcolor="#e0ffff" align="center"><b>Link layer</b></td><td>&nbsp;</td></tr>
+<tr><td bgcolor="#e0ffe0" align="center"><b>Physical layer</b></td><td>(lowest level)</td></tr>
+</table></center>
+
+<p>The specification documents the various different versions of these
+under labels of Pxxx, Lxxx, Axxx etc, where xxx is a number, and this
+convention is followed here. There are also various data types, named
+Dxxx. Roughly speaking, the Physical protocols specify RS232, the Link
+protocols specify a packet structure for sending messages to and fro,
+and the Application protocols specify what can actually go in those
+packets.</p> 
+
+<p>For example, a Garmin GPS 38 will talk to your computer
+over physical layer P000 (RS232) using a packet structure defined by
+link layer L001.  If you want to transfer waypoints to and from it,
+they will be sent using application layer A100 (a waypoint transfer
+protocol), and the actual waypoints transferred will be of type
+D100. </p>
+
+<p>At the time of writing, the only documented physical layer is P000
+which is roughly RS232 at 9600 baud, 8 data bits, no parity, 1 stop
+bit. In the software, we model this as a P000 class that has read and
+write methods, which can be used by the higher protocol levels. The
+UnixSerialPort class used in the sample code above is a subtype of
+P000.</p> 
+
+<p>If you want to understand more, read the source and the specification. I may get round to more docs, when there's more to document.</p>
+
+<h2>Limitations</h2>
+
+<p>Things which may be fixed/finished. Volunteers welcome!</p>
+<ul>
+
+<li>If you have a pretty new Garmin, this library may not work. That's
+because recent models may implement the Protocol Capability Protocol
+A001. This means that they don't appear in the 'big table' mentioned
+above. Instead, they can use A001 to tell the other end which
+protocols they support. I haven't implemented it yet, and I don't have
+anything to test it with.</li>
+
+<li>Currently no real support for the A800/D800 real-time data protocol.  That means you can't currently use PyGarmin to handle live position data such as you'd get from NMEA. Actually, the classes are partly defined, but none of the products in the 'big table' use this protocol. I think A700 will do something similar if you repeatedly request the position from the host.</li>
+ 
+<li>Some data type classes are not implemented here, just because I got bored of typing. I've done the ones used by the more common units, but if yours isn't covered, it should be easy to add. They're only a few lines each.</li>
+
+<li>Not enough error reporting if things go wrong.  No timeouts if the GPS just isn't connected or isn't switched on, or isn't set to use Garmin mode on its interface.</li>
+
+<li>More helpful methods to be added to the Garmin class.</li>
+
+</ul>
+
+<h2>Things I would like to do</h2>
+
+<ul>
+
+<li>I haven't yet created a WindowsSerialPort class for those poor
+people still using Windows, but it should be easy using the serial IO
+module available at .  <a
+href="ftp://ftp.python.org/pub/python/contrib/System/sio-151.zip">ftp://ftp.python.org/pub/python/contrib/System/sio-151.zip</a>.</li>
+
+<li>We need a standard text-based file format to store all the data on
+disk.  I suggest something XML-based.  That was the reason I started
+writing this; so I could back up my waypoint & track data without
+using somebody's proprietary format.</li>
+
+<li>Some pretty applications.</li>
+
+<li>This page could be improved.</li>
+
+</ul>
+
+
+<h2>Download</h2>
+
+<p>This software is completely free.  You can do what you like with
+it.  If you improve it, I'd be grateful if you'd let me know.  It
+comes with no warranties, explicit or implied, and you use it at your
+own risk. It may be Y2K compliant.</p>
+
+<p>It's one text file which you can download <a href="garmin.py">here</a>.</p>
+
+
+<a href="http://www.uk.research.att.com/~qsf/">Quentin Stafford-Fraser</a>
+
+</BODY>
+</HTML>

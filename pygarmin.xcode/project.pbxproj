@@ -1,0 +1,139 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 39;
+	objects = {
+		468A456F05DA1D6A0023048E = {
+			children = (
+				468A457E05DA1DE30023048E,
+				468A457F05DA1DE30023048E,
+				468A458005DA1DE30023048E,
+				468A458105DA1DE30023048E,
+				468A458205DA1DE30023048E,
+				468A458305DA1DE30023048E,
+				468A458405DA1DE30023048E,
+				468A458505DA1DE30023048E,
+				468A458605DA1DE30023048E,
+				468A458705DA1DE30023048E,
+			);
+			isa = PBXGroup;
+			refType = 4;
+			sourceTree = "<group>";
+		};
+		468A457105DA1D6A0023048E = {
+			buildRules = (
+			);
+			buildSettings = {
+				COPY_PHASE_STRIP = NO;
+			};
+			isa = PBXBuildStyle;
+			name = Development;
+		};
+		468A457205DA1D6A0023048E = {
+			buildRules = (
+			);
+			buildSettings = {
+				COPY_PHASE_STRIP = YES;
+			};
+			isa = PBXBuildStyle;
+			name = Deployment;
+		};
+		468A457305DA1D6A0023048E = {
+			buildSettings = {
+			};
+			buildStyles = (
+				468A457105DA1D6A0023048E,
+				468A457205DA1D6A0023048E,
+			);
+			hasScannedForEncodings = 1;
+			isa = PBXProject;
+			mainGroup = 468A456F05DA1D6A0023048E;
+			projectDirPath = "";
+			targets = (
+			);
+		};
+		468A457E05DA1DE30023048E = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = text;
+			path = CHANGES.txt;
+			refType = 4;
+			sourceTree = "<group>";
+		};
+		468A457F05DA1DE30023048E = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = text.script.python;
+			path = datum.py;
+			refType = 4;
+			sourceTree = "<group>";
+		};
+		468A458005DA1DE30023048E = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = text.script.python;
+			path = garmin.py;
+			refType = 4;
+			sourceTree = "<group>";
+		};
+		468A458105DA1DE30023048E = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = text;
+			path = "gnome-pygarmin";
+			refType = 4;
+			sourceTree = "<group>";
+		};
+		468A458205DA1DE30023048E = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = text.plist.xml;
+			path = "gnome-pygarmin.glade";
+			refType = 4;
+			sourceTree = "<group>";
+		};
+		468A458305DA1DE30023048E = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = text.html;
+			path = index.html;
+			refType = 4;
+			sourceTree = "<group>";
+		};
+		468A458405DA1DE30023048E = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = text.script.python;
+			path = newstruct.py;
+			refType = 4;
+			sourceTree = "<group>";
+		};
+		468A458505DA1DE30023048E = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = text;
+			path = pygarmin;
+			refType = 4;
+			sourceTree = "<group>";
+		};
+		468A458605DA1DE30023048E = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = text.script.python;
+			path = refdatum.py;
+			refType = 4;
+			sourceTree = "<group>";
+		};
+		468A458705DA1DE30023048E = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = text.script.python;
+			path = xmlwriter.py;
+			refType = 4;
+			sourceTree = "<group>";
+		};
+	};
+	rootObject = 468A457305DA1D6A0023048E;
+}

@@ -1,3 +1,10 @@
+Coding Guidelines
+-----------------------
+As of 2005-03-25, all code has been reformatted to use four space indents,
+and no tabs. This is the preferred Python coding style, as documented
+in PEP 8.
+-----------------------
+
 Date : 24 December 2004
 Author : Gerrit Sere
 

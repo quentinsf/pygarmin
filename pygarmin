@@ -207,9 +207,9 @@ The default command is to display the product information.
                     'longitude' : w.slon,
                     'format' : 'semicircle' })
             for attr in w.parts:
-               val = eval('w.'+attr)
-               if len(str(val)) > 0:
-                   x.tag('attribute', 1, { 'name': attr, 'value': val})
+                val = eval('w.'+attr)
+                if len(str(val)) > 0:
+                    x.tag('attribute', 1, { 'name': attr, 'value': val})
             x.tagClose()
         self.gps.getWaypoints(cb)
         x.tagClose()

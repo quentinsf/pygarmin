@@ -81,163 +81,163 @@ class Arguments(list):
 
 class Pygarmin(object):
 
-	def __init__(self):
-			self.args = Arguments(
-            {'d' : ('debug', 'LEVEL', 'Set debug level, 0-6'),
-            },
-            'Usage: %s [OPTIONS] [COMMAND] ...',
+    def __init__(self):
+        self.args = Arguments(
+{'d' : ('debug', 'LEVEL', 'Set debug level, 0-6'),
+},
+'Usage: %s [OPTIONS] [COMMAND] ...',
 """
 Communicate with a Garmin GPS connected to DEVICE, where COMMAND is one of:
-  info         Show product information
-  protocols    Show product communication protocols
-  waypoints    Download waypoints from the GPS
-  routes       Download routes from the GPS
-  tracks       Download tracks from the GPS
+info         Show product information
+protocols    Show product communication protocols
+waypoints    Download waypoints from the GPS
+routes       Download routes from the GPS
+tracks       Download tracks from the GPS
 The default command is to display the product information.
 """,
-            'Example: %s waypoints')
+'Example: %s waypoints')
 
-			if self.args.options.has_key('help'):
-				self.args.help()
-				sys.exit(0)
+        if self.args.options.has_key('help'):
+            self.args.help()
+            sys.exit(0)
 
-			if len(self.args) == 0:
-				self.args.help()
-				sys.exit(1)
+        if len(self.args) == 0:
+            self.args.help()
+            sys.exit(1)
 
-			if self.args.options.has_key('debug'):
-				garmin.debug = int(self.args.options['debug'])
+        if self.args.options.has_key('debug'):
+            garmin.debug = int(self.args.options['debug'])
 
-	def run(self):
-		
-			try:
-				self.device()
-			except IOError:
-				sys.stderr.write(sys.exc_info()[1] + '\n')
-				sys.exit(1)
+    def run(self):
 
-			if len(self.args) == 1:
-				self.info()
-				sys.exit(0)
+        try:
+            self.device()
+        except IOError:
+            sys.stderr.write(sys.exc_info()[1] + '\n')
+            sys.exit(1)
 
-			for cmd in self.args:
-				if cmd in ('info', 'protocols', 'waypoints', 'routes', 'tracks'):
-					self.__getattribute__(cmd)()
+        if len(self.args) == 1:
+            self.info()
+            sys.exit(0)
 
-	def device(self):
-			
-			if os.name == 'nt':
-				#0 is com1, 1 is com2 etc
-				serialDevice =  0
-			else:
-				serialDevice =  "/dev/ttyS0"
-		
-			if sys.platform[:-1] == "freebsd":
-				serialDevice =  "/dev/cuaa0" # For FreeBsd
-			
-			phys = garmin.SerialLink(serialDevice)
-		
-			self.gps = garmin.Garmin(phys)
+        for cmd in self.args:
+            if cmd in ('info', 'protocols', 'waypoints', 'routes', 'tracks'):
+                self.__getattribute__(cmd)()
+
+    def device(self):
+
+        if os.name == 'nt':
+            #0 is com1, 1 is com2 etc
+            serialDevice =  0
+        else:
+            serialDevice =  "/dev/ttyS0"
+
+        if sys.platform[:-1] == "freebsd":
+            serialDevice =  "/dev/cuaa0" # For FreeBsd
+
+        phys = garmin.SerialLink(serialDevice)
+
+        self.gps = garmin.Garmin(phys)
 
 ### commands
 
-	def info(self):
-			print '*** Product Info ***'
-			print string.join(self.gps.prod_descs, '\n')
-			print 'GPS Product ID: %i' % self.gps.prod_id
-			print 'Software version: %2.2f' % self.gps.soft_ver
-			print
+    def info(self):
+        print '*** Product Info ***'
+        print string.join(self.gps.prod_descs, '\n')
+        print 'GPS Product ID: %i' % self.gps.prod_id
+        print 'Software version: %2.2f' % self.gps.soft_ver
+        print
 
-	def protocols(self):
-		print '*** Product Protocols ***'
-		
-		for i in range(len(self.gps.protocols)):
-			p = self.gps.protocols[i]
-			
-			if  p[0] == 'D':
-				print p,
-			else:
-				if i == 0:
-					print p,
-				else:
-					print 
-					print p,
-					
-		print 
-		
-		# print unknown protocols
-		
-		if len(self.gps.protocols_unknown):
-			print
-			print "Product protocols who are not supported yet:"
-			print "--------------------------------------------"
-			
-			for i in range(len(self.gps.protocols_unknown)):
-				p = self.gps.protocols_unknown[i]
-			
-				if  p[0] == 'D':
-					print p,
-				else:
-					if i == 0:
-						print p,
-					else:
-						print 
-						print p,
-						
-			print		
-			print
-			
-	def waypoints(self):
-	
-		waypoints = self.gps.getWaypoints()
-	
-		print "Waypoints :"
-		print "-----------"
-		
-		for x in waypoints:
-			print x 	
-			
-	def routes(self):
-		
-		routes = self.gps.getRoutes()
-		
-		print "Routes"
-		print "------"
-		
-		for route in routes:
-			print
-			print "Route name :", route[0]
-			
-			for point in route[1:]:
-			
-				# Ok, Bad way to remove D210_Rte_Link_Type entrys
-				
-				if len(point) > 23:
-					print "   ",point	
-					
-	def tracks(self):
-	
-		print "Tracks"
-		print "------"
-		
-		tracks = self.gps.getTracks()
-		
-		for track in tracks:
-		
-			# Check for multiple tracks
-			
-			if type(track) == list:
-				print
-				print "Track name :",track[0]
-		
-				for point in track[1:]:
-					print "   ",point
-			else:
-				print track
-			
+    def protocols(self):
+        print '*** Product Protocols ***'
 
-"""			
-	def waypoints(self):
+        for i in range(len(self.gps.protocols)):
+            p = self.gps.protocols[i]
+
+            if  p[0] == 'D':
+                print p,
+            else:
+                if i == 0:
+                    print p,
+                else:
+                    print
+                    print p,
+
+        print
+
+        # print unknown protocols
+
+        if len(self.gps.protocols_unknown):
+            print
+            print "Product protocols who are not supported yet:"
+            print "--------------------------------------------"
+
+            for i in range(len(self.gps.protocols_unknown)):
+                p = self.gps.protocols_unknown[i]
+
+                if  p[0] == 'D':
+                    print p,
+                else:
+                    if i == 0:
+                        print p,
+                    else:
+                        print
+                        print p,
+
+            print
+            print
+
+    def waypoints(self):
+
+        waypoints = self.gps.getWaypoints()
+
+        print "Waypoints :"
+        print "-----------"
+
+        for x in waypoints:
+            print x
+
+    def routes(self):
+
+        routes = self.gps.getRoutes()
+
+        print "Routes"
+        print "------"
+
+        for route in routes:
+            print
+            print "Route name :", route[0]
+
+            for point in route[1:]:
+
+                # Ok, Bad way to remove D210_Rte_Link_Type entrys
+
+                if len(point) > 23:
+                    print "   ",point
+
+    def tracks(self):
+
+        print "Tracks"
+        print "------"
+
+        tracks = self.gps.getTracks()
+
+        for track in tracks:
+
+            # Check for multiple tracks
+
+            if type(track) == list:
+                print
+                print "Track name :",track[0]
+
+                for point in track[1:]:
+                    print "   ",point
+            else:
+                print track
+
+
+"""
+        def waypoints(self):
        fmtmap = {'xml-product': self.waypointsxmlproduct,
                   'xml-abstract': self.waypointsxmlabstract,
                   'pygarmin': self.waypointspygarmin}
@@ -251,24 +251,24 @@ The default command is to display the product information.
         else:
             self.waypointspygarmin()
 
-	def routes(self):
+        def routes(self):
         print '*** Downloaded Routes ***'
         rs = self.gps.getRoutes(print_)
         print
 
-	def tracks(self):
+        def tracks(self):
         print '*** Downloaded Tracks ***'
         ts = self.gps.getTracks(print_)
         print
 
 ###
 
-	def waypointspygarmin(self):
+        def waypointspygarmin(self):
         print '*** Downloaded Waypoints ***'
         ws = self.gps.getWaypoints(print_)
         print
 
-	def waypointsxmlproduct(self):
+        def waypointsxmlproduct(self):
         x = xmlwriter.XmlWriter()
         x.tag('gps', 0, {'class': 'garmin',
                          'id' : self.gps.prod_id,
@@ -295,7 +295,7 @@ The default command is to display the product information.
         x.tagClose()
         x.tagClose()
 
-	def waypointsxmlabstract(self):
+        def waypointsxmlabstract(self):
         x = xmlwriter.XmlWriter()
         x.tag('gps', 0, {'class': 'abstract'})
         x.tag('waypoints')

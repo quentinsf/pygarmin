@@ -12,7 +12,7 @@
    parameters of the other ones are usually quoted as differences from
    WGS84.  In this module. a Datum object represents a datum and
    converts lat/lon points in that datum to and from WGS84.
-   
+
    A reference datum consists of a particular shape of ellipsoid and
    an x, y, z offset.  The ellipsoid is defined by its semi-major-axis
    'a' (in this case, the equatorial radius) and its semi-minor-axis
@@ -25,10 +25,10 @@
 
      import datum
      osd = datum.DatumFromName ('Ordnance Survey of Great Britain 36')
-     print osd.toWGS84deg(12.3,54.3) 
+     print osd.toWGS84deg(12.3,54.3)
 
    (c) 2003 Quentin Stafford-Fraser <www.qandr.org/quentin>
-       
+
    Partly derived from some python code by Joseph Newman
    which in turn came from C code by Alan Jones
 
@@ -149,15 +149,15 @@ def DatumFromName(name):
 # A simple test routine
 
 def test():
-     osd = DatumFromName ('Ordnance Survey of Great Britain 36')
-     nad = DatumFromName ('North America 1927 mean')
-     wlat, wlon, walt    = (12.3, 45.6, 78)
-     print "lat, lon, alt =", wlat, wlon, walt
-     olat, olon, oalt    = osd.fromWGS84deg(wlat,wlon,walt)
-     wlat2, wlon2, walt2 = osd.toWGS84deg(olat, olon, oalt)
-     print "Under OSGB datum =", olat, olon, oalt
-     print "errors after conversion back = ",
-     print wlat2-wlat, wlon2-wlon, walt2-walt
+    osd = DatumFromName ('Ordnance Survey of Great Britain 36')
+    nad = DatumFromName ('North America 1927 mean')
+    wlat, wlon, walt    = (12.3, 45.6, 78)
+    print "lat, lon, alt =", wlat, wlon, walt
+    olat, olon, oalt    = osd.fromWGS84deg(wlat,wlon,walt)
+    wlat2, wlon2, walt2 = osd.toWGS84deg(olat, olon, oalt)
+    print "Under OSGB datum =", olat, olon, oalt
+    print "errors after conversion back = ",
+    print wlat2-wlat, wlon2-wlon, walt2-walt
 
 if __name__ == '__main__':
     test()

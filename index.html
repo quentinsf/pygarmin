@@ -6,16 +6,53 @@
     <title>PyGarmin - A Python Interface to Garmin GPS Equipment</title>
 
 <style type="text/css">
- body { margin-left: 12pt; margin-right: 12pt;   background-color: #E0DEFF; }
- p    { margin-left: 18pt; margin-right: 12pt }
- h1 h2 h3 h4 { font-family: arial,helvetica,sans-serif }
- div.code {text-align: center}
- .comment {font-style: italic; color: #804040}
+ body { 
+    background-color: #E0DEFF; 
+    }
+    
+ div#main { 
+    margin: 4%;
+    background-color: white; 
+    border: 1px solid black; 
+    padding: 3%;
+    }
+    
+ h1, h2, h3, h4 { 
+    font-family: arial,helvetica,sans-serif; 
+    color: #70608f;
+    }
+    
+ p {
+    text-align: justify;
+    margin-left: 18pt; 
+    margin-right: 12pt; 
+    font-size: 11pt;
+    line-height: 125%; 
+    }
+ 
+div.code {
+    margin-left: 18pt; 
+    margin-right: 12pt; 
+    background-color: #f0DEF0;
+    padding: 8px;
+    text-align: left;
+    }
+    
+pre.comment {
+    font-family: times, serif;
+    font-style: italic; 
+    color: #804040;
+    }
+
+div.table1 {
+    margin-left: 28pt;
+}
 </style>
 
   </head>
 
   <body>
+    <div id="main">
     <h1>PyGarmin - A Python Interface to Garmin GPS
     Equipment</h1>
 
@@ -111,52 +148,44 @@
     suitable permissions on the serial port (e.g /dev/ttyS0) before
     running it.</p>
 
-    <div class="code">
-      <table width="90%" border="0" bgcolor="#ffeeff"
-      cellpadding="10" cellspacing="0">
-        <tr>
-          <td><span class="comment">#! /usr/local/bin/python</span>
-          <br />
-          <span class="comment"># Load the module</span>
-          <br />
-          <tt>import garmin</tt>
-          <br />
-          <br />
-          <span class="comment"># Create a 'physical layer' connection
-          using serial port</span>
-          <br />
-          <tt>phys = garmin.UnixSerialLink("/dev/ttyS0")</tt>
-          <br />
-          <br />
-          <span class="comment"># Create a Garmin object using this
-          connection</span>
-          <br />
-          <tt>gps = garmin.Garmin(phys)</tt>
-          <br />
-          <br />
-          <span class="comment"># Get the waypoints from the GPS</span>
-          <br />
-          <span class="comment"># (This may take a little while)</span>
-          <br />
-          <tt>waypoints = gps.getWaypoints()</tt>
-          <br />
-          <br />
-          <span class="comment"># Print the waypoints</span>
-          <br />
-          <tt>for w in waypoints:</tt>
-          <br />
-          <tt>    print w.ident,
-          <br />
-               lat = garmin.degrees(w.slat)
-          <br />
-              lon = garmin.degrees(w.slon)
-          <br />
-               print lat, lon, w.cmnt</tt>
-          <br />
-          </td>
-        </tr>
-      </table>
-    </div>
+<div class="code">
+
+<pre class="comment">
+#! /usr/local/bin/python
+# Load the module
+</pre>
+
+<pre class="code">import garmin</pre>
+
+<pre class="comment">
+# Create a 'physical layer' connection using serial port
+</pre>
+<pre class="code">
+phys = garmin.UnixSerialLink("/dev/ttyS0")
+</pre>
+<pre class="comment">
+# Create a Garmin object using this connection
+</pre>
+<pre class="code">gps = garmin.Garmin(phys)</pre>
+
+<pre class="comment">
+# Get the waypoints from the GPS
+# (This may take a little while)
+</pre>
+
+<pre class="code">
+waypoints = gps.getWaypoints()
+</pre>
+ 
+<pre class="comment"># Print the waypoints</pre>
+<pre class="code">
+for w in waypoints:
+    print w.ident,
+    lat = garmin.degrees(w.slat)
+    lon = garmin.degrees(w.slon)
+    print lat, lon, w.cmnt
+</pre>
+</div>
 
     <p>Simple, eh? This should work for almost any model, because
     all waypoints will have an identity, a latitude &amp;
@@ -170,7 +199,7 @@
 
     <p>There are 3 levels of protocol documented:</p>
 
-    <div class="c2">
+    <div class="table1">
       <table border="0" cellpadding="6" cellspacing="2">
         <tr>
           <td bgcolor="#ffffe0" align="center"><b>Application
@@ -183,7 +212,7 @@
           <td bgcolor="#e0ffff" align="center"><b>Link
           layer</b></td>
 
-          <td> </td>
+          <td>&nbsp;</td>
         </tr>
 
         <tr>
@@ -251,8 +280,9 @@
     page.</p>
     <p><a href="http://www.qandr.org/quentin">Quentin
     Stafford-Fraser</a></p>
+    </div>
     
-    <p><a href="http://sourceforge.net"> <img src="http://sourceforge.net/sflogo.php?group_id=5570&amp;type=5" width="210" height="62" border="0" alt="SourceForge.net Logo" /></a></p>
+    <p><a href="http://sourceforge.net"> <img src="http://sourceforge.net/sflogo.php?group_id=5570&amp;type=5" width="210" height="62" border="0" alt="SourceForge.net Logo" align="right" /></a></p>
     
   </body>
 </html>

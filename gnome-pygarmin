@@ -47,7 +47,7 @@ class GnomePygarmin:
         device = config.get_string("/gnome-pygarmin/Preferences/serial_device")
         self.init_gps(device)
 
-    def init_gps(self, device):
+    def init_gps(self, device = None):
         if device == None:
             self.prefs(None)
             GnomeErrorDialog("Please enter the serial device to which your GPS is connected.",

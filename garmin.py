@@ -997,35 +997,50 @@ class UnixSerialLink(SerialLink):
 
       SerialLink.__init__(self, f)
 
-class WindowsSerialLink(SerialLink):
+# Win32 Serial Link ==================================================
 
+if os.name == 'nt':
+   from win32file import * 
+   import win32con
+
+class Win32SerialLink:
    def __init__(self, device):
-      """Device should be 'COM1' up to 'COM9'"""
-      from Serial import Serial
+      self.device = device
+      self.handle = CreateFile(device,
+         win32con.GENERIC_READ | win32con.GENERIC_WRITE,
+         0, # exclusive access
+         None, # no security
+         win32con.OPEN_EXISTING,
+         0,
+         None)
 
-      d = Serial.PortDict()
-      d["port"] = eval("Serial."+device)
-      d["baud"] = Serial.Baud9600
-      d["dataBits"] = Serial.WordLength8
-      d["parity"] = Serial.NoParity
-      d["stopBits"] = Serial.OneStopBit
+      # Remove anything that was there
+      PurgeComm(self.handle, PURGE_TXABORT | PURGE_RXABORT
+         | PURGE_TXCLEAR | PURGE_RXCLEAR )
 
-      f = Serial.Port(d)
-      f.open()
-      SerialLink.__init__(self, f)
+      # Setup time-outs
+      timeouts = 0xFFFFFFFF, 0, 4000, 0, 4000
+      SetCommTimeouts(self.handle, timeouts)
+
+      # Setup the connection info.
+      dcb = GetCommState( self.handle )
+      dcb.BaudRate = CBR_9600
+      dcb.ByteSize = 8
+      dcb.Parity = NOPARITY
+      dcb.StopBits = ONESTOPBIT
+      SetCommState(self.handle, dcb)
 
    def read(self, n):
-      """Apparently, on Win32 a read from the serial device will
-      return the empty string if no data are available. This method
-      mimics the usual Linux style, which is to block until n bytes
-      are available."""
-      
-      buffer = []
-      while len(buffer) != n:
-         data = self.f.read(n-len(buffer))
-         map(buffer.append, data)
-      data = string.join(buffer, "")
+      buffer = AllocateReadBuffer(n)
+      rc, data = ReadFile(self.handle, buffer)
+      if len(data) != n:
+	raise LinkException, "time out";
       return data
+
+   def write(self, n):
+      rc,n = WriteFile(self.handle, n)
+      if rc:
+        raise LinkException, "WriteFile error";
 
 class Garmin:
    def __init__(self, physicalLayer):
@@ -1096,14 +1111,19 @@ class Garmin:
 # =================================================================
 
 def main():
-   serialDevice =  "/dev/ttyS0"
-   phys = UnixSerialLink(serialDevice)
+   if os.name == 'nt':
+      serialDevice =  "com2"
+      phys = Win32SerialLink(serialDevice)
+   else:
+      serialDevice =  "/dev/ttyS0"
+      phys = UnixSerialLink(serialDevice)
+      
    gps = Garmin(phys)
 
    print "GPS Product ID: %d Descriptions: %s Software version: %2.2f" % \
          (gps.prod_id, gps.prod_descs, gps.soft_ver)
 
-   if 1:
+   if 0:
       # show waypoints
       wpts = gps.getWaypoints()
       for w in wpts:

@@ -23,35 +23,46 @@ from gnome import config
 class GnomePygarmin:
     def __init__(self):
         self.widgets = libglade.GladeXML("gnome-pygarmin.glade",
-                                         "gnome-pygarmin")
-        signals = {"on_wpt_upload_clicked"     : self.waypoints_upload,
-                   "on_wpt_download_clicked"   : self.waypoints_download,
-                   "on_exit1_activate"         : self.exit,
-                   "on_gnome-pygarmin_destroy" : self.exit,
-                   "on_about1_activate"        : self.about,
-                   "on_preferences1_activate"  : self.prefs,
-                   "on_toolbar-open_clicked"   : self.open,
-                   "on_toolbar-save_clicked"   : self.save,
-                   "on_open1_activate"         : self.open,
-                   "on_save1_activate"         : self.save,
-                   "on_save_as1_activate"      : self.save_as,
-                   "on_cut1_activate"          : self.cut,
-                   "on_copy1_activate"         : self.copy,
-                   "on_paste1_activate"        : self.paste,
-                   "on_clear1_activate"        : self.clear,
-                   "on_properties1_activate"   : self.properties}
+                                         "gnome_pygarmin")
+        signals = {
+            "on_gnome_pygarmin_destroy"    : self.exit,
+            # File
+            "on_menu_new_activate"         : self.new,
+            "on_menu_open_activate"        : self.open,
+            "on_menu_save_activate"        : self.save,
+            "on_menu_save_as_activate"     : self.save_as,
+            "on_menu_exit_activate"        : self.exit,
+            # Edit
+            "on_menu_cut_activate"         : self.cut,
+            "on_menu_copy_activate"        : self.copy,
+            "on_menu_paste_activate"       : self.paste,
+            "on_menu_clear_activate"       : self.clear,
+            "on_menu_properties_activate"  : self.properties,
+            # GPS
+            "on_menu_download_activate"    : self.download,
+            "on_menu_info_activate"        : self.info,
+            # Settings
+            "on_menu_preferences_activate" : self.prefs,
+            # Help
+            "on_menu_about_activate"       : self.about,
+            # Toolbar
+            "on_toolbar_open_clicked"      : self.open,
+            "on_toolbar_save_clicked"      : self.save,
+            "on_toolbar_download_clicked"  : self.download,
+            "on_toolbar_info_clicked"      : self.info
+            }
 
         self.widgets.signal_autoconnect(signals)
 
         self.gps = None
         device = config.get_string("/gnome-pygarmin/Preferences/serial_device")
-        self.init_gps(device)
+        self._init_gps(device)
 
-    def init_gps(self, device = None):
+    def _init_gps(self, device = None):
         if device == None:
             self.prefs(None)
             GnomeErrorDialog("Please enter the serial device to which your GPS is connected.",
-                             self.widgets.get_widget("gnome-pygarmin")).set_modal(TRUE)
+                             self.widgets.get_widget("gnome_pygarmin")).set_modal(TRUE)
         else:
             try:
                 phys = garmin.UnixSerialLink(device)
@@ -61,77 +72,75 @@ class GnomePygarmin:
                 if msg:
                     self.prefs(None)
                     GnomeErrorDialog(str(sys.exc_info()[1]),
-                                     self.widgets.get_widget("gnome-pygarmin")).set_modal(TRUE)
+                                     self.widgets.get_widget("gnome_pygarmin")).set_modal(TRUE)
 
-    def waypoints_upload(self, widget):
-        GnomeErrorDialog("Not yet implemented!",
-                         self.widgets.get_widget("gnome-pygarmin")).set_modal(TRUE)
+    def _not_done(self):
+        e = GnomeErrorDialog("Not yet implemented!",
+                             self.widgets.get_widget("gnome_pygarmin"))
+        e.set_modal(TRUE)
+        
+    # File
+    def new(self, widget):
+        self._not_done()
 
-    def waypoints_download(self, widget):
-        if not self.gps:
-            self.init_gps()
-            return
-        wpts = self.gps.getWaypoints()
-        wpt_list = self.widgets.get_widget("wpt_list")
-        wpt_list.clear()
+    def open(self, widget):
+        self._not_done()
+        
+    def save(self, widget):
+        self._not_done()
 
-        for w in wpts:
-            wpt_list.append((w.ident,
-                             str(garmin.degrees(w.slat)),
-                             str(garmin.degrees(w.slon))))
+    def save_as(self, widget):
+        self._not_done()
 
     def exit(self, widget):
         config.sync()
         mainquit()
 
+    # Edit
+    def cut(self, widget):
+        self._not_done()
+
+    def copy(self, widget):
+        self._not_done()
+
+    def paste(self, widget):
+        self._not_done()
+
+    def clear(self, widget):
+        self._not_done()
+
+    def properties(self, widget):
+        self._not_done()
+
+    # GPS
+    def download(self, widget):
+        Download(self)
+
+    def info(self, widget):
+        self._not_done()
+
+    # Settings
     def prefs(self, widget):
         Preferences(self)
 
+    # Help
     def about(self, widget):
-        libglade.GladeXML("gnome-pygarmin.glade",
-                          "about")
-
-    def open(self, widget):
-        GnomeErrorDialog("Not yet implemented!",
-                         self.widgets.get_widget("gnome-pygarmin")).set_modal(TRUE)
-        
-    def save(self, widget):
-        GnomeErrorDialog("Not yet implemented!",
-                         self.widgets.get_widget("gnome-pygarmin")).set_modal(TRUE)
-
-    def save_as(self, widget):
-        GnomeErrorDialog("Not yet implemented!",
-                         self.widgets.get_widget("gnome-pygarmin")).set_modal(TRUE)
-
-    def cut(self, widget):
-        GnomeErrorDialog("Not yet implemented!",
-                         self.widgets.get_widget("gnome-pygarmin")).set_modal(TRUE)
-
-    def copy(self, widget):
-        GnomeErrorDialog("Not yet implemented!",
-                         self.widgets.get_widget("gnome-pygarmin")).set_modal(TRUE)
-
-    def paste(self, widget):
-        GnomeErrorDialog("Not yet implemented!",
-                         self.widgets.get_widget("gnome-pygarmin")).set_modal(TRUE)
-
-    def clear(self, widget):
-        GnomeErrorDialog("Not yet implemented!",
-                         self.widgets.get_widget("gnome-pygarmin")).set_modal(TRUE)
-
-    def properties(self, widget):
-        GnomeErrorDialog("Not yet implemented!",
-                         self.widgets.get_widget("gnome-pygarmin")).set_modal(TRUE)
+        About(self)
 
 class Preferences:
     def __init__(self, pygarmin):
         self.pygarmin = pygarmin
         self.widgets = libglade.GladeXML("gnome-pygarmin.glade",
                                          "preferences")
-        signals = {"on_prefs-ok_clicked" : self.ok,
-                   "on_prefs-apply_clicked" : self.apply,
-                   "on_prefs-cancel_clicked" : self.cancel}
+        signals = {
+            "on_prefs_ok_clicked"     : self.ok,
+            "on_prefs_apply_clicked"  : self.apply,
+            "on_prefs_cancel_clicked" : self.cancel
+            }
         self.widgets.signal_autoconnect(signals)
+
+        window = self.widgets.get_widget("preferences")
+        window.set_parent(self.pygarmin.widgets.get_widget("gnome_pygarmin"))
 
         text_entry = self.widgets.get_widget("device")
         device = config.get_string("/gnome-pygarmin/Preferences/serial_device")
@@ -139,31 +148,83 @@ class Preferences:
             device = ""
         text_entry.set_text(device)
 
-        self.widgets.get_widget("preferences").set_modal(TRUE)
+        window.show()
 
     def ok(self, widget):
         text_entry = self.widgets.get_widget("device")
         device = text_entry.get_text()
-        self.pygarmin.init_gps(device)
+        self.pygarmin._init_gps(device)
         config.set_string("/gnome-pygarmin/Preferences/serial_device", device)
         self.cancel(None)
 
     def apply(self, widget):
         text_entry = self.widgets.get_widget("device")
         device = text_entry.get_text()
-        self.pygarmin.init_gps(device)
+        self.pygarmin._init_gps(device)
         self.cancel(None)
 
     def cancel(self, widget):
-        preferences = self.widgets.get_widget("preferences")
-        preferences.close()
+        window = self.widgets.get_widget("preferences")
+        window.close()
 
-def main(argv):
+class Download:
+    def __init__(self, pygarmin):
+        self.pygarmin = pygarmin
+        self.widgets = libglade.GladeXML("gnome-pygarmin.glade",
+                                         "download")
+        signals = {
+            "on_download_ok_clicked"     : self.ok,
+            "on_download_cancel_clicked" : self.cancel
+            }
+        self.widgets.signal_autoconnect(signals)
+
+        window = self.widgets.get_widget("download")
+        window.set_parent(self.pygarmin.widgets.get_widget("gnome_pygarmin"))
+        window.show()
+
+    def _waypoints(self):
+        if not self.pygarmin.gps:
+            self.pygarmin._init_gps()
+            return
+        wpts = self.pygarmin.gps.getWaypoints()
+        wpt_list = self.pygarmin.widgets.get_widget("wpt_list")
+        wpt_list.clear()
+
+        for w in wpts:
+            wpt_list.append((w.ident,
+                             str(garmin.degrees(w.slat)),
+                             str(garmin.degrees(w.slon))))
+
+    def ok(self, widget):
+        w = self.widgets.get_widget("download_waypoints")
+        r = self.widgets.get_widget("download_routes")
+        t = self.widgets.get_widget("download_tracks")
+
+        get_w = w.get_active()
+        self.cancel(None)
+
+        if get_w:
+            w = GnomeMessageBox("Downloading waypoints")
+            self._waypoints()
+            w.close()
+
+    def cancel(self, widget):
+        window = self.widgets.get_widget("download")
+        window.close()
+
+class About:
+    def __init__(self, pygarmin):
+        self.pygarmin = pygarmin
+        self.widgets = libglade.GladeXML("gnome-pygarmin.glade",
+                                         "about")
+        window = self.widgets.get_widget("about")
+        window.set_parent(self.pygarmin.widgets.get_widget("gnome_pygarmin"))
+        window.show()
+
+def main():
     app = GnomePygarmin()
     mainloop()
-    del app
-    return 0
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv))
+    main()
 

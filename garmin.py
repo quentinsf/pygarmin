@@ -1343,6 +1343,10 @@ def FormatA001(protocols):
             if tuples[pclass] == None:
                tuples[pclass] = []
             last_seen = tuples[pclass]
+         elif p[0] == "D":
+            pass
+         else:
+            continue
          last_seen.append(eval(p))
    except NameError:
       print sys.exc_info()[2]

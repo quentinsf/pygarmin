@@ -1,5 +1,10 @@
 PyGarmin Change Log
 
+0.3
+
+Some changes to newstruct to fix bugs and make it work with Python 1.5.1
+Added TrackHdr class to fix protocol D310
+
 0.2
 
 Incorporated James Skillen's improvements to support protocol A001 for

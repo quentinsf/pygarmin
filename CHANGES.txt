@@ -1,7 +1,11 @@
 PyGarmin Change Log
 
+0.2
+
 Incorporated James Skillen's improvements to support protocol A001 for
 newer Garmin units.
 
 Updated the tables based on new spec.
 
+
+0.1 Initial release

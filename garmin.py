@@ -32,6 +32,7 @@
 import os, select, string, sys, time
 import newstruct as struct
 import serial
+import math
 
 # Set this value to > 0 for some debugging output, and the higher
 # the number, the more you'll get.
@@ -540,14 +541,14 @@ def radian(semi):
 # Haversine Formula (from R.W. Sinnott, "Virtues of the Haversine",
 # Sky and Telescope, vol. 68, no. 2, 1984, p. 159):
 def distance(wp1, wp2):
-   R = 63670000
+   R = 6367000
    rlat1 = radian(wp1.slat)
    rlon1 = radian(wp1.slon)
    rlat2 = radian(wp2.slat)
    rlon2 = radian(wp2.slon)
-   dlon = rlon2 - lon1
-   dlat = rlat2 - lon1
-   a =  math.pow(math.sin(dlat/2),2) + math.cos(rlat1)*math.cos(rlat2)*math.pow(sin(dlon/2),2)
+   dlon = rlon2 - rlon1
+   dlat = rlat2 - rlat1
+   a =  math.pow(math.sin(dlat/2),2) + math.cos(rlat1)*math.cos(rlat2)*math.pow(math.sin(dlon/2),2)
    c = 2*math.atan2(math.sqrt(a), math.sqrt(1-a))
    return R*c
 

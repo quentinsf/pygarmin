@@ -1,6 +1,10 @@
 <HTML>
 <HEAD>
 <TITLE>PyGarmin - A Python Interface to Garmin GPS Equipment</TITLE>
+<STYLE>
+BODY { margin-left: 12pt; margin-right: 12pt }
+P { margin-left: 18pt; margin-right: 12pt }
+</STYLE>
 </HEAD>
 
 <BODY BGCOLOR="#E0E0FF">
@@ -22,7 +26,7 @@ just a toolkit to help you write applications.  I'm assuming you know
 how to program in Python.</p>
 
 <p>This is a project which is in development. Everything could change
-dramatically, and probably will. Lots of bits are not fully
+dramatically, and probably will.  Some bits are not fully
 implemented yet. Much of it is not really tested. No support. No
 guarantees. And so forth.</p>
 
@@ -30,15 +34,16 @@ guarantees. And so forth.</p>
 from my GPS12XL to my Linux box, and it ought to adjust automatically
 to a large number of different Garmin receivers.  If you use PyGarmin,
 it will probably be much quicker than writing your own software from
-scratch.  I haven't yet tested this on any other models. If it works
+scratch.  It has had limited testing on other models. If it works
 on your GPS, let me know. If it doesn't, let me know.  The more info
 you can give me about what went wrong, the more likely I am to fix
 it.</p>
 
-<h2>Basics</h2>
+<p>If you want to cut straigh to the code go to the SourceForge
+project page mentioned above. But I suggest you read on first.  The
+code looks quites scary if you don't know what's happening!</p>
 
-<p><i>Please read this before looking at the code.  The code looks quites
-scary if you don't know what's happening!</i></p>
+<h2>Basics</h2>
 
 <p>Almost every model of Garmin receiver implements a slightly
 different protocol. They have many things in common, but there are
@@ -173,6 +178,11 @@ using somebody's proprietary format.</li>
 
 </ul>
 
+<h2>Acknowledgements</h2>
+
+<p>Thanks are due to James Skillen, who implemented many of the more
+recent bits of the protocol, and so made PyGarmin useful for people
+with newer GPS units than mine!</p>
 
 <h2>Download</h2>
 

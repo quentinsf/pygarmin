@@ -31,6 +31,7 @@
 
 import os, select, string, sys, time
 import newstruct as struct
+import serial
 
 # Set this value to > 0 for some debugging output, and the higher
 # the number, the more you'll get.
@@ -433,6 +434,10 @@ class A600(TransferProtocol):
       d.unpack(data)
       return d
 
+class A601(TransferProtocol):
+   "Used by GPSmap 60cs, no specifications as of 2004-09-26"
+   pass
+
 class A700(TransferProtocol):
    "Position Initialisation Protocol"
    pass
@@ -472,6 +477,10 @@ class A904(TransferProtocol):
 
 class A906(TransferProtocol):
    "Mentioned in 'Garmin GPS Interface Specification', 2004-02-24"
+   pass
+
+class A907(TransferProtocol):
+   "Used by GPSmap 60cs, no documentation as of 2004-09-26"
    pass
 
 # Most of the following subclasses have a fmt member which is a format
@@ -1138,6 +1147,10 @@ class TimePoint(DataPoint):
 class D600(TimePoint):
    pass
 
+class D601(TimePoint):
+   "used by GPSmap 60cs, no documentation as of 2004-09-26"
+   pass
+
 # Position   ---------------------------------------------------
 
 class D700(DataPoint):
@@ -1158,6 +1171,22 @@ class D800(DataPoint):
    def __str__(self):
       return "tow: %g rlat: %g rlon: %g east: %g north %g" \
       % (self.tow, self.rlat, self.rlon, self.east, self.north)
+
+class D907(DataPoint):
+   "used by GPSmap 60cs, no documentation as of 2004-09-26"
+   pass
+
+class D908(DataPoint):
+   "used by GPSmap 60cs, no documentation as of 2004-09-26"
+   pass
+
+class D909(DataPoint):
+   "used by GPSmap 60cs, no documentation as of 2004-09-26"
+   pass
+
+class D910(DataPoint):
+   "used by GPSmap 60cs, no documentation as of 2004-09-26"
+   pass
 
 # Garmin models ==============================================
 
@@ -1223,6 +1252,7 @@ ModelIDs = (
    (97, "GPS II Plus"),
    (72, "GPS III"),
    (71, "GPS III Pilot"),
+   (291, "GPSMAP 60cs"),
    (50, "GPSCOM 170"),
    (53, "GPSCOM 190"),
    (49, "GPSMAP 130"),
@@ -1363,10 +1393,9 @@ class SerialLink(P000):
      A serial link will look something like this, though real
      implementations will probably override most of it.
    """
-   def __init__(self, f, timeout = 5):
-      self.f = f
-      self.initserial()
-      self.settimeout(timeout)
+   def __init__(self, device, timeout = 5):
+      self.timeout = timeout
+      self.ser = serial.Serial(device, timeout=self.timeout, baudrate=9600)
 
    def initserial(self):
       "Set up baud rate, handshaking, etc"
@@ -1377,106 +1406,21 @@ class SerialLink(P000):
       Read n bytes and return them. Real implementations should
       raise a LinkException if there is a timeout > self.timeout
       """
-      return self.f.read(n)
+      return self.ser.read(n)
 
    def write(self, data):
-      self.f.write(data)
+      self.ser.write(data)
 
    def settimeout(self, secs):
       self.timeout = secs
 
    def __del__(self):
       """Should close down any opened resources"""
-      pass
+      self.close()
 
-# Unix Serial Link ===================================================
-
-if os.name == "posix":
-   import tty
-
-class UnixSerialLink(SerialLink):
-
-   def __init__(self, device):
-      f = open(device, "w+", 0)
-      SerialLink.__init__(self, f)
-
-   def initserial(self):
-      fd = self.f.fileno()
-      tty.setraw(fd)
-      mode = tty.tcgetattr(fd)
-      mode[tty.ISPEED] = mode[tty.OSPEED] = tty.B9600
-      # mode[tty.LFLAG] = mode[tty.LFLAG] | tty.ECHO
-      tty.tcsetattr(fd, tty.TCSAFLUSH, mode)
-
-   def read(self, n):
-      i = 0
-      data = []
-      while i < n:
-         iset,oset,eset = select.select([self.f.fileno()], [], [],
-                                        self.timeout)
-         if iset == []:
-           raise LinkException, "time out"
-         b = self.f.read(1)
-         data.append(b)
-         i = i + 1
-      return string.join(data,'')
-
-   def __del__(self):
-      if self.__dict__.has_key("f"):
-         self.f.close()
-
-# Win32 Serial Link ==================================================
-
-if os.name == 'nt':
-   import win32file, win32con
-
-class Win32SerialLink(SerialLink):
-   def __init__(self, device):
-      self.device = device
-      handle = win32file.CreateFile(device,
-         win32con.GENERIC_READ | win32con.GENERIC_WRITE,
-         0, # exclusive access
-         None, # no security
-         win32con.OPEN_EXISTING,
-         0,
-         None)
-      SerialLink.__init__(self, handle)
-
-   def initserial(self):
-      # Remove anything that was there
-      win32file.PurgeComm(self.f, win32file.PURGE_TXABORT |
-                                  win32file.PURGE_RXABORT |
-                                  win32file.PURGE_TXCLEAR |
-                                  win32file.PURGE_RXCLEAR )
-
-      # Setup the connection info.
-      dcb = win32file.GetCommState( self.f )
-      dcb.BaudRate = win32file.CBR_9600
-      dcb.ByteSize = 8
-      dcb.Parity = win32file.NOPARITY
-      dcb.StopBits = win32file.ONESTOPBIT
-      win32file.SetCommState(self.f, dcb)
-
-   def read(self, n):
-      buffer = win32file.AllocateReadBuffer(n)
-      rc, data = win32file.ReadFile(self.f, buffer)
-      if len(data) != n:
-         raise LinkException, "time out";
-      return data
-
-   def write(self, n):
-      rc,n = win32file.WriteFile(self.f, n)
-      if rc:
-         raise LinkException, "WriteFile error";
-
-   def settimeout(self, secs):
-      SerialLink.settimeout(self, secs)
-      # Setup time-outs
-      timeouts = -1, 0, 1000*secs, 0, 1000*secs
-      win32file.SetCommTimeouts(self.f, timeouts)
-
-   def __del__(self):
-      win32file.CloseHandle(self.f)
+   def close(self):
+      """Close the serial port"""
+      self.ser.close()
 
 class Garmin:
    """
@@ -1573,12 +1517,13 @@ class Garmin:
 
 def main():
    if os.name == 'nt':
-      serialDevice =  "com1"
-      phys = Win32SerialLink(serialDevice)
+      #0 is com1, 1 is com2 etc
+      serialDevice =  0
    else:
       serialDevice =  "/dev/ttyS0"
-      phys = UnixSerialLink(serialDevice)
 
+   phys = SerialLink(serialDevice)
+   
    gps = Garmin(phys)
 
    print "GPS Product ID: %d Descriptions: %s Software version: %2.2f" % \

@@ -8,7 +8,7 @@
    In the format string, an "s" is interpreted as a null-terminated
    string, rather than a string of length 1.
 
-   (c) 2000 James A. H. Skillen <J.A.H.Skillen@warwick.ac.uk>
+   (c) 2000 James A. H. Skillen <jahs@skillen.org.uk>
    
 """
 

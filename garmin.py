@@ -23,7 +23,7 @@
    http://pygarmin.sourceforge.net/
 
    (c) 1999 Quentin Stafford-Fraser <quentin@att.com>
-   (c) 2000 James A. H. Skillen <J.A.H.Skillen@warwick.ac.uk>
+   (c) 2000 James A. H. Skillen <jahs@skillen.org.uk>
    
 """
 
@@ -964,8 +964,17 @@ class SerialLink(P000):
       self.f = f
 
    def read(self, n):
-      return self.f.read(n)
-   
+      """Apparently, on Win32 a read from the serial device will
+      return the empty string if no data are available. This method
+      mimics the usual Linux style, which is to block until n bytes
+      are available."""
+      
+      buffer = []
+      while len(buffer) != n:
+         data = self.f.read(n-len(buffer))
+         map(buffer.append, data)
+      return string.join(buffer, "")
+
    def write(self, data):
       self.f.write(data)
 
@@ -975,31 +984,49 @@ class SerialLink(P000):
 class UnixSerialLink(SerialLink):
 
    def __init__(self, device):
+      import termios
+      from TERMIOS import *
+      
       f = open(device, "w+", 0)
       fd = f.fileno()
 
       iflag, oflag, cflag, lflag, ispeed, ospeed, cc = termios.tcgetattr(fd)
 
-      cflag = cflag & ~TERMIOS.PARENB
-      cflag = cflag & ~TERMIOS.CSTOPB
-      cflag = cflag & ~TERMIOS.CSIZE
-      cflag = cflag | TERMIOS.CS8
-      cflag = cflag | TERMIOS.CLOCAL | TERMIOS.CREAD
+      cflag = cflag & ~PARENB
+      cflag = cflag & ~CSTOPB
+      cflag = cflag & ~CSIZE
+      cflag = cflag | CS8
+      cflag = cflag | CLOCAL | CREAD
 
-      lflag = lflag & ~(TERMIOS.ICANON | TERMIOS.ECHO | TERMIOS.ECHOE \
-                        | TERMIOS.ISIG )
+      lflag = lflag & ~(ICANON | ECHO | ECHOE | ISIG )
 
-      iflag = iflag & ~(TERMIOS.IXON | TERMIOS.IXOFF | TERMIOS.IXANY \
-                        | TERMIOS.INLCR | TERMIOS.IGNCR | TERMIOS.ICRNL \
-                        | TERMIOS.IGNBRK | TERMIOS.BRKINT | TERMIOS.IGNPAR \
-                        | TERMIOS.ISTRIP | TERMIOS.IMAXBEL | TERMIOS.IUCLC)
+      iflag = iflag & ~(IXON | IXOFF | IXANY | INLCR | IGNCR | ICRNL \
+                        | IGNBRK | BRKINT | IGNPAR | ISTRIP | IMAXBEL | IUCLC)
 
-      oflag = oflag & ~TERMIOS.OPOST
+      oflag = oflag & ~OPOST
       
-      ispeed = ospeed = TERMIOS.B9600
+      ispeed = ospeed = B9600
 
-      termios.tcsetattr(fd, TERMIOS.TCSAFLUSH,
+      termios.tcsetattr(fd, TCSAFLUSH,
                         [iflag, oflag, cflag, lflag, ispeed, ispeed, cc])
+      SerialLink.__init__(self, f)
+
+class WindowsSerialLink(SerialLink):
+
+   def __init__(self, device):
+      """Device should be 'COM1' up to 'COM9'"""
+
+      from Serial import Serial
+
+      d = Serial.PortDict()
+      d["port"] = eval("Serial."+device)
+      d["baud"] = Serial.Baud9600
+      d["dataBits"] = Serial.WordLength8
+      d["parity"] = Serial.NoParity
+      d["stopBits"] = Serial.OneStopBit
+
+      f = Serial.Port(d)
+      f.open()
       SerialLink.__init__(self, f)
 
 class Garmin:

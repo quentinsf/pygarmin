@@ -33,7 +33,8 @@ def pack(fmt, *args):
             args[i] = args[i] + "\000"
             tokens[i][0] = str(len(args[i]))
         fmt.append(_string.join(tokens[i], ''))
-    return apply(struct.pack, [ _string.join(fmt) ] + args)
+    args.insert(0, _string.join(fmt))
+    return apply(struct.pack, tuple(args))
 
 def _parse(fmt):
     if START.match(fmt) is not None:

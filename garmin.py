@@ -599,7 +599,8 @@ class D155(Waypoint):
 # Route headers  ---------------------------------------------
 
 class RouteHdr(DataPoint):
-   pass
+   def __str__(self):
+      return "<RouteHdr at %s>" % id(self)
 
 class D200(RouteHdr):
    parts = ("route_num",)
@@ -624,6 +625,7 @@ class TrackPoint(DataPoint):
    slat = 0L
    slon = 0L
    time = 0L # secs since midnight 31/12/89?
+
    def __str__(self):
       return "<Trackpoint (%3.5f, %3.5f) %s (at %x)>" %\
              (degrees(self.slat), degrees(self.slon),
@@ -641,12 +643,20 @@ class D301(TrackPoint):
    depth = 0.0
    new_trk = 0
 
-class D310(TrackPoint):
+# Track headers ----------------------------------------------
+
+class TrackHdr(DataPoint):
+   trk_ident = ""
+
+   def __str__(self):
+      return "<TrackHdr %s (at %x)>" % (self.trk_ident,
+                                        id(self))
+
+class D310(TrackHdr):
    parts = ("dspl", "color", "trk_ident")
    fmt = "<b b s"
    dspl = 0
    color = 0
-   trk_ident = ""
 
 # Proximity waypoints  ---------------------------------------
 
@@ -997,7 +1007,9 @@ class Garmin:
    def getRoutes(self):
       return self.rteLink.getData()
 
-   def getTrack(self): # should be getTracks? 
+   # should be getTracks? later models (eTrex) return
+   # more than one list - jahs
+   def getTrack(self):
       return self.trkLink.getData()
 
    def getProxPoints(self):

@@ -12,14 +12,16 @@
    
 """
 
+from struct import *
+import struct
+
 import string
 _string = string
 del string
-import struct
-error = struct.error
+
 import re
 
-START = re.compile("^[ ]*[@<>!]")
+START = re.compile("^[ ]*[@=<>!]")
 TOKEN = re.compile("[ ]*([0-9]*)([xcbBhHiIlLfdspP])")
 
 def pack(fmt, *args):
@@ -55,25 +57,21 @@ def unpack(fmt, string):
     for i in range(len(tokens)):
         if tokens[i][1] == "s" and tokens[i][0] == "":
             if len(buffer) > 1:
-                buffer, string, unpacked = _flush(buffer, string, unpacked)
-                buffer.append(endian)
+                format = _string.join(buffer)
+                size = struct.calcsize(format)
+                unpacked = unpacked + list(struct.unpack(format, string[:size]))
+                string = string[size:]
+                buffer = [ endian ]
             index = _string.find(string, "\000")
             unpacked.append(string[:index])
             string = string[index+1:]
         else:
             buffer.append(_string.join(tokens[i], ""))
     if len(buffer) > 1:
-        buffer, string, unpacked = _flush(buffer, string, unpacked)
+        format = _string.join(buffer)
+        size = struct.calcsize(format)
+        unpacked = unpacked + list(struct.unpack(format, string[:size]))
     return tuple(unpacked)
-
-def _flush(buffer, string, unpacked):
-    fmt = _string.join(buffer)
-    size = struct.calcsize(fmt)
-
-    unpacked = unpacked + list(struct.unpack(fmt, string[:size]))
-    string = string[size:]
-    del buffer[:]
-    return (buffer, string, unpacked)
 
 def calcsize(fmt):
     endian, tokens = _parse(fmt)

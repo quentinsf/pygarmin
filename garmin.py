@@ -961,22 +961,30 @@ class Garmin:
          protocols = A001(self.link).getProtocols()
          protos = FormatA001(protocols)
 
-      (versions, self.linkProto, self.cmdProto, self.wptProtos, self.rteProtos,
-       self.trkProtos, self.prxProtos, self.almProtos) = protos
+      (versions, self.linkProto, self.cmdProto, wptProtos, rteProtos,
+       trkProtos, prxProtos, almProtos) = protos
 
       self.link = self.linkProto(physicalLayer)
 
+      # The datatypes we expect to receive
+
+      self.wptType = wptProtos[1]
+      self.rteTypes = rteProtos[1:]
+      self.trkTypes = trkProtos[1:]
+
       # Now we set up 'links' through which we can get data of the appropriate types
 
-      self.wptLink = self.wptProtos[0](self.link, self.cmdProto, self.wptProtos[1:])
-      self.rteLink = self.rteProtos[0](self.link, self.cmdProto, self.rteProtos[1:])
-      self.trkLink = self.trkProtos[0](self.link, self.cmdProto, self.trkProtos[1:])
+      self.wptLink = wptProtos[0](self.link, self.cmdProto, (self.wptType,))
+      self.rteLink = rteProtos[0](self.link, self.cmdProto, self.rteTypes)
+      self.trkLink = trkProtos[0](self.link, self.cmdProto, self.trkTypes)
 
-      if self.prxProtos != None:   
-         self.prxLink = self.prxProtos[0](self.link, self.cmdProto, self.prxProtos[1:])
+      if prxProtos != None:   
+         self.prxType = prxProtos[1]
+         self.prxLink = prxProtos[0](self.link, self.cmdProto, (self.prxType,))
 
-      if self.almProtos != None:
-         self.almLink = self.almProtos[0](self.link, self.cmdProto, self.almProtos[1:])
+      if almProtos != None:
+         self.almType = almProtos[1]
+         self.almLink = almProtos[0](self.link, self.cmdProto, (self.almType,))
 
       self.timeLink = A600(self.link, self.cmdProto, D600)
       

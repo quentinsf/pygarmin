@@ -27,7 +27,7 @@
    
 """
 
-import os, string, newstruct, time, sys
+import os, string, newstruct, time, sys, termios, TERMIOS
 struct = newstruct
 
 debug = 0
@@ -960,31 +960,47 @@ def FormatA001(protocols):
 
 class SerialLink(P000):
 
-   def __init__(self, device):
-      self.device = device
-      self.fd = open(self.device,"w+", 0)
+   def __init__(self, f):
+      self.f = f
 
    def read(self, n):
-      return self.fd.read(n)
+      return self.f.read(n)
    
    def write(self, data):
-      self.fd.write(data)
+      self.f.write(data)
 
    def __del__(self):
-      self.fd.close()
+      self.f.close()
 
-         
 class UnixSerialLink(SerialLink):
 
    def __init__(self, device):
-      # The appropriate value here depends on the output from your stty
-      # 
-      STTY_MODE = "0:4:cbd:8a30:3:1c:7f:15:4:0:1:0:11:13:1a" +\
-                  ":0:12:f:17:16:0:0:73:0:0:0:0:0:0:0:0:0:0:0:0:0"
-      # Equivalent to raw -echo
-      dummy = os.popen("/bin/stty %s < %s" % (STTY_MODE, device)
-                       ).read()
-      SerialLink.__init__(self, device)
+      f = open(device, "w+", 0)
+      fd = f.fileno()
+
+      iflag, oflag, cflag, lflag, ispeed, ospeed, cc = termios.tcgetattr(fd)
+
+      cflag = cflag & ~TERMIOS.PARENB
+      cflag = cflag & ~TERMIOS.CSTOPB
+      cflag = cflag & ~TERMIOS.CSIZE
+      cflag = cflag | TERMIOS.CS8
+      cflag = cflag | TERMIOS.CLOCAL | TERMIOS.CREAD
+
+      lflag = lflag & ~(TERMIOS.ICANON | TERMIOS.ECHO | TERMIOS.ECHOE \
+                        | TERMIOS.ISIG )
+
+      iflag = iflag & ~(TERMIOS.IXON | TERMIOS.IXOFF | TERMIOS.IXANY \
+                        | TERMIOS.INLCR | TERMIOS.IGNCR | TERMIOS.ICRNL \
+                        | TERMIOS.IGNBRK | TERMIOS.BRKINT | TERMIOS.IGNPAR \
+                        | TERMIOS.ISTRIP | TERMIOS.IMAXBEL | TERMIOS.IUCLC)
+
+      oflag = oflag & ~TERMIOS.OPOST
+      
+      ispeed = ospeed = TERMIOS.B9600
+
+      termios.tcsetattr(fd, TERMIOS.TCSAFLUSH,
+                        [iflag, oflag, cflag, lflag, ispeed, ispeed, cc])
+      SerialLink.__init__(self, f)
 
 class Garmin:
    def __init__(self, physicalLayer):

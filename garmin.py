@@ -1142,15 +1142,15 @@ class ProxPoint(DataPoint):
 
 class D400(ProxPoint, D100):
     parts = D100.parts + ("dst",)
-    fmt = D100.fmt + "f"
+    fmt = D100.fmt + " f"
 
 class D403(ProxPoint, D103):
     parts = D103.parts + ("dst",)
-    fmt = D103.fmt + "f"
+    fmt = D103.fmt + " f"
 
 class D450(ProxPoint, D150):
     parts = ("idx",) + D150.parts + ("dst",)
-    fmt = "i" + D150.fmt + "f"
+    fmt = "<i " + D150.fmt[1:] + " f"
     idx = 0
 
 

@@ -378,7 +378,7 @@ class A001:
 				protos["command"] = [eval(x)]
 			elif x == "A100":
 				known = True
-				ap_prot = "waypoint" # Application Ptotocol
+				ap_prot = "waypoint" # Application Protocol
 				protos[ap_prot] = [eval(x)]
 			elif x in ["A200","A201"]:
 				known = True
@@ -1231,7 +1231,8 @@ class D109(Waypoint):
 		self.dataDict['dist'] = 0.0
 		self.dataDict['state'] = ""
 		self.dataDict['cc'] = ""
-		self.dataDict['ete'] = 0xffffffff   # Estimated time en route in seconds to next waypoint
+		#self.dataDict['ete'] = 0xffffffff   # Estimated time en route in seconds to next waypoint
+		self.dataDict['ete'] = -1   # Estimated time en route in seconds to next waypoint
 		self.dataDict['ident'] = ""
 		self.dataDict['cmnt'] = ""
 		self.dataDict['facility'] = ""
@@ -1270,9 +1271,11 @@ class D110(Waypoint):
 		self.dataDict['dist'] = 0.0
 		self.dataDict['state'] = ""
 		self.dataDict['cc'] = ""
-		self.dataDict['ete'] = 0xffffffff   # Estimated time en route in seconds to next waypoint
+		#self.dataDict['ete'] = 0xffffffff   # Estimated time en route in seconds to next waypoint
+		self.dataDict['ete'] = -1   # Estimated time en route in seconds to next waypoint
 		self.dataDict['temp'] = 1.0e25
-		self.dataDict['time'] = 0xffffffff
+		#self.dataDict['time'] = 0xffffffff
+		self.dataDict['time'] = -1
 		self.dataDict['wpt_cat'] =0x0000
 		self.dataDict['ident'] = ""
 		self.dataDict['cmnt'] = ""
@@ -2231,6 +2234,10 @@ class Garmin:
 		if self.protos.has_key("data_time"):
 			self.timeLink = self.protos["data_time"][0](self.link, self.cmdProto,self.protos["data_time"][1])
 			
+		# self.flightBook = A650(L001,A010,D650)
+		if self.protos.has_key("flightbook"):
+			self.flightBook = self.protos["flightbook"][0](self.link, self.cmdProto,self.protos["flightbook"][1])
+			
 		# Sorry, no link for A700
 		
 		# self.pvtLink = A800(self.link, self.cmdProto, D800)	
@@ -2270,6 +2277,9 @@ class Garmin:
 		
 	def getTime(self,callback = None):
 		return self.timeLink.getData(callback)
+
+	def getFlightBook(self,callback = None):
+		return self.flightBook.getData(callback)		
 			
 	def pvtOn(self):
 		return self.pvtLink.dataOn()
@@ -2282,7 +2292,7 @@ class Garmin:
 		
 	def getLaps(self,callback = None):
 		return self.lapLink.getData(callback)
-	
+		
 	def abortTransfer(self):
 		return self.command.abortTransfer()
 		
@@ -2452,6 +2462,8 @@ def main():
 					else:
 						print 
 						print p,
+						
+			print
 			
 	# Show waypoints
 	
@@ -2578,7 +2590,7 @@ def main():
 		print
 		print "Same routes but now with a callback function :"
 		print "---------------------------------------------"
-		print "If you leave the header empty, the computer will generate one four you (ROUTE1,ROUTE2,....)"
+		print "If you leave the header empty, the computer will generate one for you (ROUTE1,ROUTE2,....)"
 		
 		header1 = header2 = {}
 		
@@ -2622,7 +2634,7 @@ def main():
 	if 0:
 		print "Sending tracks with a callback function :"
 		print "-----------------------------------------"
-		print "If you leave the header empty, the computer will generate one four you (TRACK1,TRACK2,....)"
+		print "If you leave the header empty, the computer will generate one for you (TRACK1,TRACK2,....)"
 		print "It's possible to send track to the ACTIVE LOG.but you can't send time to tracks"
 		
 		
@@ -2683,7 +2695,18 @@ def main():
 		print "--------------------"
 		
 		gps.getAlmanac(MyCallbackgetAlmanac)
+		
+	# Show FlightBook
 	
+	if 0:
+		print "FlightBook information:"
+		print "-----------------------"
+		
+		flightbook = gps.getFlightBook()
+		
+		for x in flightbook:
+			print x 		
+
 	# Show date and time
 		
 	if 0:
@@ -2694,9 +2717,6 @@ def main():
 			print timeInfo.getDict() # or timeInfo.dataDict
 			
 		print gps.getTime(MyCallbackgetTime)
-		
-	# Show Flightbook
-	# Need to program ...
 		
 	# Show some real-time data
 	
@@ -2729,6 +2749,5 @@ def main():
 		for x in laps:
 			print x 		
 		
-			
 if __name__ == "__main__":
 	main()

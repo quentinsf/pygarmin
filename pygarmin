@@ -157,7 +157,7 @@ class Pygarmin(GnuApp):
             val = self.options['-f']
             fmt = fmtmap[val]                        
         else:
-            fmt = self.FORMAT_PYGARMIN
+            fmt = FORMAT_PYGARMIN
         return fmt
         
     def getwaypoints(self, arg):

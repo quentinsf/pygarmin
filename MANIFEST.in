@@ -1,0 +1,7 @@
+include *.txt
+include *.html
+include *.py
+include *.glade
+include gnome-pygarmin
+include pygarmin
+include MANIFEST.in

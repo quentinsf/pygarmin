@@ -1,5 +1,13 @@
 PyGarmin Change Log
 
+0.7
+Fixed various bugs
+Brought up to date with CVS
+(the tarball had become very dated)
+Patches for recent pythons on Win32
+JAHS's mods - callback, debug etc
+See CVS logs for more details
+
 0.6
 Fixed various bugs
 Tidier SerialLink code

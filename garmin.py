@@ -309,7 +309,7 @@ class TransferProtocol:
 
 class SingleTransferProtocol(TransferProtocol):
 
-   def getData(self, cmd, pid):
+   def getData(self, callback, cmd, pid):
       self.link.sendPacket(self.link.Pid_Command_Data, cmd)
       data = self.link.expectPacket(self.link.Pid_Records)
       (numrecords,) = struct.unpack("<h", data)
@@ -320,13 +320,17 @@ class SingleTransferProtocol(TransferProtocol):
          p = self.datatypes[0]()
          p.unpack(data)
          result.append(p)
-
+         if callback:
+            try:
+               callback(p)
+            except:
+               pass
       self.link.expectPacket(self.link.Pid_Xfer_Cmplt)
       return result
 
 class MultiTransferProtocol(TransferProtocol):
 
-   def getData(self, cmd, hdr_pid, *data_pids):
+   def getData(self, callback, cmd, hdr_pid, *data_pids):
       self.link.sendPacket(self.link.Pid_Command_Data, cmd)
       data = self.link.expectPacket(self.link.Pid_Records)
       (numrecords,) = struct.unpack("<h", data)
@@ -349,6 +353,11 @@ class MultiTransferProtocol(TransferProtocol):
          p = self.datatypes[index]()
          p.unpack(data)
          last.append(p)
+         if callback:
+            try:
+               callback(p)
+            except:
+               pass
 
       self.link.expectPacket(self.link.Pid_Xfer_Cmplt)
       if last:
@@ -357,8 +366,8 @@ class MultiTransferProtocol(TransferProtocol):
 
 class A100(SingleTransferProtocol):
    "Waypoint Transfer Protocol"
-   def getData(self):
-      return SingleTransferProtocol.getData(self,
+   def getData(self, callback = None):
+      return SingleTransferProtocol.getData(self, callback,
                                             self.cmdproto.Cmnd_Transfer_Wpt,
                                             self.link.Pid_Wpt_Data)
    def putData(self,data):
@@ -370,16 +379,16 @@ class A100(SingleTransferProtocol):
 
 class A200(MultiTransferProtocol):
    "Route Transfer Protocol"
-   def getData(self):
-      return MultiTransferProtocol.getData(self,
+   def getData(self, callback = None):
+      return MultiTransferProtocol.getData(self, callback,
                                            self.cmdproto.Cmnd_Transfer_Rte,
                                            self.link.Pid_Rte_Hdr,
                                            self.link.Pid_Rte_Wpt_Data)
 
 class A201(MultiTransferProtocol):
    "Route Transfer Protocol"
-   def getData(self):
-      return MultiTransferProtocol.getData(self,
+   def getData(self, callback = None):
+      return MultiTransferProtocol.getData(self, callback,
                                            self.cmdproto.Cmnd_Transfer_Rte,
                                            self.link.Pid_Rte_Hdr,
                                            self.link.Pid_Rte_Wpt_Data,
@@ -387,30 +396,30 @@ class A201(MultiTransferProtocol):
 
 class A300(SingleTransferProtocol):
    "Track Log Transfer Protocol"
-   def getData(self):
-      return SingleTransferProtocol.getData(self,
+   def getData(self, callback = None):
+      return SingleTransferProtocol.getData(self, callback,
                                             self.cmdproto.Cmnd_Transfer_Trk,
                                             self.link.Pid_Trk_Data)
 
 class A301(MultiTransferProtocol):
    "Track Log Transfer Protocol"
-   def getData(self):
-      return MultiTransferProtocol.getData(self,
+   def getData(self, callback = None):
+      return MultiTransferProtocol.getData(self, callback,
                                            self.cmdproto.Cmnd_Transfer_Trk,
                                            self.link.Pid_Trk_Hdr,
                                            self.link.Pid_Trk_Data)
 
 class A400(SingleTransferProtocol):
    "Proximity Waypoint Transfer Protocol"
-   def getData(self):
-      return SingleTransferProtocol.getData(self,
+   def getData(self, callback = None):
+      return SingleTransferProtocol.getData(self, callback,
                                             self.cmdproto.Cmnd_Transfer_Prx,
                                             self.link.Pid_Prx_Wpt_Data)
 
 class A500(SingleTransferProtocol):
    "Almanac Transfer Protocol"
-   def getData(self):
-      return SingleTransferProtocol.getData(self,
+   def getData(self, callback):
+      return SingleTransferProtocol.getData(self, callback,
                                             self.cmdproto.Cmnd_Transfer_Alm,
                                             self.link.Pid_Prx_Alm_Data)
 
@@ -444,9 +453,6 @@ class A800(TransferProtocol):
       d = D800()
       d.unpack(data)
       return d
-
-
-   pass
 
 class A900(TransferProtocol):
    "Used by GPS III+, no documentation as of 2000-09-18"
@@ -1513,27 +1519,27 @@ class Garmin:
       self.timeLink = A600(self.link, self.cmdProto, D600)
       self.pvtLink  = A800(self.link, self.cmdProto, D800)
 
-   def getWaypoints(self):
-      return self.wptLink.getData()
+   def getWaypoints(self, callback = None):
+      return self.wptLink.getData(callback)
 
    def putWaypoints(self, data):
       return self.wptLink.putData(data)
 
-   def getRoutes(self):
-      return self.rteLink.getData()
+   def getRoutes(self, callback = None):
+      return self.rteLink.getData(callback)
 
-   def getTracks(self):
-      data = self.trkLink.getData()
+   def getTracks(self, callback = None):
+      data = self.trkLink.getData(callback)
       if isinstance(self.trkLink, SingleTransferProtocol):
          return [data] # for consistency- compare A300 with A301
       else:
          return data
 
-   def getProxPoints(self):
-      return self.prxLink.getData()
+   def getProxPoints(self, callback = None):
+      return self.prxLink.getData(callback)
 
-   def getAlmanac(self):
-      return self.almLink.getData()
+   def getAlmanac(self, callback = None):
+      return self.almLink.getData(callback)
 
    def getTime(self):
       return self.timeLink.getData()

@@ -24,6 +24,8 @@
 
    (c) 1999 Quentin Stafford-Fraser <quentin@att.com>
    (c) 2000 James A. H. Skillen <jahs@skillen.org.uk>
+   (c) 2001 Raymond Penners <raymond@dotsphinx.com>
+   (c) 2001 Tom Grydeland <Tom.Grydeland@phys.uit.no>
    
 """
 
@@ -357,7 +359,7 @@ class A200(MultiTransferProtocol):
    "Route Transfer Protocol"
    def getData(self):
       return MultiTransferProtocol.getData(self,
-                                           self.cmdproto.Cmd_Tranfer_Rte,
+                                           self.cmdproto.Cmnd_Transfer_Rte,
                                            self.link.Pid_Rte_Hdr,
                                            self.link.Pid_Rte_Wpt_Data)
 
@@ -416,6 +418,21 @@ class A700(TransferProtocol):
 class A800(TransferProtocol):
    "PVT Data Protocol"
    # Live Position, Velocity and Time, similar to that provided by NMEA
+   def dataOn(self):
+      self.link.sendPacket(self.link.Pid_Command_Data,
+                           self.cmdproto.Cmnd_Start_Pvt_Data)
+ 
+   def dataOff(self):
+      self.link.sendPacket(self.link.Pid_Command_Data,
+                           self.cmdproto.Cmnd_Stop_Pvt_Data)
+
+   def getData(self):
+      data = self.link.expectPacket(self.link.Pid_Pvt_Data)
+      d = D800()
+      d.unpack(data)
+      return d
+
+
    pass
 
 class A900(TransferProtocol):
@@ -449,9 +466,16 @@ class DataPoint:
    def unpack(self, bytes):
       # print struct.calcsize(self.fmt), self.fmt
       # print len(bytes), repr(bytes)
-      bits = struct.unpack(self.fmt, bytes)
-      for i in range(len(self.parts)):
-         self.__dict__[self.parts[i]] = bits[i]
+      try:
+         bits = struct.unpack(self.fmt, bytes)
+         for i in range(len(self.parts)):
+            self.__dict__[self.parts[i]] = bits[i]
+      except Exception, e:
+         print e
+         print "Format: <" + self.fmt   + ">"
+         print "Parts:  <" + ", ".join(self.parts) + ">"
+         print "Input:  <" + "><".join([x for x in bytes]) + ">"
+	 raise Exception, e
 
 # Waypoints  ---------------------------------------------------
 
@@ -771,10 +795,13 @@ class D700(DataPoint):
 # Live position info
 
 class D800(DataPoint):
-   parts = ("alt", "epe", "eph", "epv", "fix", "tow", "rlat", "rlon,"
+   parts = ("alt", "epe", "eph", "epv", "fix", "tow", "rlat", "rlon",
             "east", "north", "up", "msl_height", "leap_secs", "wn_days")
-   fmt = "<f f f f i d d d f f f f i l"
-   pass
+   fmt = "<f f f f h d d d f f f f h l"
+
+   def __str__(self):
+      return "tow: %g rlat: %g rlon: %g east: %g north %g" \
+      % (self.tow, self.rlat, self.rlon, self.east, self.north)
 
 # Garmin models ==============================================
 
@@ -961,7 +988,7 @@ def FormatA001(protocols):
             last_seen = tuples[p[1]]
          last_seen.append(eval(p))
    except NameError:
-      raise "Protocol %s not supported yet!" % sys.exc_info()[1]
+      raise NameError, "Protocol %s not supported yet!" % sys.exc_info()[1]
    return (None, link, cmnd, tuples["1"], tuples["2"], tuples["3"],
            tuples["4"], tuples["5"])
 
@@ -986,7 +1013,7 @@ class SerialLink(P000):
          b = self.f.read(1)
          data.append(b)
          i = i + 1
-      print data
+      # print data
       return string.join(data)
 
    def write(self, data):
@@ -1047,13 +1074,13 @@ class Win32SerialLink:
       buffer = AllocateReadBuffer(n)
       rc, data = ReadFile(self.handle, buffer)
       if len(data) != n:
-	raise LinkException, "time out";
+         raise LinkException, "time out";
       return data
 
    def write(self, n):
       rc,n = WriteFile(self.handle, n)
       if rc:
-        raise LinkException, "WriteFile error";
+         raise LinkException, "WriteFile error";
 
 class Garmin:
    def __init__(self, physicalLayer):
@@ -1061,13 +1088,17 @@ class Garmin:
       (self.prod_id, self.soft_ver,
        self.prod_descs) = A000(self.link).getProductData()
 
-      # Read the protocols supported by the unit from the Big Table.
-      # If the unit isn't mentioned there, assume it does A001
+      # Wait for the unit to announce its capabilities using A001.  If
+      # that doesn't happen, try reading the protocols supported by the
+      # unit from the Big Table.
       try:
-         protos = GetProtocols(self.prod_id, self.soft_ver)
-      except KeyError:
          self.protocols = A001(self.link).getProtocols()
          protos = FormatA001(self.protocols)
+      except NameError, e:
+         try:
+            protos = GetProtocols(self.prod_id, self.soft_ver)
+         except KeyError:
+            raise Exception, "Couldn't determine product capabilities"
 
       (versions, self.linkProto, self.cmdProto, wptProtos, rteProtos,
        trkProtos, prxProtos, almProtos) = protos
@@ -1095,6 +1126,7 @@ class Garmin:
          self.almLink = almProtos[0](self.link, self.cmdProto, (self.almType,))
 
       self.timeLink = A600(self.link, self.cmdProto, D600)
+      self.pvtLink  = A800(self.link, self.cmdProto, D800)
       
    def getWaypoints(self):
       return self.wptLink.getData()
@@ -1121,6 +1153,15 @@ class Garmin:
    def getTime(self):
       return self.timeLink.getData()
 
+   def pvtOn(self):
+      return self.pvtLink.dataOn()
+
+   def pvtOff(self):
+      return self.pvtLink.dataOff()
+
+   def getPvt(self):
+      return self.pvtLink.getData()
+
 # =================================================================
 
 def main():
@@ -1136,7 +1177,7 @@ def main():
    print "GPS Product ID: %d Descriptions: %s Software version: %2.2f" % \
          (gps.prod_id, gps.prod_descs, gps.soft_ver)
 
-   if 1:
+   if 0:
       # show waypoints
       wpts = gps.getWaypoints()
       for w in wpts:
@@ -1179,6 +1220,20 @@ def main():
          slon=-2529985
          )
       gps.putWaypoints([w])
+
+   if 1:
+      # show some real-time data
+      print "Starting pvt"
+      gps.pvtOn()
+      try:
+         for i in range(10):
+            p = gps.getPvt()
+            print p
+      finally:
+         print "Stopping pvt"
+         gps.pvtOff()
+
+
       
 if __name__ == "__main__":
    main()

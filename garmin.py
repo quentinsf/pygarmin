@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 """
    garmin
-   
+
    This module implements the protocol used for communication by the
    Garmin GPS receivers. It is based on the official description
    available from Garmin at
-   
+
    http://www.garmin.com/support/commProtocol.html
 
    There are lots of variations in the protocols employed by different
@@ -26,11 +26,11 @@
    (c) 2000 James A. H. Skillen <jahs@skillen.org.uk>
    (c) 2001 Raymond Penners <raymond@dotsphinx.com>
    (c) 2001 Tom Grydeland <Tom.Grydeland@phys.uit.no>
-   
+
 """
 
-import os, string, newstruct, time, sys
-struct = newstruct
+import os, select, string, sys, time
+import newstruct as struct
 
 # Set this value to > 0 for some debugging output, and the higher
 # the number, the more you'll get.
@@ -56,7 +56,7 @@ debug = 0
 
 
 # secs from Unix epoch (start of 1970) to Sun Dec 31 00:00:00 1989
-TimeEpoch = 631065600   
+TimeEpoch = 631065600
 
 
 # Physical protocols ===============================================
@@ -111,7 +111,7 @@ class L000:
       tp = chr(ptype)
       chk = self.checksum( tp + ld + data)
       escline = self.escape( ld + data + chk)
-      bytes = self.DLE + tp + escline + self.EOM 
+      bytes = self.DLE + tp + escline + self.EOM
       self.phys.write(bytes)
       if debug > 5: print "< packet %3d : " % ptype, hexdump(data)
       if readAck:
@@ -165,7 +165,7 @@ class L000:
    def sendAcknowledge(self, ptype):
       if debug > 5: print "(<ack)",
       self.sendPacket(self.Pid_Ack_Byte, struct.pack("<h", ptype), 0)
-      
+
    def readEscapedByte(self):
       c = self.phys.read(1)
       if c == self.DLE:
@@ -256,22 +256,22 @@ class A001:
       if debug > 0:
          print "Protocols reported by A001:", protocols
       return protocols
-      
+
 # Commands  ---------------------------------------------------
 
 class A010:
    "Device Command Protocol 1"
-   Cmnd_Abort_Transfer = 0   # abort current transfer 
-   Cmnd_Transfer_Alm = 1     # transfer almanac 
-   Cmnd_Transfer_Posn = 2    # transfer position 
-   Cmnd_Transfer_Prx = 3     # transfer proximity waypoints 
-   Cmnd_Transfer_Rte = 4     # transfer routes 
-   Cmnd_Transfer_Time = 5    # transfer time 
-   Cmnd_Transfer_Trk = 6     # transfer track log 
-   Cmnd_Transfer_Wpt = 7     # transfer waypoints 
-   Cmnd_Turn_Off_Pwr = 8     # turn off power 
-   Cmnd_Start_Pvt_Data = 49  # start transmitting PVT data 
-   Cmnd_Stop_Pvt_Data = 50   # stop transmitting PVT data 
+   Cmnd_Abort_Transfer = 0   # abort current transfer
+   Cmnd_Transfer_Alm = 1     # transfer almanac
+   Cmnd_Transfer_Posn = 2    # transfer position
+   Cmnd_Transfer_Prx = 3     # transfer proximity waypoints
+   Cmnd_Transfer_Rte = 4     # transfer routes
+   Cmnd_Transfer_Time = 5    # transfer time
+   Cmnd_Transfer_Trk = 6     # transfer track log
+   Cmnd_Transfer_Wpt = 7     # transfer waypoints
+   Cmnd_Turn_Off_Pwr = 8     # turn off power
+   Cmnd_Start_Pvt_Data = 49  # start transmitting PVT data
+   Cmnd_Stop_Pvt_Data = 50   # stop transmitting PVT data
 
 class A011:
    "Device Command Protocol 2"
@@ -366,7 +366,7 @@ class A100(SingleTransferProtocol):
                                             self.cmdproto.Cmnd_Transfer_Wpt,
                                             self.link.Pid_Wpt_Data,
                                             data)
-      
+
 
 class A200(MultiTransferProtocol):
    "Route Transfer Protocol"
@@ -434,7 +434,7 @@ class A800(TransferProtocol):
    def dataOn(self):
       self.link.sendPacket(self.link.Pid_Command_Data,
                            self.cmdproto.Cmnd_Start_Pvt_Data)
- 
+
    def dataOff(self):
       self.link.sendPacket(self.link.Pid_Command_Data,
                            self.cmdproto.Cmnd_Stop_Pvt_Data)
@@ -481,9 +481,9 @@ class DataPoint:
             v = self.__dict__[i]
          except KeyError:
             v = eval('self.'+i)
-         arg = arg + (v,) 
+         arg = arg + (v,)
       return apply(struct.pack, arg)
-   
+
    def unpack(self, bytes):
       # print struct.calcsize(self.fmt), self.fmt
       # print len(bytes), repr(bytes)
@@ -517,10 +517,10 @@ class Waypoint(DataPoint):
    def __init__(self, ident="", slat=0L, slon=0L, cmnt=""):
       self.ident = ident         # text identidier (upper case)
       self.slat = slat           # lat & long in semicircle terms
-      self.slon = slon       
+      self.slon = slon
       self.cmnt = cmnt           # comment (must be upper case)
       self.unused = 0L
-      
+
    def __repr__(self):
       return "<Waypoint %s (%3.5f, %3.5f) (at %x)>" % (self.ident,
                                                        degrees(self.slat),
@@ -540,7 +540,7 @@ class Waypoint(DataPoint):
                 }
       return self.data
 
-   
+
 class D100(Waypoint):
    pass
 
@@ -553,7 +553,7 @@ class D101(Waypoint):
    def __init__(self, ident="", slat=0L, slon=0L, cmnt="", dst=0L, smbl=0L):
       self.ident = ident         # text identidier (upper case)
       self.slat = slat           # lat & long in semicircle terms
-      self.slon = slon       
+      self.slon = slon
       self.cmnt = cmnt           # comment (must be upper case)
       self.unused = 0L
       self.dst = dst
@@ -577,7 +577,7 @@ class D101(Waypoint):
                    'latitude': self.slat,
                    'longitude': self.slon,
                    'distance': self.dst,
-                   'symbol': self.smbl, 
+                   'symbol': self.smbl,
                    }
       return self.data
 
@@ -590,7 +590,7 @@ class D102(Waypoint):
    def __init__(self, ident="", slat=0L, slon=0L, cmnt="", dst=0L, smbl=0L):
       self.ident = ident         # text identidier (upper case)
       self.slat = slat           # lat & long in semicircle terms
-      self.slon = slon       
+      self.slon = slon
       self.cmnt = cmnt           # comment (must be upper case)
       self.unused = 0L
       self.dst = dst
@@ -627,7 +627,7 @@ class D103(Waypoint):
    def __init__(self, ident="", slat=0L, slon=0L, cmnt="", dspl=0L, smbl=0L):
       self.ident = ident         # text identidier (upper case)
       self.slat = slat           # lat & long in semicircle terms
-      self.slon = slon       
+      self.slon = slon
       self.cmnt = cmnt           # comment (must be upper case)
       self.unused = 0L
       self.dspl = dspl
@@ -654,7 +654,7 @@ class D103(Waypoint):
                    'symbol': self.smbl
                    }
       return self.data
-   
+
 class D104(Waypoint):
    parts = Waypoint.parts + ("dst", "smbl", "dspl")
    fmt = "<6s l l L 40s f h b"
@@ -666,7 +666,7 @@ class D104(Waypoint):
                 dst=0L, smbl=0L, dspl=0L):
       self.ident = ident         # text identidier (upper case)
       self.slat = slat           # lat & long in semicircle terms
-      self.slon = slon       
+      self.slon = slon
       self.cmnt = cmnt           # comment (must be upper case)
       self.unused = 0L
       self.dst = dst             # proximity distance (m)
@@ -690,7 +690,7 @@ class D104(Waypoint):
                    'latitude': self.slat,
                    'longitude': self.slon,
                    'distance': self.dst,
-                   'symbol': self.smbl, 
+                   'symbol': self.smbl,
                    'display': self.dspl
                    }
       return self.data
@@ -703,7 +703,7 @@ class D105(Waypoint):
    def __init__(self, ident="", slat=0L, slon=0L, smbl=0L):
       self.ident = ident         # text identidier (upper case)
       self.slat = slat           # lat & long in semicircle terms
-      self.slon = slon       
+      self.slon = slon
       self.unused = 0L
       self.smbl = smbl
 
@@ -738,10 +738,10 @@ class D106(Waypoint):
                 wpt_class=0L, lnk_ident="", smbl=0L):
       self.ident = ident         # text identidier (upper case)
       self.slat = slat           # lat & long in semicircle terms
-      self.slon = slon       
-      self.wpt_class = wpt_class   
+      self.slon = slon
+      self.wpt_class = wpt_class
       self.unused = 0L
-      self.subclass = subclass          
+      self.subclass = subclass
       self.lnk_ident = lnk_ident
       self.smbl = smbl
 
@@ -779,7 +779,7 @@ class D107(Waypoint):
                 dst=0L, smbl=0L, dspl=0L, color=0L):
       self.ident = ident         # text identidier (upper case)
       self.slat = slat           # lat & long in semicircle terms
-      self.slon = slon       
+      self.slon = slon
       self.cmnt = cmnt           # comment (must be upper case)
       self.unused = 0L
       self.dst = dst             # proximity distance (m)
@@ -804,7 +804,7 @@ class D107(Waypoint):
                    'latitude': self.slat,
                    'longitude': self.slon,
                    'distance': self.dst,
-                   'symbol': self.smbl, 
+                   'symbol': self.smbl,
                    'display': self.dspl,
                    'color': self.color
                    }
@@ -836,10 +836,10 @@ class D108(Waypoint):
                 cmnt="", subclass="", wpt_class=0L, lnk_ident="", smbl=18L):
       self.ident = ident         # text identidier (upper case)
       self.slat = slat           # lat & long in semicircle terms
-      self.slon = slon       
-      self.wpt_class = wpt_class   
+      self.slon = slon
+      self.wpt_class = wpt_class
       self.unused = 0L
-      self.subclass = subclass          
+      self.subclass = subclass
       self.lnk_ident = lnk_ident
       self.smbl = smbl
       self.cmnt = cmnt
@@ -985,7 +985,7 @@ class TrackHdr(DataPoint):
    def __repr__(self):
       return "<TrackHdr %s (at %x)>" % (self.trk_ident,
                                         id(self))
-   
+
 class D310(TrackHdr):
    parts = ("dspl", "color", "trk_ident")
    fmt = "<b b s"
@@ -1000,11 +1000,11 @@ class ProxPoint(DataPoint):
 class D400(ProxPoint, D100):
    parts = D100.parts + ("dst",)
    fmt = D100.fmt + "f"
-   
+
 class D403(ProxPoint, D103):
    parts = D103.parts + ("dst",)
    fmt = D103.fmt + "f"
-   
+
 class D450(ProxPoint, D150):
    parts = ("idx",) + D150.parts + ("dst",)
    fmt = "i" + D150.fmt + "f"
@@ -1039,7 +1039,7 @@ class D551(Almanac):
 # Date & Time  ---------------------------------------------------
 
 class TimePoint(DataPoint):
-   # Not sure what the last four bytes are. Not in docs. 
+   # Not sure what the last four bytes are. Not in docs.
    # hmm... eTrex just sends 8 bytes, no trailing 4 bytes
    parts = ("month", "day", "year", "hour", "min", "sec") #,"unknown")
    fmt = "<b b H h b b" #L"
@@ -1251,7 +1251,7 @@ def FormatA001(protocols):
       phys = eval(protocols[0])
       link = eval(protocols[1])
       cmnd = eval(protocols[2])
-      
+
       tuples = {"1" : None, "2" : None, "3" : None, "4" : None,
                 "5" : None, "6" : None, "7" : None, "8" : None,
                 "9" : None}
@@ -1287,7 +1287,7 @@ class SerialLink(P000):
    def initserial(self):
       "Set up baud rate, handshaking, etc"
       pass
-   
+
    def read(self, n):
       """
       Read n bytes and return them. Real implementations should
@@ -1300,11 +1300,15 @@ class SerialLink(P000):
 
    def settimeout(self, secs):
       self.timeout = secs
-      
+
    def __del__(self):
       """Should close down any opened resources"""
       pass
 
+# Unix Serial Link ===================================================
+
+if os.name == "posix":
+   import tty
 
 class UnixSerialLink(SerialLink):
 
@@ -1313,18 +1317,14 @@ class UnixSerialLink(SerialLink):
       SerialLink.__init__(self, f)
 
    def initserial(self):
-      from tty import *
-      
       fd = self.f.fileno()
-      setraw(fd)
-      mode = tcgetattr(fd)
-      mode[ISPEED] = mode[OSPEED] = B9600
+      tty.setraw(fd)
+      mode = tty.tcgetattr(fd)
+      mode[tty.ISPEED] = mode[tty.OSPEED] = tty.B9600
       # mode[LFLAG] = mode[LFLAG] | ECHO
-      tcsetattr(fd, TCSAFLUSH, mode)
+      tty.tcsetattr(fd, tty.TCSAFLUSH, mode)
 
    def read(self, n):
-      import select
-      
       i = 0
       data = []
       while i < n:
@@ -1342,7 +1342,7 @@ class UnixSerialLink(SerialLink):
 # Win32 Serial Link ==================================================
 
 if os.name == 'nt':
-   from win32file import * 
+   from win32file import *
    import win32con
 
 class Win32SerialLink(SerialLink):
@@ -1390,7 +1390,7 @@ class Win32SerialLink(SerialLink):
 
    def __del__(self):
       CloseHandle(self.f)
-      
+
 class Garmin:
    """
    A representation of the GPS device, which is connected
@@ -1416,7 +1416,7 @@ class Garmin:
          except KeyError:
             raise Exception, "Couldn't determine product capabilities"
       physicalLayer.settimeout(5)
-      
+
       # protos = GetProtocols(self.prod_id, self.soft_ver)
 
       (versions, self.linkProto, self.cmdProto, wptProtos, rteProtos,
@@ -1437,7 +1437,7 @@ class Garmin:
       self.rteLink = rteProtos[0](self.link, self.cmdProto, self.rteTypes)
       self.trkLink = trkProtos[0](self.link, self.cmdProto, self.trkTypes)
 
-      if prxProtos != None:   
+      if prxProtos != None:
          self.prxType = prxProtos[1]
          self.prxLink = prxProtos[0](self.link, self.cmdProto, (self.prxType,))
 
@@ -1447,7 +1447,7 @@ class Garmin:
 
       self.timeLink = A600(self.link, self.cmdProto, D600)
       self.pvtLink  = A800(self.link, self.cmdProto, D800)
-      
+
    def getWaypoints(self):
       return self.wptLink.getData()
 
@@ -1493,7 +1493,7 @@ def main():
    else:
       serialDevice =  "/dev/ttyS0"
       phys = UnixSerialLink(serialDevice)
-      
+
    gps = Garmin(phys)
 
    print "GPS Product ID: %d Descriptions: %s Software version: %2.2f" % \
@@ -1512,7 +1512,7 @@ def main():
          print r[0].route_num
          for p in r[1:]:
             print p
-         
+
    if 0:
       # show proximity points
       print gps.getProxPoints()
@@ -1557,6 +1557,6 @@ def main():
          gps.pvtOff()
 
 
-      
+
 if __name__ == "__main__":
    main()

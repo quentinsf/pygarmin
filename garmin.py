@@ -16,6 +16,12 @@
 
    For documentation, see the source.
 
+   This is released under the Gnu General Public Licence. A copy of
+   this can be found at http://www.opensource.org/licenses/gpl-license.html
+
+   For the latest information about PyGarmin, please see
+   http://pygarmin.sourceforge.net/
+
    (c) 1999 Quentin Stafford-Fraser <quentin@att.com>
    
 """

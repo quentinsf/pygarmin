@@ -8,4 +8,4 @@ setup(name="pygarmin",
       author="Quentin Stafford-Fraser",
       author_email="quentinsf@users.sourceforge.net",
       url="http://pygarmin.sourceforge.net",
-      py_modules=["garmin", "newstruct"])
+      py_modules=["garmin", "newstruct", "datum", "refdatum"])

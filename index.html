@@ -1,46 +1,46 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-    
+
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <title>PyGarmin - A Python Interface to Garmin GPS Equipment</title>
 
 <style type="text/css">
- body { 
-    background-color: #E0DEFF; 
+ body {
+    background-color: #E0DEFF;
     }
-    
- div#main { 
+
+ div#main {
     margin: 4%;
-    background-color: white; 
-    border: 1px solid black; 
+    background-color: white;
+    border: 1px solid black;
     padding: 3%;
     }
-    
- h1, h2, h3, h4 { 
-    font-family: arial,helvetica,sans-serif; 
+
+ h1, h2, h3, h4 {
+    font-family: arial,helvetica,sans-serif;
     color: #70608f;
     }
-    
+
  p {
     text-align: justify;
-    margin-left: 18pt; 
-    margin-right: 12pt; 
+    margin-left: 18pt;
+    margin-right: 12pt;
     font-size: 11pt;
-    line-height: 125%; 
+    line-height: 125%;
     }
- 
+
 div.code {
-    margin-left: 18pt; 
-    margin-right: 12pt; 
+    margin-left: 18pt;
+    margin-right: 12pt;
     background-color: #f0DEF0;
     padding: 8px;
     text-align: left;
     }
-    
+
 pre.comment {
     font-family: times, serif;
-    font-style: italic; 
+    font-style: italic;
     color: #804040;
     }
 
@@ -90,13 +90,13 @@ div.table1 {
     <p>Having said all of that, this has been used to transfer
     information to and from several different Garmin receivers,
     mostly under Linux, though there is some Windows support now
-    and people have used it on Mac OS X as well. 
+    and people have used it on Mac OS X as well.
     If you use PyGarmin, it will probably be much
     quicker than writing your own software from scratch. If it
     works on your GPS, let us know. If it doesn't, let us know.
     The more info you can give us about what went wrong, the more
     likely we are to fix it.  The best place to discuss issues with
-    PyGarmin is on the 
+    PyGarmin is on the
     <a href="http://sourceforge.net/mail/?group_id=5570">mailing list</a>.</p>
 
     <p>If you want to cut straight to the code go to the
@@ -176,7 +176,7 @@ phys = garmin.UnixSerialLink("/dev/ttyS0")
 <pre class="code">
 waypoints = gps.getWaypoints()
 </pre>
- 
+
 <pre class="comment"># Print the waypoints</pre>
 <pre class="code">
 for w in waypoints:
@@ -274,16 +274,24 @@ for w in waypoints:
     be Y2K compliant.</p>
 
     <p>You can download the releases <a
-    href="http://sourceforge.net/project/filelist.php?group_id=5570">
+    href="http://sourceforge.net/project/showfiles.php?group_id=5570">
     here</a>, or you can get the really up-to-date versions via
     CVS from the SourceForge site mentioned at the start of this
     page.</p>
+
+    <p>For <a href="http://www.debian.org">Debian</a> users, there is
+    also an apt repository available. Add the following line to your
+    <code>apt.sources</code> list.</p>
+    <div class="code">
+    <code>deb http://pygarmin.sourceforge.net debian/</code>
+    </div>
+
     <p><a href="http://www.qandr.org/quentin">Quentin
     Stafford-Fraser</a></p>
     </div>
-    
+
     <p><a href="http://sourceforge.net"> <img src="http://sourceforge.net/sflogo.php?group_id=5570&amp;type=5" width="210" height="62" border="0" alt="SourceForge.net Logo" align="right" /></a></p>
-    
+
   </body>
 </html>
 

@@ -1,0 +1,150 @@
+#!/usr/bin/env python
+"""
+   app
+
+   This is a user application for communicating with Garmin GPS receivers.
+
+   This is released under the Gnu General Public Licence. A copy of
+   this can be found at http://www.opensource.org/licenses/gpl-license.html
+
+   For the latest information about PyGarmin, please see
+   http://pygarmin.sourceforge.net/
+
+   (c) 2000 James A. H. Skillen <jahs@skillen.org.uk>
+   
+"""
+
+# Need a better name for this!
+
+import garmin, os, sys, getopt, string
+
+class GnuApp:
+    def __init__(self):
+        self.opts = {"h" : ("help", "", "This page")}
+        self.longopts = {"help" : "h"}
+        self.options = {}
+        self.usage = ""
+        self.description = ""
+        self.example = ""
+
+    def help(self, arg):
+        print self.usage
+        print self.description
+        print self.example
+
+        seq = self.opts.keys()
+        seq.sort()
+        for k in seq:
+            if self.opts[k][1]:
+                print "  -%s, --%s=%s\t%s" % (k, self.opts[k][0], self.opts[k][1], self.opts[k][2])
+            else:
+                print "  -%s, --%s\t%s" % (k, self.opts[k][0], self.opts[k][2])
+
+    def _parse_argv(self):
+        shortopts = []
+        longopts = []
+        for k in self.opts.keys():
+            option, value, desc = self.opts[k]
+            shortopts.append(k)
+            if value:
+                shortopts.append(":")
+                longopts.append(self.opts[k][0]+"=")
+            else:
+                longopts.append(self.opts[k][0])
+
+        try:
+            parsed, self.leftover = getopt.getopt(sys.argv[1:],
+                                                  string.join(shortopts, ""),
+                                                  longopts)
+        except:
+            print "%s: %s" % (sys.argv[0], sys.exc_info()[1])
+            sys.exit(1)
+
+        self.options = {}
+        seq = range(len(parsed))
+        seq.reverse()
+        for i in seq:
+            option, value = parsed[i]
+            if option[:2] == "--":
+                option = "-"+self.longopts[string.strip(option)[2:]]
+            self.options[option] = value
+        self._check_options()
+
+    def _check_options(self):
+        pass
+
+    def _run(self):
+        seq = self.options.keys()
+        seq.sort()
+        for k in seq:
+            apply(eval("self."+self.opts[k[1:]][0]), (self.options[k],))
+
+class GarminApp(GnuApp):
+    def __init__(self):
+        self.opts = {"i" : ("info        ", "", "Show product information"),
+                     "p" : ("protocols   ", "", "Show product communication protocols"),
+                     "h" : ("help        ", "", "This page"),
+                     "w" : ("getwaypoints", "", "Download waypoints from the GPS")}
+
+        self.longopts = {"info" : "i",
+                         "protocols" : "p",
+                         "help" : "h",
+                         "getwaypoints": "w"}
+
+        self.usage = "Usage: %s [OPTIONS] DEVICE" % sys.argv[0]
+        self.description = "Communicate with a Garmin GPS connected to DEVICE."
+        self.example = "Example: %s -i /dev/ttyS0" % sys.argv[0]
+
+        self._parse_argv()
+
+    def _check_options(self):
+        if len(self.leftover) != 1:
+            self.help("")
+            sys.exit(1)
+        else:
+            self.device(self.leftover[0])
+
+        if not self.options:
+            print "%s: No command specified!" % sys.argv[0]
+            sys.exit(1)
+
+    def info(self, arg):
+        print "*** Product Info ***"
+        print string.join(self.gps.prod_descs, "\n")
+        print "GPS Product ID: %i" % self.gps.prod_id
+        print "Software version: %2.2f" % self.gps.soft_ver
+        print
+
+    def device(self, arg):
+        links = {"posix" : garmin.UnixSerialLink,
+                 "nt" : garmin.WindowsSerialLink}
+        phys = links[os.name](arg)
+        self.gps = garmin.Garmin(phys)
+
+    def protocols(self, arg):
+        print "*** Product Protocols ***"
+        for i in range(len(self.gps.protocols)):
+            p = self.gps.protocols[i]
+            if p[0] == "D":
+                sys.stdout.write(", "+p)
+            else:
+                if i == 0:
+                    sys.stdout.write(p)
+                else:
+                    sys.stdout.write("\n"+p)
+        print "\n"
+
+    def getwaypoints(self, arg):
+        print "*** Downloaded Waypoints ***"
+        ws = self.gps.getWaypoints()
+        for w in ws:
+            print w
+        print
+
+def main():
+    app = GarminApp()
+    app._run()
+    return 0
+
+if __name__ == "__main__":
+    sys.exit(main())

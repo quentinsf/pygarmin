@@ -239,6 +239,8 @@ class A001:
       protocols = []
       for i in range(0, 2*num, 2):
          protocols.append(tup[i]+"%03d"%tup[i+1])
+      if debug:
+         print protocols
       return protocols
       
 # Commands  ---------------------------------------------------
@@ -1040,12 +1042,8 @@ class Garmin:
       try:
          protos = GetProtocols(self.prod_id, self.soft_ver)
       except KeyError:
-         protocols = A001(self.link).getProtocols()
-         try:
-            protos = FormatA001(protocols)
-         except:
-            print sys.exc_info()[0]
-            sys.exit(1)
+         self.protocols = A001(self.link).getProtocols()
+         protos = FormatA001(self.protocols)
 
       (versions, self.linkProto, self.cmdProto, wptProtos, rteProtos,
        trkProtos, prxProtos, almProtos) = protos

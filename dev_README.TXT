@@ -1,3 +1,32 @@
+Date : 24 December 2004
+Author : Gerrit Sere
+
+Happy days everybody
+
+dev_garmin.py
+------------------------
+
+* Lap protocel is tested.
+* FlightBook protocol is included but not tested. Do you have an airplane ?
+
+dev_format.py
+------------------------
+
+* Include GPX, it is now possible to get and send information into GPX format. 
+GPX format is a standard XML schema for gps and used with lots of other programs
+(http://www.topografix.com/GPX/1/1 )
+
+dev_pygarmin.py
+------------------------
+
+Changed this program fast to work with the new dev_garmin.py program
+
+
+
+****************************************************************************************************************************
+Origal Version
+date : Novermber
+Author : Gerrit Sere
 
 This readme file explains :
 

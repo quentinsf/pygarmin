@@ -1,5 +1,7 @@
 PyGarmin Change Log
 
+Added Raymond Penners' Win32SerialLink stuff and timeout stuff
+
 0.4
 
 Various bug fixes and minor changes. See CVS logs for details.

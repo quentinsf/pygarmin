@@ -418,6 +418,9 @@ class A800(TransferProtocol):
    # Live Position, Velocity and Time, similar to that provided by NMEA
    pass
 
+class A900(TransferProtocol):
+   "Used by GPS III+, no documentation as of 2000-09-18"
+   pass
 
 # Most of the following subclasses have a fmt member which is a format
 # string as understood by the struct module, detailing how the class

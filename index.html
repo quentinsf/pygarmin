@@ -143,13 +143,6 @@ P000.</p>
 <p>Things which may be fixed/finished. Volunteers welcome!</p>
 <ul>
 
-<li>If you have a pretty new Garmin, this library may not work. That's
-because recent models may implement the Protocol Capability Protocol
-A001. This means that they don't appear in the 'big table' mentioned
-above. Instead, they can use A001 to tell the other end which
-protocols they support. I haven't implemented it yet, and I don't have
-anything to test it with.</li>
-
 <li>Currently no real support for the A800/D800 real-time data protocol.  That means you can't currently use PyGarmin to handle live position data such as you'd get from NMEA. Actually, the classes are partly defined, but none of the products in the 'big table' use this protocol. I think A700 will do something similar if you repeatedly request the position from the host.</li>
  
 <li>Some data type classes are not implemented here, just because I got bored of typing. I've done the ones used by the more common units, but if yours isn't covered, it should be easy to add. They're only a few lines each.</li>
@@ -190,8 +183,7 @@ It comes with no warranties, explicit or implied, and you use it at your
 own risk. It may be Y2K compliant.
 </p>
 
-<p>It's one text file which you can download <a href="garmin.py">here</a>, or you can get it via CVS from the SourceForge site mentioned at the start of this page.</p>
-
+<p>You can download the files <a href="http://cvs.sourceforge.net/cgi-bin/cvsweb.cgi/pygarmin/?cvsroot=pygarmin">here</a>, or you can get them via CVS from the SourceForge site mentioned at the start of this page.</p>
 
 <a href="http://www.uk.research.att.com/~qsf/">Quentin Stafford-Fraser</a>
 

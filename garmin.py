@@ -94,6 +94,7 @@ class L000:
     Pid_Protocol_Array = 253
     Pid_Product_Rqst = 254
     Pid_Product_Data = 255
+    Pid_Ext_Product_Data = 248
 
     # DataLinkEscape etc
     DLE                  = "\x10"
@@ -203,6 +204,9 @@ class L001(L000):
     Pid_Pvt_Data = 51
     Pid_Rte_Link_Data = 98
     Pid_Trk_Hdr = 99
+    Pid_FlightBook_Record = 134
+    Pid_Lap = 149
+    Pid_Wpt_Cat = 152
 
 # L002 builds on L000
 
@@ -213,6 +217,7 @@ class L002(L000):
     Pid_Xfer_Cmplt = 12
     Pid_Date_Time_Data = 20
     Pid_Position_Data = 24
+    Pid_Prx_Wpt_Data = 27
     Pid_Records = 35
     Pid_Rte_Hdr = 37
     Pid_Rte_Wpt_Data = 39
@@ -263,23 +268,27 @@ class A001:
 
 class A010:
     "Device Command Protocol 1"
-    Cmnd_Abort_Transfer = 0   # abort current transfer
-    Cmnd_Transfer_Alm = 1     # transfer almanac
-    Cmnd_Transfer_Posn = 2    # transfer position
-    Cmnd_Transfer_Prx = 3     # transfer proximity waypoints
-    Cmnd_Transfer_Rte = 4     # transfer routes
-    Cmnd_Transfer_Time = 5    # transfer time
-    Cmnd_Transfer_Trk = 6     # transfer track log
-    Cmnd_Transfer_Wpt = 7     # transfer waypoints
-    Cmnd_Turn_Off_Pwr = 8     # turn off power
-    Cmnd_Start_Pvt_Data = 49  # start transmitting PVT data
-    Cmnd_Stop_Pvt_Data = 50   # stop transmitting PVT data
+    Cmnd_Abort_Transfer = 0        # abort current transfer
+    Cmnd_Transfer_Alm = 1          # transfer almanac
+    Cmnd_Transfer_Posn = 2         # transfer position
+    Cmnd_Transfer_Prx = 3          # transfer proximity waypoints
+    Cmnd_Transfer_Rte = 4          # transfer routes
+    Cmnd_Transfer_Time = 5         # transfer time
+    Cmnd_Transfer_Trk = 6          # transfer track log
+    Cmnd_Transfer_Wpt = 7          # transfer waypoints
+    Cmnd_Turn_Off_Pwr = 8          # turn off power
+    Cmnd_Start_Pvt_Data = 49       # start transmitting PVT data
+    Cmnd_Stop_Pvt_Data = 50        # stop transmitting PVT data
+    Cmnd_FlightBook_Transfer = 92  # transfer flight records
+    Cmnd_Transfer_Laps = 117       # transfer laps
+    Cmnd_Transfer_Wpt_Cats = 121   # transfer waypoint categories
 
 class A011:
     "Device Command Protocol 2"
     Cmnd_Abort_Transfer = 0   # abort current transfer
     Cmnd_Transfer_Alm = 4     # transfer almanac
     Cmnd_Transfer_Rte = 8     # transfer routes
+    Cmnd_Transfer_Prx = 17    # transfer proximity waypoints
     Cmnd_Transfer_Time = 20   # transfer time
     Cmnd_Transfer_Wpt = 21    # transfer waypoints
     Cmnd_Turn_Off_Pwr = 26    # turn off power
@@ -378,6 +387,12 @@ class A100(SingleTransferProtocol):
                                               self.link.Pid_Wpt_Data,
                                               data)
 
+class A101(SingleTransferProtocol):
+    "Waypoint Transfer Protocol"
+    def getData(self, callback = None):
+        return SingleTransferProtocol.getData(self, callback,
+                                              self.cmdproto.Cmnd_Transfer_Wpt_Cats,
+                                              self.link.Pid_Wpt_Cat)
 
 class A200(MultiTransferProtocol):
     "Route Transfer Protocol"
@@ -405,6 +420,14 @@ class A300(SingleTransferProtocol):
 
 class A301(MultiTransferProtocol):
     "Track Log Transfer Protocol"
+    def getData(self, callback = None):
+        return MultiTransferProtocol.getData(self, callback,
+                                             self.cmdproto.Cmnd_Transfer_Trk,
+                                             self.link.Pid_Trk_Hdr,
+                                             self.link.Pid_Trk_Data)
+
+class A302(MultiTransferProtocol):
+    "Track Log Transfer Protocol, same as A301"
     def getData(self, callback = None):
         return MultiTransferProtocol.getData(self, callback,
                                              self.cmdproto.Cmnd_Transfer_Trk,
@@ -461,24 +484,27 @@ class A800(TransferProtocol):
         return d
 
 class A900(TransferProtocol):
-    "Used by GPS III+, no documentation as of 2000-09-18"
+    "Used by GPS III+, no documentation as of 2004-09-16"
     pass
 
 class A902(TransferProtocol):
-    "Used by etrex, no documentation as of 2001-05-30"
+    "Used by etrex, no documentation as of 2004-09-16"
     pass
 
 class A903(TransferProtocol):
-    "Used by etrex, no documentation as of 2001-05-30"
+    "Used by etrex, no documentation as of 2004-09-16"
     pass
 
 class A904(TransferProtocol):
-    "Used by GPS V"
+    "Used by GPS V, no documentation as of 2004-09-16"
     pass
 
 class A906(TransferProtocol):
-    "Mentioned in 'Garmin GPS Interface Specification', 2004-02-24"
-    pass
+    "Lap Transfer Protocol"
+    def getData(self,callback):
+        return SingleTransferProtocol.getData(self, callback,
+                                              self.cmdproto.Cmnd_Transfer_Laps,
+                                              self.link.Pid_Lap)
 
 class A907(TransferProtocol):
     "Used by GPSmap 60cs, no documentation as of 2004-09-26"
@@ -947,6 +973,17 @@ class D109(Waypoint):
            self.alt, string.strip(self.cmnt),
            self.wpt_class, self.smbl)
 
+class D110(Waypoint):
+    parts = ("dtyp", "wpt_class", "dspl_color", "attr", "smbl",
+             "subclass", "slat", "slon", "alt", "dpth", "dist",
+             "state", "cc", "ete", "temp", "time", "wpt_cat",
+             "ident", "cmnt", "facility", "city", "addr", "cross_road")
+    fmt = "<b b b b h 18s l l f f f 2s 2s l f l i s s s s s s"
+
+class D120(DataPoint):
+    parts = ("name",)
+    fmt = "<17s"
+
 class D150(Waypoint):
     parts = ("ident", "cc", "clss", "lat", "lon", "alt", "city", "state", "name", "cmnt")
     fmt = "<6s 2s b l l i 24s 2s 30s 40s"
@@ -1032,6 +1069,10 @@ class D202(RouteHdr):
     parts = ("ident",)
     fmt="<s"
 
+class D210(DataPoint):
+    parts = ("class", "subclass", "ident")
+    fmt = "<i 18s s"
+
 # Route links  -----------------------------------------------
 
 class RouteLink(DataPoint):
@@ -1067,6 +1108,10 @@ class D301(TrackPoint):
     depth = 0.0
     new_trk = 0
 
+class D302(TrackPoint):
+    parts = ("slat", "slon", "time", "alt", "depth", "temp", "new_trk")
+    fmt = "<l l L f f f b"
+
 # Track headers ----------------------------------------------
 
 class TrackHdr(DataPoint):
@@ -1081,6 +1126,14 @@ class D310(TrackHdr):
     fmt = "<b b s"
     dspl = 0
     color = 0
+
+class D311(TrackHdr):
+    parts = ("index",)
+    fmt = "<i"
+
+class D312(TrackHdr):
+    parts = ("dspl", "color", "trk_ident")
+    fmt = "<b b s"
 
 # Proximity waypoints  ---------------------------------------
 
@@ -1152,6 +1205,14 @@ class D601(TimePoint):
     "used by GPSmap 60cs, no documentation as of 2004-09-26"
     pass
 
+class D650(DataPoint):
+    parts = ("takeoff_time", "landing_time", "takeoff_slat", "takeoff_slon",
+             "landing_slat", "landing_slon", "night_time", "num_landings",
+             "max_speed", "max_alt", "distance", "cross_country_flag",
+             "departure_name", "departure_ident", "arrival_name",
+             "arrival_ident", "ac_id")
+    fmt = "<L L l l l l L L f f f B s s s s s"
+
 # Position   ---------------------------------------------------
 
 class D700(DataPoint):
@@ -1172,6 +1233,12 @@ class D800(DataPoint):
     def __str__(self):
         return "tow: %g rlat: %g rlon: %g east: %g north %g" \
         % (self.tow, self.rlat, self.rlon, self.east, self.north)
+
+class D906(DataPoint):
+    parts = ("start_time", "total_time", "total_distance", "begin_slat",
+             "begin_slon", "end_slat", "end_slon", "calories",
+             "track_index", "unused")
+    fmt = "<l l f l l l l i b b"
 
 class D907(DataPoint):
     "used by GPSmap 60cs, no documentation as of 2004-09-26"

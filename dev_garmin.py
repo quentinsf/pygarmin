@@ -628,9 +628,9 @@ class A200(MultiTransferProtocol):
 
     def getData(self, callback = None):
         return MultiTransferProtocol.getData(self, callback,
-                                                                                                                                                         self.cmdproto.Cmnd_Transfer_Rte,
-                                                                                                                                                         self.link.Pid_Rte_Hdr,
-                                                                                                                                                         self.link.Pid_Rte_Wpt_Data)
+                                             self.cmdproto.Cmnd_Transfer_Rte,
+                                             self.link.Pid_Rte_Hdr,
+                                             self.link.Pid_Rte_Wpt_Data)
 
     def putData(self,data,callback):
         sendData = []
@@ -678,10 +678,10 @@ class A201(MultiTransferProtocol):
 
     def getData(self, callback = None):
         return MultiTransferProtocol.getData(self, callback,
-                                                                                                                                                         self.cmdproto.Cmnd_Transfer_Rte,
-                                                                                                                                                         self.link.Pid_Rte_Hdr,
-                                                                                                                                                         self.link.Pid_Rte_Wpt_Data,
-                                                                                                                                                         self.link.Pid_Rte_Link_Data)
+                                             self.cmdproto.Cmnd_Transfer_Rte,
+                                             self.link.Pid_Rte_Hdr,
+                                             self.link.Pid_Rte_Wpt_Data,
+                                             self.link.Pid_Rte_Link_Data)
     def putData(self,data,callback):
         sendData = []
         header = {}
@@ -729,8 +729,8 @@ class A300(SingleTransferProtocol):
 
     def getData(self, callback = None):
         return SingleTransferProtocol.getData(self, callback,
-                                                                                                                                                                self.cmdproto.Cmnd_Transfer_Trk,
-                                                                                                                                                                self.link.Pid_Trk_Data)
+                                              self.cmdproto.Cmnd_Transfer_Trk,
+                                              self.link.Pid_Trk_Data)
 
     def putData(self,data,callback):
         sendData = []
@@ -747,9 +747,9 @@ class A301(MultiTransferProtocol):
 
     def getData(self, callback = None):
         return MultiTransferProtocol.getData(self, callback,
-                                                                                                                                                         self.cmdproto.Cmnd_Transfer_Trk,
-                                                                                                                                                         self.link.Pid_Trk_Hdr,
-                                                                                                                                                         self.link.Pid_Trk_Data)
+                                             self.cmdproto.Cmnd_Transfer_Trk,
+                                             self.link.Pid_Trk_Hdr,
+                                             self.link.Pid_Trk_Data)
     def putData (self,data,callback):
         sendData = []
         header = {}
@@ -798,8 +798,8 @@ class A400(SingleTransferProtocol):
 
     def getData(self, callback = None):
         return SingleTransferProtocol.getData(self, callback,
-                                                                                                                                                                self.cmdproto.Cmnd_Transfer_Prx,
-                                                                                                                                                                self.link.Pid_Prx_Wpt_Data)
+                                              self.cmdproto.Cmnd_Transfer_Prx,
+                                              self.link.Pid_Prx_Wpt_Data)
 
     def putData(self,data,callback):
         sendData = []
@@ -816,15 +816,15 @@ class A500(SingleTransferProtocol):
 
     def getData(self, callback):
         return SingleTransferProtocol.getData(self, callback,
-                                                                                                                                                                self.cmdproto.Cmnd_Transfer_Alm,
-                                                                                                                                                                self.link.Pid_Almanac_Data)
+                                              self.cmdproto.Cmnd_Transfer_Alm,
+                                              self.link.Pid_Almanac_Data)
 
 class A600(TransferProtocol):
     "Waypoint Date & Time Initialization Protocol"
 
     def getData(self,callback):
         self.link.sendPacket(self.link.Pid_Command_Data,
-                                                                                         self.cmdproto.Cmnd_Transfer_Time)
+                             self.cmdproto.Cmnd_Transfer_Time)
         data = self.link.expectPacket(self.link.Pid_Date_Time_Data)
         p = self.datatypes[0]() # p =D600()
         p.unpack(data)
@@ -848,8 +848,8 @@ class A650(SingleTransferProtocol):
 
     def getData(self,callback):
         return SingleTransferProtocol.getData(self, callback,
-                                                                                                                                                                self.cmdproto.Cmnd_FlightBook_Transfer,
-                                                                                                                                                                self.link.Pid_FlightBook_Record)
+                                              self.cmdproto.Cmnd_FlightBook_Transfer,
+                                              self.link.Pid_FlightBook_Record)
 
 class A700(TransferProtocol):
     "Position Initialisation Protocol"
@@ -862,11 +862,11 @@ class A800(TransferProtocol):
 
     def dataOn(self):
         self.link.sendPacket(self.link.Pid_Command_Data,
-                                                                                         self.cmdproto.Cmnd_Start_Pvt_Data)
+                             self.cmdproto.Cmnd_Start_Pvt_Data)
 
     def dataOff(self):
         self.link.sendPacket(self.link.Pid_Command_Data,
-                                                                                         self.cmdproto.Cmnd_Stop_Pvt_Data)
+                             self.cmdproto.Cmnd_Stop_Pvt_Data)
 
     def getData(self,callback):
 
@@ -917,8 +917,8 @@ class A906(SingleTransferProtocol):
 
     def getData(self,callback):
         return SingleTransferProtocol.getData(self, callback,
-                                                                                                                                                                self.cmdproto.Cmnd_Transfer_Laps,
-                                                                                                                                                                self.link.Pid_Lap)
+                                              self.cmdproto.Cmnd_Transfer_Laps,
+                                              self.link.Pid_Lap)
 
 class A907(TransferProtocol):
     "Used by GPSmap 60cs, no documentation as of 2004-09-26"
@@ -1251,9 +1251,9 @@ class D109(Waypoint):
 
 class D110(Waypoint):
     parts = ("dtyp", "wpt_class", "dspl_color", "attr", "smbl",
-                                     "subclass", "slat", "slon", "alt", "dpth", "dist",
-                                     "state", "cc", "ete", "temp", "time", "wpt_cat",
-                                     "ident", "cmnt", "facility", "city", "addr", "cross_road")
+             "subclass", "slat", "slon", "alt", "dpth", "dist",
+             "state", "cc", "ete", "temp", "time", "wpt_cat",
+             "ident", "cmnt", "facility", "city", "addr", "cross_road")
     fmt = "<b b b b h 18s l l f f f 2s 2s l f l i s s s s s s"
 
     def __init__(self, data = {}):
@@ -1764,16 +1764,16 @@ class D601(TimePoint):
 
 class D650(DataPoint):
     parts = ("takeoff_time", "landing_time", "takeoff_lat", "takeoff_lon",
-                                     "landing_lat", "landing_lon", "night_time", "num_landings",
-                                     "max_speed", "max_alt", "distance", "cross_country_flag",
-                                     "departure_name", "departure_ident", "arrival_name",
-                                     "arrival_ident", "ac_id")
+             "landing_lat", "landing_lon", "night_time", "num_landings",
+             "max_speed", "max_alt", "distance", "cross_country_flag",
+             "departure_name", "departure_ident", "arrival_name",
+             "arrival_ident", "ac_id")
     fmt = "<L L l l l l L L f f f B s s s s s"
 
     def __str__(self):
         return "%s %s takeoff: (%s,%s) landing: (%s,%s)" % (self.dataDict['takeoff_time'],self.dataDict['landing_time'],
-                                                                                self.dataDict['takeoff_lat'],self.dataDict['takeoff_lon'],
-                                                                                self.dataDict['landing_lat'],self.dataDict['landing_lon'])
+                                                            self.dataDict['takeoff_lat'],self.dataDict['takeoff_lon'],
+                                                            self.dataDict['landing_lat'],self.dataDict['landing_lon'])
 
 class D700:
     pass

@@ -975,7 +975,19 @@ class SerialLink(P000):
       self.f = f
 
    def read(self, n):
-      return self.f.read(n)
+      import select
+      
+      i = 0
+      data = []
+      while i < n:
+         iset,oset,eset = select.select([self.f.fileno()], [], [], 5)
+         if iset == []:
+           raise LinkException, "time out"
+         b = self.f.read(1)
+         data.append(b)
+         i = i + 1
+      print data
+      return string.join(data)
 
    def write(self, data):
       self.f.write(data)
@@ -993,6 +1005,7 @@ class UnixSerialLink(SerialLink):
       setraw(fd)
       mode = tcgetattr(fd)
       mode[ISPEED] = mode[OSPEED] = B9600
+      mode[LFLAG] = mode[LFLAG] | ECHO
       tcsetattr(fd, TCSAFLUSH, mode)
 
       SerialLink.__init__(self, f)
@@ -1123,7 +1136,7 @@ def main():
    print "GPS Product ID: %d Descriptions: %s Software version: %2.2f" % \
          (gps.prod_id, gps.prod_descs, gps.soft_ver)
 
-   if 0:
+   if 1:
       # show waypoints
       wpts = gps.getWaypoints()
       for w in wpts:

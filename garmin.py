@@ -498,7 +498,7 @@ class D101(Waypoint):
 
 class D102(Waypoint):
    parts = Waypoint.parts + ("dst", "smbl")
-   fmt = "< 6s l l L 40s f i"
+   fmt = "< 6s l l L 40s f h"
    dst = 0.0                  # proximity distance (m)
    smbl = 0                   # symbol_type id
 
@@ -510,19 +510,19 @@ class D103(Waypoint):
    
 class D104(Waypoint):
    parts = Waypoint.parts + ("dst", "smbl", "dspl")
-   fmt = "<6s l l L 40s f i b"
+   fmt = "<6s l l L 40s f h b"
    dst = 0.0                  # proximity distance (m)
    smbl = 0                   # symbol_type id
    dspl = 0                   # D104 display option
 
 class D105(Waypoint):
    parts = ("slat", "slon", "smbl", "ident")
-   fmt = "<l l i s"
+   fmt = "<l l h s"
    smbl = 0
 
 class D106(Waypoint):
    parts = ("wpt_class", "subclass", "slat", "slon", "smbl", "ident", "lnk_ident")
-   fmt = "<b 13s l l i s s"
+   fmt = "<b 13s l l h s s"
    wpt_class = 0
    subclass = ""
    smbl = 0

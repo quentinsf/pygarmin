@@ -22,7 +22,7 @@
    For the latest information about PyGarmin, please see
    http://pygarmin.sourceforge.net/
 
-   (c) 1999 Quentin Stafford-Fraser <quentin@uk.research.att.com>
+   (c) 2001 Quentin Stafford-Fraser <quentin@uk.research.att.com>
    (c) 2000 James A. H. Skillen <jahs@skillen.org.uk>
    (c) 2001 Raymond Penners <raymond@dotsphinx.com>
    (c) 2001 Tom Grydeland <Tom.Grydeland@phys.uit.no>
@@ -31,6 +31,9 @@
 
 import os, string, newstruct, time, sys
 struct = newstruct
+
+# Set this value to > 0 for some debugging output, and the higher
+# the number, the more you'll get.
 
 debug = 0
 
@@ -74,6 +77,10 @@ class P000:
    def write(self, n):
       pass
 
+# The following is handy for debugging:
+
+def hexdump(data): return string.join(map(lambda x: "%02x" % ord(x), data))
+
 # Link protocols ===================================================
 
 LinkException = "Link Error"
@@ -106,6 +113,7 @@ class L000:
       escline = self.escape( ld + data + chk)
       bytes = self.DLE + tp + escline + self.EOM 
       self.phys.write(bytes)
+      if debug > 5: print "< packet %3d : " % ptype, hexdump(data)
       if readAck:
          self.readAcknowledge(ptype)
 
@@ -135,6 +143,7 @@ class L000:
          raise LinkException, "Invalid checksum"
       eom = self.phys.read(2)
       assert(eom==self.EOM, "Invalid EOM seen")
+      if debug > 5: print "> packet %3d : " % ptype, hexdump(data)
       if sendAck:
          self.sendAcknowledge(ptype)
       return (ptype, data)
@@ -148,11 +157,13 @@ class L000:
 
    def readAcknowledge(self, ptype):
       "Read an ack msg in response to a particular sent msg"
+      if debug > 5: print "(>ack)",
       tp, data = self.readPacket(0)
       if (tp & 0xff) != self.Pid_Ack_Byte or ord(data[0]) != ptype:
          raise LinkException, "Acknowledge error"
 
    def sendAcknowledge(self, ptype):
+      if debug > 5: print "(<ack)",
       self.sendPacket(self.Pid_Ack_Byte, struct.pack("<h", ptype), 0)
       
    def readEscapedByte(self):
@@ -234,6 +245,7 @@ class A001:
 
    def getProtocols(self):
       # may raise LinkException here
+      if debug > 3: print "Try reading protocols using PCP"
       data = self.link.expectPacket(self.link.Pid_Protocol_Array)
       num = len(data)/3
       fmt = "<"+num*"ch"
@@ -242,7 +254,7 @@ class A001:
       for i in range(0, 2*num, 2):
          protocols.append(tup[i]+"%03d"%tup[i+1])
       if debug > 0:
-         print "protocols reported by A001:", protocols
+         print "Protocols reported by A001:", protocols
       return protocols
       
 # Commands  ---------------------------------------------------
@@ -289,6 +301,7 @@ class TransferProtocol:
 
    def putData(self, cmd, data_pid, records):
       numrecords = len(records)
+      if debug > 3: print self.__doc__, "Sending %d records" % numrecords
       self.link.sendPacket(self.link.Pid_Records, numrecords)
       for i in records:
          self.link.sendPacket(data_pid, i.pack())
@@ -300,7 +313,7 @@ class SingleTransferProtocol(TransferProtocol):
       self.link.sendPacket(self.link.Pid_Command_Data, cmd)
       data = self.link.expectPacket(self.link.Pid_Records)
       (numrecords,) = struct.unpack("<h", data)
-
+      if debug > 3: print self.__doc__, "Expecting %d records" % numrecords
       result = []
       for i in range(numrecords):
          data = self.link.expectPacket(pid)
@@ -317,7 +330,7 @@ class MultiTransferProtocol(TransferProtocol):
       self.link.sendPacket(self.link.Pid_Command_Data, cmd)
       data = self.link.expectPacket(self.link.Pid_Records)
       (numrecords,) = struct.unpack("<h", data)
-
+      if debug > 3: print self.__doc__, "Expecting %d records" % numrecords
       data_pids = list(data_pids)
       result = []
       last = []
@@ -439,6 +452,14 @@ class A900(TransferProtocol):
    "Used by GPS III+, no documentation as of 2000-09-18"
    pass
 
+class A902(TransferProtocol):
+   "Used by etrex, no documentation as of 2001-05-30"
+   pass
+
+class A903(TransferProtocol):
+   "Used by etrex, no documentation as of 2001-05-30"
+   pass
+
 # Most of the following subclasses have a fmt member which is a format
 # string as understood by the struct module, detailing how the class
 # is transmitted on the wire, and a 'parts' member, listing the
@@ -473,8 +494,8 @@ class DataPoint:
       except Exception, e:
          print e
          print "Format: <" + self.fmt   + ">"
-         print "Parts:  <" + ", ".join(self.parts) + ">"
-         print "Input:  <" + "><".join([x for x in bytes]) + ">"
+         print "Parts:  <" + string.join(self.parts, ", ") + ">"
+         print "Input:  <" + string.join(x, "><") + ">"
 	 raise Exception, e
 
 # Waypoints  ---------------------------------------------------
@@ -798,11 +819,11 @@ class D108(Waypoint):
    wpt_class = 0
    color = 0
    dspl = 0
-   attr = 0
+   attr = 0x60
    smbl = 0
    subclass = ""
-   alt = 0.0
-   dpth = 0.0
+   alt = 1.0e25
+   dpth = 1.0e25
    dist = 0.0
    state = ""
    cc = ""
@@ -811,6 +832,30 @@ class D108(Waypoint):
    addr = ""
    cross_road = ""
 
+   def __init__(self, ident="", slat=0L, slon=0L, alt=1.0e25, dpth=1.0e25,
+                cmnt="", subclass="", wpt_class=0L, lnk_ident="", smbl=18L):
+      self.ident = ident         # text identidier (upper case)
+      self.slat = slat           # lat & long in semicircle terms
+      self.slon = slon       
+      self.wpt_class = wpt_class   
+      self.unused = 0L
+      self.subclass = subclass          
+      self.lnk_ident = lnk_ident
+      self.smbl = smbl
+      self.cmnt = cmnt
+
+   def __repr__(self):
+      return "<Waypoint %s (%3.5f, %3.5f) (at %x)>" % (self.ident,
+                                                       degrees(self.slat),
+                                                       degrees(self.slon),
+                                                       id(self))
+
+   def __str__(self):
+      return "%s (%3.5f, %3.5f, %3f) '%s' class %d symbl %d" % (
+         self.ident,
+         degrees(self.slat), degrees(self.slon),
+         self.alt, string.strip(self.cmnt),
+         self.wpt_class, self.smbl)
 
 class D150(Waypoint):
    parts = ("ident", "cc", "clss", "lat", "lon", "alt", "city", "state", "name", "cmnt")
@@ -1214,11 +1259,13 @@ def FormatA001(protocols):
       for i in range(3, len(protocols)):
          p = protocols[i]
          if p[0] == "A":
-            if tuples[p[1]] == None:
-               tuples[p[1]] = []
-            last_seen = tuples[p[1]]
+            pclass = p[1]
+            if tuples[pclass] == None:
+               tuples[pclass] = []
+            last_seen = tuples[pclass]
          last_seen.append(eval(p))
    except NameError:
+      print sys.exc_info()[2]
       raise NameError, "Protocol %s not supported yet!" % sys.exc_info()[1]
    return (None, link, cmnd, tuples["1"], tuples["2"], tuples["3"],
            tuples["4"], tuples["5"])
@@ -1228,9 +1275,52 @@ def FormatA001(protocols):
 # Now some practical implementations
 
 class SerialLink(P000):
-
-   def __init__(self, f):
+   """
+     A serial link will look something like this, though real
+     implementations will probably override most of it.
+   """
+   def __init__(self, f, timeout = 5):
       self.f = f
+      self.initserial()
+      self.settimeout(timeout)
+
+   def initserial(self):
+      "Set up baud rate, handshaking, etc"
+      pass
+   
+   def read(self, n):
+      """
+      Read n bytes and return them. Real implementations should
+      raise a LinkException if there is a timeout > self.timeout
+      """
+      return self.f.read(n)
+
+   def write(self, data):
+      self.f.write(data)
+
+   def settimeout(self, secs):
+      self.timeout = secs
+      
+   def __del__(self):
+      """Should close down any opened resources"""
+      pass
+
+
+class UnixSerialLink(SerialLink):
+
+   def __init__(self, device):
+      f = open(device, "w+", 0)
+      SerialLink.__init__(self, f)
+
+   def initserial(self):
+      from tty import *
+      
+      fd = self.f.fileno()
+      setraw(fd)
+      mode = tcgetattr(fd)
+      mode[ISPEED] = mode[OSPEED] = B9600
+      # mode[LFLAG] = mode[LFLAG] | ECHO
+      tcsetattr(fd, TCSAFLUSH, mode)
 
    def read(self, n):
       import select
@@ -1238,35 +1328,16 @@ class SerialLink(P000):
       i = 0
       data = []
       while i < n:
-         iset,oset,eset = select.select([self.f.fileno()], [], [], 5)
+         iset,oset,eset = select.select([self.f.fileno()], [], [], self.timeout)
          if iset == []:
            raise LinkException, "time out"
          b = self.f.read(1)
          data.append(b)
          i = i + 1
-      # print data
-      return string.join(data)
-
-   def write(self, data):
-      self.f.write(data)
+      return string.join(data,'')
 
    def __del__(self):
       self.f.close()
-
-class UnixSerialLink(SerialLink):
-
-   def __init__(self, device):
-      from tty import *
-      
-      f = open(device, "w+", 0)
-      fd = f.fileno()
-      setraw(fd)
-      mode = tcgetattr(fd)
-      mode[ISPEED] = mode[OSPEED] = B9600
-      mode[LFLAG] = mode[LFLAG] | ECHO
-      tcsetattr(fd, TCSAFLUSH, mode)
-
-      SerialLink.__init__(self, f)
 
 # Win32 Serial Link ==================================================
 
@@ -1274,45 +1345,52 @@ if os.name == 'nt':
    from win32file import * 
    import win32con
 
-class Win32SerialLink:
+class Win32SerialLink(SerialLink):
    def __init__(self, device):
       self.device = device
-      self.handle = CreateFile(device,
+      handle = CreateFile(device,
          win32con.GENERIC_READ | win32con.GENERIC_WRITE,
          0, # exclusive access
          None, # no security
          win32con.OPEN_EXISTING,
          0,
          None)
+      SerialLink.__init__(self, handle)
 
+   def initserial(self):
       # Remove anything that was there
-      PurgeComm(self.handle, PURGE_TXABORT | PURGE_RXABORT
+      PurgeComm(self.f, PURGE_TXABORT | PURGE_RXABORT
          | PURGE_TXCLEAR | PURGE_RXCLEAR )
 
-      # Setup time-outs
-      timeouts = 0xFFFFFFFF, 0, 4000, 0, 4000
-      SetCommTimeouts(self.handle, timeouts)
-
       # Setup the connection info.
-      dcb = GetCommState( self.handle )
+      dcb = GetCommState( self.f )
       dcb.BaudRate = CBR_9600
       dcb.ByteSize = 8
       dcb.Parity = NOPARITY
       dcb.StopBits = ONESTOPBIT
-      SetCommState(self.handle, dcb)
+      SetCommState(self.f, dcb)
 
    def read(self, n):
       buffer = AllocateReadBuffer(n)
-      rc, data = ReadFile(self.handle, buffer)
+      rc, data = ReadFile(self.f, buffer)
       if len(data) != n:
          raise LinkException, "time out";
       return data
 
    def write(self, n):
-      rc,n = WriteFile(self.handle, n)
+      rc,n = WriteFile(self.f, n)
       if rc:
          raise LinkException, "WriteFile error";
 
+   def settimeout(self, secs):
+      SerialLink.settimeout(self, secs)
+      # Setup time-outs
+      timeouts = 0xFFFFFFFF, 0, 1000*secs, 0, 1000*secs
+      SetCommTimeouts(self.f, timeouts)
+
+   def __del__(self):
+      CloseHandle(self.f)
+      
 class Garmin:
    """
    A representation of the GPS device, which is connected
@@ -1323,17 +1401,23 @@ class Garmin:
       (self.prod_id, self.soft_ver,
        self.prod_descs) = A000(self.link).getProductData()
 
+      if debug > 1: print "Get supported protocols"
       # Wait for the unit to announce its capabilities using A001.  If
       # that doesn't happen, try reading the protocols supported by the
       # unit from the Big Table.
+      physicalLayer.settimeout(2)
       try:
          self.protocols = A001(self.link).getProtocols()
          protos = FormatA001(self.protocols)
-      except NameError, e:
+      except LinkException, e:
+         if debug > 2: print "PCP not supported"
          try:
             protos = GetProtocols(self.prod_id, self.soft_ver)
          except KeyError:
             raise Exception, "Couldn't determine product capabilities"
+      physicalLayer.settimeout(5)
+      
+      # protos = GetProtocols(self.prod_id, self.soft_ver)
 
       (versions, self.linkProto, self.cmdProto, wptProtos, rteProtos,
        trkProtos, prxProtos, almProtos) = protos
@@ -1404,7 +1488,7 @@ class Garmin:
 
 def main():
    if os.name == 'nt':
-      serialDevice =  "com2"
+      serialDevice =  "com1"
       phys = Win32SerialLink(serialDevice)
    else:
       serialDevice =  "/dev/ttyS0"
@@ -1415,7 +1499,7 @@ def main():
    print "GPS Product ID: %d Descriptions: %s Software version: %2.2f" % \
          (gps.prod_id, gps.prod_descs, gps.soft_ver)
 
-   if 0:
+   if 1:
       # show waypoints
       wpts = gps.getWaypoints()
       for w in wpts:
@@ -1447,7 +1531,7 @@ def main():
    if 0:
       # show time
       d = gps.getTime()
-      print d.year, d.month, d.day, d.hour, d.min, d.sec, d.unknown
+      print d.year, d.month, d.day, d.hour, d.min, d.sec
 
    if 0:
       # upload a waypoint
@@ -1458,8 +1542,9 @@ def main():
          slon=-2529985
          )
       gps.putWaypoints([w])
+      print "Uploaded", w
 
-   if 1:
+   if 0:
       # show some real-time data
       print "Starting pvt"
       gps.pvtOn()

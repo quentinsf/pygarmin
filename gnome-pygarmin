@@ -5,6 +5,9 @@
    This is a GNOME user application for communicating with Garmin
    GPS receivers.
 
+   To use it you will need the gnome-python package installed, which
+   can be found at ftp://ftp.daa.com.au/pub/james/python/
+   
    This is released under the Gnu General Public Licence. A copy of
    this can be found at http://www.opensource.org/licenses/gpl-license.html
 

@@ -1,0 +1,7 @@
+PyGarmin Change Log
+
+Incorporated James Skillen's improvements to support protocol A001 for
+newer Garmin units.
+
+Updated the tables based on new spec.
+

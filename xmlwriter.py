@@ -1,3 +1,16 @@
+#!/usr/bin/env python
+"""
+   xmlwriter
+
+   Helps in outputting nicely indented XML files.
+
+   This is released under the Gnu General Public Licence. A copy of
+   this can be found at http://www.opensource.org/licenses/gpl-license.html
+
+   (c) 2001 Raymond Penners <raymond@dotsphinx.com>
+   
+"""
+
 from sys import *
 
 class XmlWriter:

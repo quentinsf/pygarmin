@@ -29,6 +29,7 @@ class Arguments(list):
         self.description = description
         self.example = example % self.appname
         self.options = {}
+        self.maxlength = 0
 
         shortopts = []
         longopts = []
@@ -40,11 +41,13 @@ class Arguments(list):
                 longopts.append(option + '=')
             else:
                 longopts.append(option)
+            n = len(option) + len(value)
+            if n > self.maxlength:
+                self.maxlength = n
 
         try:
-            parsed, leftover = getopt.getopt(sys.argv[1:],
-                                                  string.join(shortopts, ''),
-                                                  longopts)
+            parsed, leftover = getopt.getopt(sys.argv[1:], ''.join(shortopts),
+                                             longopts)
         except:
             print '%s: %s' % (sys.argv[0], sys.exc_info()[1])
             sys.exit(1)
@@ -65,10 +68,15 @@ class Arguments(list):
         seq.sort()
         for k in seq:
             option, value, desc = self.config[k]
+            n = len(option) + len(value)
             if value:
-                print '  -%s, --%s=%s\t%s' % (k, option, value, desc)
+                print '  -%s, --%s=%s%s%s' % (k, option, value,
+                                              (self.maxlength - n + 1) * ' ',
+                                              desc)
             else:
-                print '  -%s, --%s\t\t%s' % (k, option, desc)
+                print '  -%s, --%s%s%s' % (k, option,
+                                           (self.maxlength - n + 2) * ' ',
+                                           desc)
 
 class Pygarmin(object):
 

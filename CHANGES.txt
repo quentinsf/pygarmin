@@ -1,5 +1,11 @@
 PyGarmin Change Log
 
+0.6
+Fixed various bugs
+Tidier SerialLink code
+Runs under Python 1.5.2
+More debugging available if wanted
+
 0.5
 
 Added a datum-conversion module.

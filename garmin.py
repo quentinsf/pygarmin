@@ -1393,14 +1393,15 @@ class UnixSerialLink(SerialLink):
       tty.setraw(fd)
       mode = tty.tcgetattr(fd)
       mode[tty.ISPEED] = mode[tty.OSPEED] = tty.B9600
-      # mode[LFLAG] = mode[LFLAG] | ECHO
+      # mode[tty.LFLAG] = mode[tty.LFLAG] | tty.ECHO
       tty.tcsetattr(fd, tty.TCSAFLUSH, mode)
 
    def read(self, n):
       i = 0
       data = []
       while i < n:
-         iset,oset,eset = select.select([self.f.fileno()], [], [], self.timeout)
+         iset,oset,eset = select.select([self.f.fileno()], [], [],
+                                        self.timeout)
          if iset == []:
            raise LinkException, "time out"
          b = self.f.read(1)
@@ -1415,13 +1416,12 @@ class UnixSerialLink(SerialLink):
 # Win32 Serial Link ==================================================
 
 if os.name == 'nt':
-   from win32file import *
-   import win32con
+   import win32file, win32con
 
 class Win32SerialLink(SerialLink):
    def __init__(self, device):
       self.device = device
-      handle = CreateFile(device,
+      handle = win32file.CreateFile(device,
          win32con.GENERIC_READ | win32con.GENERIC_WRITE,
          0, # exclusive access
          None, # no security
@@ -1432,26 +1432,28 @@ class Win32SerialLink(SerialLink):
 
    def initserial(self):
       # Remove anything that was there
-      PurgeComm(self.f, PURGE_TXABORT | PURGE_RXABORT
-         | PURGE_TXCLEAR | PURGE_RXCLEAR )
+      win32file.PurgeComm(self.f, win32file.PURGE_TXABORT |
+                                  win32file.PURGE_RXABORT |
+                                  win32file.PURGE_TXCLEAR |
+                                  win32file.PURGE_RXCLEAR )
 
       # Setup the connection info.
-      dcb = GetCommState( self.f )
-      dcb.BaudRate = CBR_9600
+      dcb = win32file.GetCommState( self.f )
+      dcb.BaudRate = win32file.CBR_9600
       dcb.ByteSize = 8
-      dcb.Parity = NOPARITY
-      dcb.StopBits = ONESTOPBIT
-      SetCommState(self.f, dcb)
+      dcb.Parity = win32file.NOPARITY
+      dcb.StopBits = win32file.ONESTOPBIT
+      win32file.SetCommState(self.f, dcb)
 
    def read(self, n):
-      buffer = AllocateReadBuffer(n)
-      rc, data = ReadFile(self.f, buffer)
+      buffer = win32file.AllocateReadBuffer(n)
+      rc, data = win32file.ReadFile(self.f, buffer)
       if len(data) != n:
          raise LinkException, "time out";
       return data
 
    def write(self, n):
-      rc,n = WriteFile(self.f, n)
+      rc,n = win32file.WriteFile(self.f, n)
       if rc:
          raise LinkException, "WriteFile error";
 
@@ -1459,10 +1461,10 @@ class Win32SerialLink(SerialLink):
       SerialLink.settimeout(self, secs)
       # Setup time-outs
       timeouts = 0xFFFFFFFF, 0, 1000*secs, 0, 1000*secs
-      SetCommTimeouts(self.f, timeouts)
+      win32file.SetCommTimeouts(self.f, timeouts)
 
    def __del__(self):
-      CloseHandle(self.f)
+      win32file.CloseHandle(self.f)
 
 class Garmin:
    """

@@ -720,4 +720,18 @@
   </child>
 </widget>
 
+<widget class="GtkAboutDialog" id="about">
+  <property name="border_width">2</property>
+  <property name="visible">True</property>
+  <property name="destroy_with_parent">False</property>
+  <property name="name" translatable="yes">GNOME PyGarmin</property>
+  <property name="copyright" translatable="yes">Copyright © 2000, 2006</property>
+  <property name="comments" translatable="yes">A GNOME application for communicating with Garmin GPS receivers, written in Python.
+This program is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version.</property>
+  <property name="wrap_license">False</property>
+  <property name="authors">James A. H. Skillen &lt;jahs@skillen.org.uk&gt;
+Hyrum K. Wright &lt;hyrum@hyrumwright.org&gt;</property>
+  <property name="translator_credits" translatable="yes" comments="TRANSLATORS: Replace this string with your names, one name per line.">translator-credits</property>
+</widget>
+
 </glade-interface>

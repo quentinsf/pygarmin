@@ -253,8 +253,8 @@ class Download:
 class About:
     def __init__(self, pygarmin):
         self.pygarmin = pygarmin
-        self.widgets = glade.GladeXML("gnome-pygarmin.glade",
-                                         "about")
+        self.widgets = glade.XML("gnome-pygarmin.glade",
+                                 "about")
         window = self.widgets.get_widget("about")
         window.show()
 

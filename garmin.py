@@ -1121,6 +1121,17 @@ class D302(TrackPoint):
     parts = ("slat", "slon", "time", "alt", "depth", "temp", "new_trk")
     fmt = "<l l L f f f b"
 
+class D304(TrackPoint):
+    parts = (
+        "slat", "slon", "time", "alt", "distance", "heart_rate", "cadence",
+        "sensor")
+    fmt = "<l l L f f b b b"
+    alt = 0.0
+    distance = 0.0
+    heart_rate = 0
+    cadence = 0
+    sensor = False
+
 # Track headers ----------------------------------------------
 
 class TrackHdr(DataPoint):

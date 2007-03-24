@@ -39,6 +39,10 @@ import math
 
 debug = 0
 
+# Set this value to True if you don't want pygarmin to error out
+# completely if some protocol isn't supported yet.
+enable_partial_support = False
+
 # Introduction =====================================================
 
 # There are 3 levels of protocol documented:
@@ -1450,7 +1454,13 @@ def FormatA001(protocols):
                 pass
             else:
                 continue
-            last_seen.append(eval(p))
+            try:
+                last_seen.append(eval(p))
+            except NameError:
+                if enable_partial_support:
+                    print "Protocol %s not supported yet!" % p
+                else:
+                    raise
     except NameError:
         print sys.exc_info()[2]
         raise NameError, "Protocol %s not supported yet!" % sys.exc_info()[1]

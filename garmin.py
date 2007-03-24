@@ -154,6 +154,11 @@ class L000:
     def expectPacket(self, ptype):
         "Expect and read a particular msg type. Return data."
         tp, data = self.readPacket()
+        if tp == 248 and ptype != 248:
+            # No idea what packet type 248 is, it's not in the
+            # specification. It seems safe to ignore it, though.
+            print "Got msg type 248, retrying..."
+            tp, data = self.readPacket()
         if tp != ptype:
             raise LinkException, "Expected msg type %d, got %d" % (ptype, tp)
         return data

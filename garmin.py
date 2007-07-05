@@ -508,12 +508,12 @@ class A904(TransferProtocol):
     "Used by GPS V, no documentation as of 2004-09-16"
     pass
 
-class A906(TransferProtocol):
+class A906(MultiTransferProtocol):
     "Lap Transfer Protocol"
     def getData(self,callback):
-        return SingleTransferProtocol.getData(self, callback,
-                                              self.cmdproto.Cmnd_Transfer_Laps,
-                                              self.link.Pid_Lap)
+        return MultiTransferProtocol.getData(self, callback,
+                                             self.cmdproto.Cmnd_Transfer_Laps,
+                                             self.link.Pid_Lap)
 
 class A907(TransferProtocol):
     "Used by GPSmap 60cs, no documentation as of 2004-09-26"
@@ -1276,6 +1276,22 @@ class D910(DataPoint):
     "used by GPSmap 60cs, no documentation as of 2004-09-26"
     pass
 
+class D1011(DataPoint):
+    """A lap point."""
+
+    parts = ("index", "unused", "start_time", "total_time", "total_dist",
+             "max_speed", "begin_lat", "begin_lon", "end_lat", "end_lon",
+             "calories", "avg_heart_rate", "max_heart_rate",
+             "intensity", "avg_cadence", "trigger_method")
+    fmt = "<h h L l f f l l l l h b b b b b"
+
+    def __repr__(self):
+        return "<Lap %i (%3.5f, %3.5f) %s (duration %i seconds)>" % (
+            self.index, degrees(self.begin_lat), degrees(self.begin_lon),
+            time.asctime(time.gmtime(TimeEpoch+self.start_time)),
+            int(self.total_time/100))
+
+
 # Garmin models ==============================================
 
 # For reference, here are some of the product ID numbers used by
@@ -1476,7 +1492,7 @@ def FormatA001(protocols):
         print sys.exc_info()[2]
         raise NameError, "Protocol %s not supported yet!" % sys.exc_info()[1]
     return (None, link, cmnd, tuples["1"], tuples["2"], tuples["3"],
-            tuples["4"], tuples["5"])
+            tuples["4"], tuples["5"], tuples["9"])
 
 # ====================================================================
 
@@ -1544,7 +1560,12 @@ class Garmin:
         physicalLayer.settimeout(5)
 
         (versions, self.linkProto, self.cmdProto, wptProtos, rteProtos,
-         trkProtos, prxProtos, almProtos) = protos
+         trkProtos, prxProtos, almProtos, lapProtos) = protos
+        # A906 is the only lap protocol that's documented.
+        if lapProtos.index(A906) >= 0:
+            lapProtos = lapProtos[lapProtos.index(A906):]
+        else:
+            lapProtos = []
 
         self.link = self.linkProto(physicalLayer)
 
@@ -1553,6 +1574,7 @@ class Garmin:
         self.wptType = wptProtos[1]
         self.rteTypes = rteProtos[1:]
         self.trkTypes = trkProtos[1:]
+        self.lapTypes = lapProtos[1:]
 
         # Now we set up 'links' through which we can get data of the
         # appropriate types
@@ -1560,6 +1582,12 @@ class Garmin:
         self.wptLink = wptProtos[0](self.link, self.cmdProto, (self.wptType,))
         self.rteLink = rteProtos[0](self.link, self.cmdProto, self.rteTypes)
         self.trkLink = trkProtos[0](self.link, self.cmdProto, self.trkTypes)
+        # Not all GPS devices support laps.
+        if lapProtos:
+            self.lapLink = lapProtos[0](
+                self.link, self.cmdProto, self.lapTypes)
+        else:
+            self.lapLink = None
 
         if prxProtos != None:
             self.prxType = prxProtos[1]
@@ -1587,6 +1615,11 @@ class Garmin:
             return [data] # for consistency- compare A300 with A301
         else:
             return data
+
+    def getLaps(self, callback=None):
+        assert self.lapLink is not None, (
+            "No lap protocol specified for this GPS.")
+        return self.lapLink.getData(callback)
 
     def getProxPoints(self, callback = None):
         return self.prxLink.getData(callback)

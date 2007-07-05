@@ -17,6 +17,7 @@
 """
 
 import garmin, getopt, os, string, sys, xmlwriter
+import time
 
 class Arguments(list):
 
@@ -119,7 +120,9 @@ The default command is to display the product information.
             sys.exit(0)
 
         for cmd in self.args:
-            if cmd in ('info', 'protocols', 'waypoints', 'routes', 'tracks'):
+            available_commands = (
+                'info', 'protocols', 'waypoints', 'routes', 'tracks', 'laps')
+            if cmd in available_commands:
                 try:
                     getattr(self, cmd)()
                 except:
@@ -143,6 +146,10 @@ The default command is to display the product information.
         print 'GPS Product ID: %i' % self.gps.prod_id
         print 'Software version: %2.2f' % self.gps.soft_ver
         print
+
+    def laps(self):
+        print '*** Laps ***'
+        self.gps.getLaps(print_)
 
     def protocols(self):
         print '*** Product Protocols ***'

@@ -166,7 +166,8 @@ class L000:
         if tp == 248 and ptype != 248:
             # No idea what packet type 248 is, it's not in the
             # specification. It seems safe to ignore it, though.
-            print "Got msg type 248, retrying..."
+            if debug > 3:
+                print "Got msg type 248, retrying..."
             tp, data = self.readPacket()
         if tp != ptype:
             raise LinkException, "Expected msg type %d, got %d" % (ptype, tp)
@@ -1490,7 +1491,8 @@ def FormatA001(protocols):
                 last_seen.append(eval(p))
             except NameError:
                 if _enable_partial_support:
-                    print "Protocol %s not supported yet!" % p
+                    if debug > 0:
+                        print "Protocol %s not supported yet!" % p
                 else:
                     raise
     except NameError:

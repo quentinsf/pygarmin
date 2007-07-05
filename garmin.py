@@ -39,9 +39,14 @@ import math
 
 debug = 0
 
-# Set this value to True if you don't want pygarmin to error out
-# completely if some protocol isn't supported yet.
-enable_partial_support = False
+_enable_partial_support = False
+def enable_partial_support():
+    """Don't require the GPS to be completely supported by pygarmin.
+
+    Enabling this might cause subtle problems.
+    """
+    global _enable_partial_support
+    _enable_partial_support = True
 
 # Introduction =====================================================
 
@@ -1484,7 +1489,7 @@ def FormatA001(protocols):
             try:
                 last_seen.append(eval(p))
             except NameError:
-                if enable_partial_support:
+                if _enable_partial_support:
                     print "Protocol %s not supported yet!" % p
                 else:
                     raise

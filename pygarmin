@@ -84,7 +84,9 @@ class Pygarmin(object):
     def __init__(self):
         self.args = Arguments(
             {'d' : ('debug', 'LEVEL', 'Set debug level, 0-6'),
-             'f' : ('format', 'FORMAT', 'Output format (pygarmin, xml-abstract, xml-product)')},
+             'f' : ('format', 'FORMAT',
+                    'Output format (pygarmin, xml-abstract, xml-product)'),
+             'p' : ('partial', '', 'Enable partial support')},
             'Usage: %s [OPTIONS] DEVICE [COMMAND] ...',
 """
 Communicate with a Garmin GPS connected to DEVICE, where COMMAND is one of:
@@ -107,6 +109,9 @@ The default command is to display the product information.
 
         if self.args.options.has_key('debug'):
             garmin.debug = int(self.args.options['debug'])
+
+        if self.args.options.has_key('partial'):
+            garmin.enable_partial_support()
 
     def run(self):
         try:

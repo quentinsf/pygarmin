@@ -22,6 +22,7 @@
    For the latest information about PyGarmin, please see
    http://pygarmin.sourceforge.net/
 
+   (c) 2007 Bjorn Tillenius <bjorn.tillenius@gmail.com>
    (c) 2003 Quentin Stafford-Fraser <www.qandr.org/quentin>
    (c) 2000 James A. H. Skillen <jahs@jahs.net>
    (c) 2001 Raymond Penners <raymond@dotsphinx.com>
@@ -33,6 +34,7 @@ import os, select, string, sys, time
 import newstruct as struct
 import serial
 import math
+import usb
 
 # Set this value to > 0 for some debugging output, and the higher
 # the number, the more you'll get.
@@ -1575,6 +1577,88 @@ class SerialLink(P000):
         """Close the serial port"""
         if "ser" in self.__dict__:
             self.ser.close()
+
+
+class USBLink:
+    """Implementation of the Garmin USB protocol.
+
+    It will talk to the first Garmin GPS device it finds.
+    """
+
+    Pid_Data_Available = 2
+    Pid_Start_Session = 5
+    Pid_Session_Started = 6
+
+    def __init__(self):
+        self.garmin_dev = None
+        for bus in usb.busses():
+            for dev in bus.devices:
+                if dev.idVendor == 2334:
+                    self.garmin_dev = dev
+                    break
+            if self.garmin_dev:
+                break
+        else:
+            raise LinkException("No Garmin device found!")
+        self.handle = self.garmin_dev.open()
+        self.handle.claimInterface(0)
+        start_packet = self.constructPacket(0, self.Pid_Start_Session)
+        sent = self.handle.bulkWrite(0x02, start_packet)
+        start_packet = self.constructPacket(0, 0x10)
+        sent = self.handle.bulkWrite(0x02, start_packet)
+        packet = self.handle.bulkRead(0x81, 16, 5000)
+
+    def constructPacket(self, layer, packet_id, data=None):
+        package = [chr(layer)]
+        package.append(chr(0))
+        package.append(chr(0))
+        package.append(chr(0))
+        package.extend(list(struct.pack("<h", packet_id)))
+        package.append(chr(0))
+        package.append(chr(0))
+        if data:
+            if isinstance(data, int):
+                data = struct.pack("<h",data)
+            package.extend(list(struct.pack("<l", len(data))))
+            package += list(data)
+        else:
+            package.append(chr(0))
+            package.append(chr(0))
+            package.append(chr(0))
+            package.append(chr(0))
+        return package
+
+    def sendPacket(self, tp, data):
+        """Send a packet over USB."""
+        packet = self.constructPacket(20, tp, data)
+        print "Sending: %s" % (hexdump(''.join(packet)))
+        sent = self.handle.bulkWrite(0x02, packet)
+        print "Sent %s bytes" % sent
+        self.seen_data_available = False
+        self.data_in_pipe = None
+
+    def unpack(self, packet):
+        header = packet[:12]
+        data = packet[12:]
+        packet_type, unused1, unused2, packet_id, reserved, data_size = (
+            struct.unpack("<b h b h h l", header))
+        return packet_id, data
+
+    def readPacket(self):
+        """Read a packet over USB."""
+        packet = self.handle.bulkRead(0x81, 1024)
+        packet = ''.join(chr(b) for b in packet)
+        packet_id, data = self.unpack(packet)
+        if packet_id == 0x11:
+            #XXX: WTF?
+            return self.readPacket()
+        return packet_id, data
+
+    def settimeout(self, timeout):
+        pass
+
+    def close(self):
+        self.handle.releaseInterface()
 
 class Garmin:
     """

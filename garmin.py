@@ -221,6 +221,7 @@ class L001(L000):
     Pid_Trk_Hdr = 99
     Pid_FlightBook_Record = 134
     Pid_Lap = 149
+    Pid_Run = 990
     Pid_Wpt_Cat = 152
 
 # L002 builds on L000
@@ -296,6 +297,7 @@ class A010:
     Cmnd_Stop_Pvt_Data = 50        # stop transmitting PVT data
     Cmnd_FlightBook_Transfer = 92  # transfer flight records
     Cmnd_Transfer_Laps = 117       # transfer laps
+    Cmnd_Transfer_Runs = 450       # transfer runs
     Cmnd_Transfer_Wpt_Cats = 121   # transfer waypoint categories
 
 class A011:
@@ -520,6 +522,14 @@ class A906(MultiTransferProtocol):
         return MultiTransferProtocol.getData(self, callback,
                                              self.cmdproto.Cmnd_Transfer_Laps,
                                              self.link.Pid_Lap)
+
+class A1000(MultiTransferProtocol):
+    "Run Transfer Protocol"
+
+    def getData(self, callback):
+        return MultiTransferProtocol.getData(self, callback,
+                                             self.cmdproto.Cmnd_Transfer_Runs,
+                                             self.link.Pid_Run)
 
 class A907(TransferProtocol):
     "Used by GPSmap 60cs, no documentation as of 2004-09-26"
@@ -1297,6 +1307,19 @@ class D1011(DataPoint):
             time.asctime(time.gmtime(TimeEpoch+self.start_time)),
             int(self.total_time/100))
 
+class D1009(DataPoint):
+    """A run data point."""
+
+    parts = ("track_index", "first_lap_index", "last_lap_index",
+             "sport_type", "program_type",
+             "multisport", "unused1", "unused2",
+             "quick_workout_time", "quick_workout_distance")
+    fmt = "<h h h b b b b h l f"
+
+    def __repr__(self):
+        return "<Run %i, lap %i to %i>" % (
+            self.track_index, self.first_lap_index, self.last_lap_index)
+
 
 # Garmin models ==============================================
 
@@ -1573,6 +1596,13 @@ class Garmin:
             lapProtos = lapProtos[lapProtos.index(A906):]
         else:
             lapProtos = []
+        # A1000 is a protocol for transfering runs, not waypoints.
+        if A1000 in wptProtos and D1009 in wptProtos:
+            runProtos = [A1000, D1009]
+            wptProtos.remove(A1000)
+            wptProtos.remove(D1009)
+        else:
+            runProtos = []
 
         self.link = self.linkProto(physicalLayer)
 
@@ -1582,6 +1612,7 @@ class Garmin:
         self.rteTypes = rteProtos[1:]
         self.trkTypes = trkProtos[1:]
         self.lapTypes = lapProtos[1:]
+        self.runTypes = runProtos[1:]
 
         # Now we set up 'links' through which we can get data of the
         # appropriate types
@@ -1589,12 +1620,17 @@ class Garmin:
         self.wptLink = wptProtos[0](self.link, self.cmdProto, (self.wptType,))
         self.rteLink = rteProtos[0](self.link, self.cmdProto, self.rteTypes)
         self.trkLink = trkProtos[0](self.link, self.cmdProto, self.trkTypes)
-        # Not all GPS devices support laps.
+        # Not all GPS devices support laps and runs.
         if lapProtos:
             self.lapLink = lapProtos[0](
                 self.link, self.cmdProto, self.lapTypes)
         else:
             self.lapLink = None
+        if runProtos:
+            self.runLink = runProtos[0](
+                self.link, self.cmdProto, self.runTypes)
+        else:
+            self.runLink = None
 
         if prxProtos != None:
             self.prxType = prxProtos[1]
@@ -1627,6 +1663,11 @@ class Garmin:
         assert self.lapLink is not None, (
             "No lap protocol specified for this GPS.")
         return self.lapLink.getData(callback)
+
+    def getRuns(self, callback=None):
+        assert self.runLink is not None, (
+            "No run protocol supported for this GPS.")
+        return self.runLink.getData(callback)
 
     def getProxPoints(self, callback = None):
         return self.prxLink.getData(callback)

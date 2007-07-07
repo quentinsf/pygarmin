@@ -126,7 +126,8 @@ The default command is to display the product information.
 
         for cmd in self.args:
             available_commands = (
-                'info', 'protocols', 'waypoints', 'routes', 'tracks', 'laps')
+                'info', 'protocols', 'waypoints', 'routes', 'tracks', 'laps',
+                'runs')
             if cmd in available_commands:
                 try:
                     getattr(self, cmd)()
@@ -155,6 +156,10 @@ The default command is to display the product information.
     def laps(self):
         print '*** Laps ***'
         self.gps.getLaps(print_)
+
+    def runs(self):
+        print '*** Runs ***'
+        self.gps.getRuns(print_)
 
     def protocols(self):
         print '*** Product Protocols ***'

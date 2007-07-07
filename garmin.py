@@ -98,66 +98,23 @@ LinkException = "Link Error"
 
 class L000:
     "Basic Link Protocol"
-    Pid_Ack_Byte = 6
-    Pid_Nak_Byte = 21
     Pid_Protocol_Array = 253
     Pid_Product_Rqst = 254
     Pid_Product_Data = 255
     Pid_Ext_Product_Data = 248
 
-    # DataLinkEscape etc
-    DLE                  = "\x10"
-    ETX                  = "\x03"
-    EOM                  = DLE+ETX
-
     def __init__(self, physicalLayer):
         self.phys = physicalLayer
 
-    def sendPacket(self, ptype, data, readAck=1):
-        " Send a message. By default this will also wait for the ack."
-        if type(data) == type(""):
-            ld = chr(len(data))
-        else: # XXX assume 16-bit integer for now
-            ld = chr(2)
-            data = struct.pack("<h",data)
-        tp = chr(ptype)
-        chk = self.checksum( tp + ld + data)
-        escline = self.escape( ld + data + chk)
-        bytes = self.DLE + tp + escline + self.EOM
-        self.phys.write(bytes)
+    def sendPacket(self, ptype, data):
+        " Send a packet."""
+        self.phys.sendPacket(ptype, data)
         if debug > 5: print "< packet %3d : " % ptype, hexdump(data)
-        if readAck:
-            self.readAcknowledge(ptype)
 
-    def readPacket(self, sendAck=1):
-        " Read a message. By default this will also send the ack."
-        dle = self.phys.read(1)
-        # Find the start of a message
-        while dle != self.DLE:
-            print "resync - expected DLE and got something else: %r" % dle
-            dle = self.phys.read(1)
-        # We've now found either the start or the end of a msg
-        # Try reading the type.
-        tp = self.phys.read(1)
-        if tp == self.ETX:
-            # It was the end!
-            dle = self.phys.read(1)
-            tp = self.phys.read(1)
-        # Now we should be synchronised
-        ptype = ord(tp)
-        ld = self.readEscapedByte()
-        datalen = ord(ld)
-        data = ""
-        for i in range(0, datalen):
-            data = data + self.readEscapedByte()
-        ck = self.readEscapedByte()
-        if ck != self.checksum(tp + ld + data):
-            raise LinkException, "Invalid checksum"
-        eom = self.phys.read(2)
-        assert(eom==self.EOM, "Invalid EOM seen")
+    def readPacket(self):
+        " Read a packet."""
+        ptype, data = self.phys.readPacket()
         if debug > 5: print "> packet %3d : " % ptype, hexdump(data)
-        if sendAck:
-            self.sendAcknowledge(ptype)
         return (ptype, data)
 
     def expectPacket(self, ptype):
@@ -172,34 +129,6 @@ class L000:
         if tp != ptype:
             raise LinkException, "Expected msg type %d, got %d" % (ptype, tp)
         return data
-
-    def readAcknowledge(self, ptype):
-        "Read an ack msg in response to a particular sent msg"
-        if debug > 5: print "(>ack)",
-        tp, data = self.readPacket(0)
-        if (tp & 0xff) != self.Pid_Ack_Byte or ord(data[0]) != ptype:
-            raise LinkException, "Acknowledge error"
-
-    def sendAcknowledge(self, ptype):
-        if debug > 5: print "(<ack)",
-        self.sendPacket(self.Pid_Ack_Byte, struct.pack("<h", ptype), 0)
-
-    def readEscapedByte(self):
-        c = self.phys.read(1)
-        if c == self.DLE:
-            c = self.phys.read(1)
-        return c
-
-    def checksum(self, data):
-        sum = 0
-        for i in data:
-            sum = sum + ord(i)
-        sum = sum % 256
-        return chr((256-sum) % 256)
-
-    def escape(self, data):
-        "Escape any DLE characters"
-        return string.join(string.split(data, self.DLE), self.DLE+self.DLE)
 
 # L001 builds on L000
 
@@ -1533,6 +1462,15 @@ class SerialLink(P000):
       A serial link will look something like this, though real
       implementations will probably override most of it.
     """
+
+    Pid_Ack_Byte = 6
+    Pid_Nak_Byte = 21
+
+    # DataLinkEscape etc
+    DLE                  = "\x10"
+    ETX                  = "\x03"
+    EOM                  = DLE+ETX
+
     def __init__(self, device, timeout = 5):
         self.timeout = timeout
         self.ser = serial.Serial(device, timeout=self.timeout, baudrate=9600)
@@ -1540,6 +1478,81 @@ class SerialLink(P000):
     def initserial(self):
         "Set up baud rate, handshaking, etc"
         pass
+
+    def sendPacket(self, ptype, data, readAck=1):
+        " Send a message. By default this will also wait for the ack."
+        if type(data) == type(""):
+            ld = chr(len(data))
+        else: # XXX assume 16-bit integer for now
+            ld = chr(2)
+            data = struct.pack("<h",data)
+        tp = chr(ptype)
+        chk = self.checksum( tp + ld + data)
+        escline = self.escape( ld + data + chk)
+        bytes = self.DLE + tp + escline + self.EOM
+        self.write(bytes)
+        if debug > 5: print "< packet %3d : " % ptype, hexdump(data)
+        if readAck:
+            self.readAcknowledge(ptype)
+
+    def readPacket(self, sendAck=1):
+        " Read a message. By default this will also send the ack."
+        dle = self.read(1)
+        # Find the start of a message
+        while dle != self.DLE:
+            print "resync - expected DLE and got something else: %r" % dle
+            dle = self.read(1)
+        # We've now found either the start or the end of a msg
+        # Try reading the type.
+        tp = self.read(1)
+        if tp == self.ETX:
+            # It was the end!
+            dle = self.read(1)
+            tp = self.read(1)
+        # Now we should be synchronised
+        ptype = ord(tp)
+        ld = self.readEscapedByte()
+        datalen = ord(ld)
+        data = ""
+        for i in range(0, datalen):
+            data = data + self.readEscapedByte()
+        ck = self.readEscapedByte()
+        if ck != self.checksum(tp + ld + data):
+            raise LinkException, "Invalid checksum"
+        eom = self.read(2)
+        assert(eom==self.EOM, "Invalid EOM seen")
+        if debug > 5: print "> packet %3d : " % ptype, hexdump(data)
+        if sendAck:
+            self.sendAcknowledge(ptype)
+        return (ptype, data)
+
+    def readAcknowledge(self, ptype):
+        "Read an ack msg in response to a particular sent msg"
+        if debug > 5: print "(>ack)",
+        tp, data = self.readPacket(0)
+        if (tp & 0xff) != self.Pid_Ack_Byte or ord(data[0]) != ptype:
+            raise LinkException, "Acknowledge error"
+
+    def sendAcknowledge(self, ptype):
+        if debug > 5: print "(<ack)",
+        self.sendPacket(self.Pid_Ack_Byte, struct.pack("<h", ptype), 0)
+
+    def readEscapedByte(self):
+        c = self.read(1)
+        if c == self.DLE:
+            c = self.read(1)
+        return c
+
+    def checksum(self, data):
+        sum = 0
+        for i in data:
+            sum = sum + ord(i)
+        sum = sum % 256
+        return chr((256-sum) % 256)
+
+    def escape(self, data):
+        "Escape any DLE characters"
+        return string.join(string.split(data, self.DLE), self.DLE+self.DLE)
 
     def read(self, n):
         """

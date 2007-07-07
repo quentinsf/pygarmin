@@ -134,7 +134,7 @@ class L000:
         dle = self.phys.read(1)
         # Find the start of a message
         while dle != self.DLE:
-            print "resync - expected DLE and got something else"
+            print "resync - expected DLE and got something else: %r" % dle
             dle = self.phys.read(1)
         # We've now found either the start or the end of a msg
         # Try reading the type.

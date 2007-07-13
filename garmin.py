@@ -1606,7 +1606,7 @@ class USBLink:
         sent = self.handle.bulkWrite(0x02, start_packet)
         start_packet = self.constructPacket(0, 0x10)
         sent = self.handle.bulkWrite(0x02, start_packet)
-        packet = self.handle.bulkRead(0x81, 16, 5000)
+        packet = self.handle.interruptRead(0x81, 16)
 
     def constructPacket(self, layer, packet_id, data=None):
         package = [chr(layer)]
@@ -1646,7 +1646,7 @@ class USBLink:
 
     def readPacket(self):
         """Read a packet over USB."""
-        packet = self.handle.bulkRead(0x81, 1024)
+        packet = self.handle.interruptRead(0x81, 1024)
         packet = ''.join(chr(b) for b in packet)
         packet_id, data = self.unpack(packet)
         if packet_id == 0x11:

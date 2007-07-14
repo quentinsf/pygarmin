@@ -1072,7 +1072,7 @@ class D304(TrackPoint):
     parts = (
         "slat", "slon", "time", "alt", "distance", "heart_rate", "cadence",
         "sensor")
-    fmt = "<l l L f f b b b"
+    fmt = "<l l L f f B B B"
     alt = 0.0
     distance = 0.0
     heart_rate = 0
@@ -1096,7 +1096,7 @@ class D310(TrackHdr):
 
 class D311(TrackHdr):
     parts = ("index",)
-    fmt = "<i"
+    fmt = "<H"
 
 class D312(TrackHdr):
     parts = ("dspl", "color", "trk_ident")
@@ -1230,7 +1230,7 @@ class D1011(DataPoint):
              "max_speed", "begin_lat", "begin_lon", "end_lat", "end_lon",
              "calories", "avg_heart_rate", "max_heart_rate",
              "intensity", "avg_cadence", "trigger_method")
-    fmt = "<h h L l f f l l l l h b b b b b"
+    fmt = "<H H L L f f l l l l H B B B B B"
 
     def __repr__(self):
         return "<Lap %i (%3.5f, %3.5f) %s (duration %i seconds)>" % (
@@ -1245,7 +1245,7 @@ class D1009(DataPoint):
              "sport_type", "program_type",
              "multisport", "unused1", "unused2",
              "quick_workout_time", "quick_workout_distance")
-    fmt = "<h h h b b b b h l f"
+    fmt = "<H H H B B B B H L f"
 
     def __repr__(self):
         return "<Run %i, lap %i to %i>" % (

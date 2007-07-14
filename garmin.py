@@ -1631,9 +1631,11 @@ class USBLink:
     def sendPacket(self, tp, data):
         """Send a packet over USB."""
         packet = self.constructPacket(20, tp, data)
-        print "Sending: %s" % (hexdump(''.join(packet)))
+        if debug > 5:
+            print "Sending: %s" % (hexdump(''.join(packet)))
         sent = self.handle.bulkWrite(0x02, packet)
-        print "Sent %s bytes" % sent
+        if debug > 5:
+            print "Sent %s bytes" % sent
         self.seen_data_available = False
         self.data_in_pipe = None
 

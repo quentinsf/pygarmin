@@ -1473,6 +1473,8 @@ class SerialLink(P000):
     ETX                  = "\x03"
     EOM                  = DLE+ETX
 
+    unit_id = None
+
     def __init__(self, device, timeout = 5):
         self.timeout = timeout
         self.ser = serial.Serial(device, timeout=self.timeout, baudrate=9600)
@@ -1607,6 +1609,9 @@ class USBLink:
         start_packet = self.constructPacket(0, 0x10)
         sent = self.handle.bulkWrite(0x02, start_packet)
         packet = self.handle.interruptRead(0x81, 16)
+        packet = ''.join(chr(b) for b in packet)
+        packet_id, unit_id = self.unpack(packet)
+        [self.unit_id] = struct.unpack("<L", unit_id)
 
     def constructPacket(self, layer, packet_id, data=None):
         package = [chr(layer)]
@@ -1668,6 +1673,7 @@ class Garmin:
     via some physical connection, typically a SerialLink of some sort.
     """
     def __init__(self, physicalLayer):
+        self.unit_id = physicalLayer.unit_id
         self.link = L000(physicalLayer)      # at least initially
         (self.prod_id, self.soft_ver,
          self.prod_descs) = A000(self.link).getProductData()

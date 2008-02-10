@@ -1,6 +1,5 @@
 #!/usr/bin/env python
-"""
-   garmin
+"""Module for communicating with Garmin GPS devices.
 
    This module implements the protocol used for communication by the
    Garmin GPS receivers. It is based on the official description
@@ -73,7 +72,7 @@ TimeEpoch = 631065600
 # subclass this as something which handles Unix serial ports.
 
 class P000:
-    " Physical layer for communicating with Garmin "
+    """Physical layer for communicating with Garmin."""
 
     def read(self, n):
         pass
@@ -81,10 +80,12 @@ class P000:
     def write(self, n):
         pass
 
+
 # The following is handy for debugging:
 
 #def hexdump(data): return ''.join(map(lambda x: "%02x" % ord(x), data)) or
 def hexdump(data): return ''.join(["%02x" % ord(x) for x in data])
+
 
 # Define Errors
 
@@ -93,22 +94,29 @@ class GarminException:
     def __init__(self,data):
         self.data = data
 
+
 class LinkException(GarminException):
+    """Link error."""
 
     def __str__(self):
         return "Link Error"
 
+
 class ProtocolException(GarminException):
+    """Protocol error."""
 
     def __str__(self):
         return "Protocol Error"
+
 
 # Link protocols ===================================================
 
 #LinkException = "Link Error"
 
+
 class L000:
-    "Basic Link Protocol"
+    """Basic Link Protocol."""
+
     Pid_Ack_Byte = 6
     Pid_Nak_Byte = 21
     Pid_Protocol_Array = 253
@@ -245,7 +253,8 @@ class L000:
 # L001 builds on L000
 
 class L001(L000):
-    "Link protocol 1"
+    """Link protocol 1."""
+
     Pid_Command_Data = 10
     Pid_Xfer_Cmplt = 12
     Pid_Date_Time_Data = 14
@@ -267,7 +276,8 @@ class L001(L000):
 # L002 builds on L000
 
 class L002(L000):
-    "Link Protocol 2"
+    """Link Protocol 2."""
+
     Pid_Almanac_Data = 4
     Pid_Command_Data = 11
     Pid_Xfer_Cmplt = 12
@@ -279,6 +289,7 @@ class L002(L000):
     Pid_Rte_Wpt_Data = 39
     Pid_Wpt_Data = 43
 
+
 # Application Protocols =======================================
 
 # ProtocolException = "Protocol Error"
@@ -287,7 +298,7 @@ class L002(L000):
 # wire, and hence which other protocols we can use.
 
 class A000:
-    "Product Data Protocol"
+    """Product data protocol."""
 
     def __init__(self, linkLayer):
         self.link = linkLayer
@@ -303,7 +314,7 @@ class A000:
 
 
 class A001:
-    "Protocol Capabilities Protocol"
+    """Protocol capabilities protocol."""
 
     def __init__(self, linkLayer):
         self.link=linkLayer
@@ -326,7 +337,6 @@ class A001:
             print "Protocols reported by A001:", self.protocols
 
         return self.protocols
-
 
     def getProtocolsNoPCP(self,prod_id, soft_ver):
 
@@ -468,7 +478,7 @@ class A001:
 # Commands  ---------------------------------------------------
 
 class A010:
-    "Device Command Protocol 1"
+    """Device command protocol 1."""
     Cmnd_Abort_Transfer = 0        # abort current transfer
     Cmnd_Transfer_Alm = 1          # transfer almanac
     Cmnd_Transfer_Posn = 2         # transfer position
@@ -484,8 +494,10 @@ class A010:
     Cmnd_Transfer_Laps = 117       # transfer laps
     Cmnd_Transfer_Wpt_Cats = 121   # transfer waypoint categories
 
+
 class A011:
-    "Device Command Protocol 2"
+    """Device command protocol 2."""
+
     Cmnd_Abort_Transfer = 0   # abort current transfer
     Cmnd_Transfer_Alm = 4     # transfer almanac
     Cmnd_Transfer_Rte = 8     # transfer routes
@@ -493,6 +505,7 @@ class A011:
     Cmnd_Transfer_Time = 20   # transfer time
     Cmnd_Transfer_Wpt = 21    # transfer waypoints
     Cmnd_Turn_Off_Pwr = 26    # turn off power
+
 
 # Transfer Protocols -------------------------------------------
 
@@ -540,6 +553,7 @@ class TransferProtocol:
     def turnPowerOff(self):
         self.link.sendPacket(self.link.Pid_Command_Data,self.cmdproto.Cmnd_Turn_Off_Pwr)
 
+
 class SingleTransferProtocol(TransferProtocol):
 
     def getData(self, callback, cmd, pid):
@@ -580,6 +594,7 @@ class SingleTransferProtocol(TransferProtocol):
 
             self.link.sendPacket(self.link.Pid_Xfer_Cmplt, cmd)
     """
+
 
 class MultiTransferProtocol(TransferProtocol):
 
@@ -629,13 +644,16 @@ class MultiTransferProtocol(TransferProtocol):
 
         return result
 
-#
+
 class T001:
-    "no documentation as of 2004-02-24"
+    """T001 implementation.
+
+    No documentation as of 2004-02-24."""
     pass
 
+
 class A100(SingleTransferProtocol):
-    "Waypoint Transfer Protocol"
+    """Waypoint transfer protocol."""
 
     def getData(self, callback = None):
         return SingleTransferProtocol.getData(self, callback,
@@ -651,15 +669,16 @@ class A100(SingleTransferProtocol):
 
         return SingleTransferProtocol.putData(self,callback,self.cmdproto.Cmnd_Transfer_Wpt,sendData)
 
+
 class A101(SingleTransferProtocol):
-    "Waypoint Transfer Protocol"
+    """Waypoint transfer protocol."""
     def getData(self, callback = None):
         return SingleTransferProtocol.getData(self, callback,
                                               self.cmdproto.Cmnd_Transfer_Wpt_Cats,
                                               self.link.Pid_Wpt_Cat)
 
 class A200(MultiTransferProtocol):
-    "Route Transfer Protocol"
+    """Route transfer protocol."""
 
     def getData(self, callback = None):
         return MultiTransferProtocol.getData(self, callback,
@@ -709,7 +728,7 @@ class A200(MultiTransferProtocol):
 
 
 class A201(MultiTransferProtocol):
-    "Route Transfer Protocol"
+    """Route transfer protocol."""
 
     def getData(self, callback = None):
         return MultiTransferProtocol.getData(self, callback,
@@ -759,8 +778,9 @@ class A201(MultiTransferProtocol):
 
         return MultiTransferProtocol.putData(self,callback,self.cmdproto.Cmnd_Transfer_Rte,sendData)
 
+
 class A300(SingleTransferProtocol):
-    "Track Log Transfer Protocol"
+    """Track log transfer protocol."""
 
     def getData(self, callback = None):
         return SingleTransferProtocol.getData(self, callback,
@@ -778,7 +798,7 @@ class A300(SingleTransferProtocol):
 
 
 class A301(MultiTransferProtocol):
-    "Track Log Transfer Protocol"
+    """Track log transfer protocol."""
 
     def getData(self, callback = None):
         return MultiTransferProtocol.getData(self, callback,
@@ -824,12 +844,13 @@ class A301(MultiTransferProtocol):
 
         return MultiTransferProtocol.putData(self,callback,self.cmdproto.Cmnd_Transfer_Trk,sendData)
 
+
 class A302(A301):
-    "Track Log Transfer Protocol"
-    pass
+    """Track log transfer protocol."""
+
 
 class A400(SingleTransferProtocol):
-    "Proximity Waypoint Transfer Protocol"
+    """Proximity waypoint transfer protocol."""
 
     def getData(self, callback = None):
         return SingleTransferProtocol.getData(self, callback,
@@ -847,15 +868,16 @@ class A400(SingleTransferProtocol):
 
 
 class A500(SingleTransferProtocol):
-    "Almanac Transfer Protocol"
+    """Almanac transfer protocol."""
 
     def getData(self, callback):
         return SingleTransferProtocol.getData(self, callback,
                                               self.cmdproto.Cmnd_Transfer_Alm,
                                               self.link.Pid_Almanac_Data)
 
+
 class A600(TransferProtocol):
-    "Waypoint Date & Time Initialization Protocol"
+    """Waypoint date & time initialization protocol."""
 
     def getData(self,callback):
         self.link.sendPacket(self.link.Pid_Command_Data,
@@ -873,27 +895,31 @@ class A600(TransferProtocol):
 
         return p
 
-class A601(TransferProtocol):
-    "Used by GPSmap 60cs, no specifications as of 2004-09-26"
 
-    pass
+class A601(TransferProtocol):
+    """A601 implementaion.
+
+    Used by GPSmap 60cs, no specifications as of 2004-09-26."""
+
 
 class A650(SingleTransferProtocol):
-    "FlightBook Transfer protocol"
+    """FlightBook transfer protocol."""
 
     def getData(self,callback):
         return SingleTransferProtocol.getData(self, callback,
                                               self.cmdproto.Cmnd_FlightBook_Transfer,
                                               self.link.Pid_FlightBook_Record)
 
+
 class A700(TransferProtocol):
-    "Position Initialisation Protocol"
-    pass
+    """Position initialisation protocol."""
+
 
 class A800(TransferProtocol):
-    "PVT Data Protocol"
+    """PVT data protocol.
 
-    # Live Position, Velocity and Time, similar to that provided by NMEA
+    Live Position, Velocity and Time, similar to that provided by NMEA.
+    """
 
     def dataOn(self):
         self.link.sendPacket(self.link.Pid_Command_Data,
@@ -923,41 +949,64 @@ class A800(TransferProtocol):
 
         return p
 
+
 class A801:
-    "Used by ?, no documentation as of 2001-05-30"
-    pass
+    """A801 implementation.
+
+    Used by ?, no documentation as of 2001-05-30.
+    """
+
 
 class A802:
-    "Used by ?, no documentation as of 2001-05-30"
-    pass
+    """A802 implementation.
+
+    Used by ?, no documentation as of 2001-05-30.
+    """
+
 
 class A900:
-    "Used by GPS III+, no documentation as of 2000-09-18"
-    pass
+    """A900 implementation.
+
+    Used by GPS III+, no documentation as of 2000-09-18.
+    """
+
 
 class A902:
-    "Used by etrex, no documentation as of 2001-05-30"
-    pass
+    "A902 implementation.
+
+    Used by etrex, no documentation as of 2001-05-30.
+    """
+
 
 class A903:
-    "Used by etrex, no documentation as of 2001-05-30"
-    pass
+    """A903 implementation.
+
+    Used by etrex, no documentation as of 2001-05-30.
+    """
+
 
 class A904:
-    "no documentation as of 2004-02-24"
-    pass
+    "A904 implementation.
+
+    No documentation as of 2004-02-24.
+    """
+
 
 class A906(SingleTransferProtocol):
-    "Lap Transfer protocol"
+    """Lap transfer protocol."""
 
     def getData(self,callback):
         return SingleTransferProtocol.getData(self, callback,
                                               self.cmdproto.Cmnd_Transfer_Laps,
                                               self.link.Pid_Lap)
 
+
 class A907(TransferProtocol):
-    "Used by GPSmap 60cs, no documentation as of 2004-09-26"
-    pass
+    """A907 implementation.
+
+    Used by GPSmap 60cs, no documentation as of 2004-09-26.
+    """
+
 
 # Most of the following subclasses have a fmt member which is a format
 # string as understood by the struct module, detailing how the class
@@ -965,6 +1014,7 @@ class A907(TransferProtocol):
 # atrributes that are serialized.
 
 class DataPoint:
+
     parts = ()
     fmt = ""
 
@@ -1000,6 +1050,7 @@ class DataPoint:
             raise
             #raise Exception, e
 
+
 # Waypoints  ---------------------------------------------------
 
 # Different products store different info in their waypoints
@@ -1009,8 +1060,10 @@ class DataPoint:
 def degrees(semi):
     return semi * 180.0 / (1L<<31)
 
+
 def semi(deg):
     return long(deg * ((1L<<31) / 180))
+
 
 def radian(semi):
     return semi * math.pi / (1L<<31)
@@ -1032,7 +1085,9 @@ def distance(wp1, wp2):
     c = 2*math.atan2(math.sqrt(a), math.sqrt(1-a))
     return R*c
 
+
 class Waypoint(DataPoint):
+
     parts = ("ident", "slat", "slon", "unused", "cmnt")
     fmt = "< 6s l l L 40s"
 
@@ -1066,7 +1121,9 @@ class Waypoint(DataPoint):
 class D100(Waypoint):
     pass
 
+
 class D101(Waypoint):
+
     parts = Waypoint.parts + ("dst", "smbl")
     fmt = "< 6s l l L 40s f b"
     dst = 0.0                  # proximity distance (m)
@@ -1103,7 +1160,9 @@ class D101(Waypoint):
                      }
         return self.data
 
+
 class D102(Waypoint):
+
     parts = Waypoint.parts + ("dst", "smbl")
     fmt = "< 6s l l L 40s f h"
     dst = 0.0                  # proximity distance (m)
@@ -1140,7 +1199,9 @@ class D102(Waypoint):
                      }
         return self.data
 
+
 class D103(Waypoint):
+
     parts = Waypoint.parts + ("smbl","dspl")
     fmt = "<6s l l L 40s b b"
     smbl = 0                   # D103 symbol id
@@ -1177,7 +1238,9 @@ class D103(Waypoint):
                      }
         return self.data
 
+
 class D104(Waypoint):
+
     parts = Waypoint.parts + ("dst", "smbl", "dspl")
     fmt = "<6s l l L 40s f h b"
     dst = 0.0                  # proximity distance (m)
@@ -1217,7 +1280,9 @@ class D104(Waypoint):
                      }
         return self.data
 
+
 class D105(Waypoint):
+
     parts = ("slat", "slon", "smbl", "ident")
     fmt = "<l l h s"
     smbl = 0
@@ -1248,7 +1313,9 @@ class D105(Waypoint):
                      }
         return self.data
 
+
 class D106(Waypoint):
+
     parts = ("wpt_class", "subclass", "slat", "slon", "smbl", "ident", "lnk_ident")
     fmt = "<b 13s l l h s s"
     wpt_class = 0
@@ -1289,7 +1356,9 @@ class D106(Waypoint):
                      }
         return self.data
 
+
 class D107(Waypoint):
+
     parts = Waypoint.parts + ("smbl", "dspl", "dst", "color")
     fmt = "<6s l l L 40s b b f b"
     smbl = 0                   # D103 symbol id
@@ -1332,7 +1401,9 @@ class D107(Waypoint):
                      }
         return self.data
 
+
 class D108(Waypoint):
+
     parts = ("wpt_class", "color", "dspl", "attr", "smbl",
              "subclass", "slat", "slon", "alt", "dpth", "dist",
              "state", "cc", "ident", "cmnt", "facility", "city",
@@ -1379,7 +1450,9 @@ class D108(Waypoint):
            self.alt, self.cmnt.strip(),
            self.wpt_class, self.smbl)
 
+
 class D109(Waypoint):
+
     parts = ("dtyp", "wpt_class", "dspl_color", "attr", "smbl",
              "subclass", "slat", "slon", "alt", "dpth", "dist",
              "state", "cc", "ete", "ident", "cmnt", "facility", "city",
@@ -1427,18 +1500,24 @@ class D109(Waypoint):
            self.alt, self.cmnt.strip(),
            self.wpt_class, self.smbl)
 
+
 class D110(Waypoint):
+
     parts = ("dtyp", "wpt_class", "dspl_color", "attr", "smbl",
              "subclass", "slat", "slon", "alt", "dpth", "dist",
              "state", "cc", "ete", "temp", "time", "wpt_cat",
              "ident", "cmnt", "facility", "city", "addr", "cross_road")
     fmt = "<b b b b h 18s l l f f f 2s 2s l f l i s s s s s s"
 
+
 class D120(DataPoint):
+
     parts = ("name",)
     fmt = "<17s"
 
+
 class D150(Waypoint):
+
     parts = ("ident", "cc", "clss", "lat", "lon", "alt", "city", "state", "name", "cmnt")
     fmt = "<6s 2s b l l i 24s 2s 30s 40s"
     cc = "  "
@@ -1448,7 +1527,9 @@ class D150(Waypoint):
     state = ""
     name = ""
 
+
 class D151(Waypoint):
+
     parts = Waypoint.parts + ("dst", "name", "city", "state",
                               "alt", "cc", "unused2", "wpt_class")
     fmt = "< 6s l l L 40s f 30s 24s 2s i 2s c b"
@@ -1460,8 +1541,10 @@ class D151(Waypoint):
     cc = ""
     unused2 = ""
     wpt_cass = 0
+
 
 class D152(Waypoint):
+
     parts = Waypoint.parts + ("dst", "name", "city", "state",
                               "alt", "cc", "unused2", "wpt_class")
     fmt = "< 6s l l L 40s f 30s 24s 2s i 2s c b"
@@ -1474,7 +1557,9 @@ class D152(Waypoint):
     unused2 = ""
     wpt_cass = 0
 
+
 class D154(Waypoint):
+
     parts = Waypoint.parts + ("dst", "name", "city", "state", "alt",
                               "cc", "unused2", "wpt_class", "smbl")
     fmt = "< 6s l l L 40s f 30s 24s 2s i 2s c b i"
@@ -1488,7 +1573,9 @@ class D154(Waypoint):
     wpt_cass = 0
     smbl = 0
 
+
 class D155(Waypoint):
+
     parts = Waypoint.parts + ("dst", "name", "city", "state", "alt",
                               "cc", "unused2", "wpt_class", "smbl", "dspl")
     fmt = "< 6s l l L 40s f 30s 24s 2s i 2s c b i b"
@@ -1503,6 +1590,7 @@ class D155(Waypoint):
     smbl = 0
     dspl = 0
 
+
 # Route headers  ---------------------------------------------
 
 class RouteHdr(DataPoint):
@@ -1510,22 +1598,29 @@ class RouteHdr(DataPoint):
     def __repr__(self):
         return "<RouteHdr (at %s)>" % id(self)
 
+
 class D200(RouteHdr):
+
     parts = ("route_num",)
     fmt = "<b"
 
 class D201(RouteHdr):
+
     parts = ("route_num", "cmnt")
     fmt = "<b 20s"
     cmnt = ""
 
+
 class D202(RouteHdr):
+
     parts = ("ident",)
     fmt="<s"
+
 
 class D210(DataPoint):
     parts = ("class", "subclass", "ident")
     fmt = "<i 18s s"
+
 
 # Route links  -----------------------------------------------
 
@@ -1534,13 +1629,16 @@ class RouteLink(DataPoint):
     def __repr__(self):
         return "<RouteLink (at %s)" % id(self)
 
+
 class D210(RouteLink):
     parts = ("clazz", "subclass", "ident")
     fmt = "<h 18s s"
 
+
 # Track points  ----------------------------------------------
 
 class TrackPoint(DataPoint):
+
     slat = 0L
     slon = 0L
     time = 0L # secs since midnight 31/12/89?
@@ -1550,25 +1648,33 @@ class TrackPoint(DataPoint):
                (degrees(self.slat), degrees(self.slon),
                 time.asctime(time.gmtime(TimeEpoch+self.time)), id(self))
 
+
 class D300(TrackPoint):
+
     parts = ("slat", "slon", "time", "newtrk")
     fmt = "<l l L B"
     newtrk = 0
 
+
 class D301(TrackPoint):
+
     parts = ("slat", "slon", "time", "alt", "depth", "new_trk")
     fmt = "<l l L f f b"
     alt = 0.0
     depth = 0.0
     new_trk = 0
 
+
 class D302(TrackPoint):
+
     parts = ("slat", "slon", "time", "alt", "depth", "temp", "new_trk")
     fmt = "<l l L f f f b"
+
 
 # Track headers ----------------------------------------------
 
 class TrackHdr(DataPoint):
+
     trk_ident = ""
 
     def __repr__(self):
@@ -1576,33 +1682,46 @@ class TrackHdr(DataPoint):
                                           id(self))
 
 class D310(TrackHdr):
+
     parts = ("dspl", "color", "trk_ident")
     fmt = "<b b s"
     dspl = 0
     color = 0
 
+
 class D311(TrackHdr):
+
     parts = ("index",)
     fmt = "<i"
 
+
 class D312(TrackHdr):
+
     parts = ("dspl", "color", "trk_ident")
     fmt = "<b b s"
+
 
 # Proximity waypoints  ---------------------------------------
 
 class ProxPoint(DataPoint):
+
     dst = 0.0
 
+
 class D400(ProxPoint, D100):
+
     parts = D100.parts + ("dst",)
     fmt = D100.fmt + " f"
 
+
 class D403(ProxPoint, D103):
+
     parts = D103.parts + ("dst",)
     fmt = D103.fmt + " f"
 
+
 class D450(ProxPoint, D150):
+
     parts = ("idx",) + D150.parts + ("dst",)
     fmt = "<i " + D150.fmt[1:] + " f"
     idx = 0
@@ -1613,29 +1732,39 @@ class D450(ProxPoint, D150):
 class Almanac(DataPoint):
     pass
 
+
 class D500(Almanac):
+
     parts = ("weeknum", "toa", "af0", "af1", "e",
              "sqrta", "m0", "w", "omg0", "odot", "i")
     fmt = "<i f f f f f f f f f f"
 
+
 class D501(Almanac):
+
     parts = ("weeknum", "toa", "af0", "af1", "e",
              "sqrta", "m0", "w", "omg0", "odot", "i", "hlth")
     fmt = "<i f f f f f f f f f f b"
 
+
 class D550(Almanac):
+
     parts = ("svid", "weeknum", "toa", "af0", "af1", "e",
              "sqrta", "m0", "w", "omg0", "odot", "i")
     fmt = "<c i f f f f f f f f f f"
 
+
 class D551(Almanac):
+
     parts = ("svid", "weeknum", "toa", "af0", "af1", "e",
              "sqrta", "m0", "w", "omg0", "odot", "i", "hlth")
     fmt = "<c i f f f f f f f f f f b"
 
+
 # Date & Time  ---------------------------------------------------
 
 class TimePoint(DataPoint):
+
     # Not sure what the last four bytes are. Not in docs.
     # hmm... eTrex just sends 8 bytes, no trailing 4 bytes
     parts = ("month", "day", "year", "hour", "min", "sec") #,"unknown")
@@ -1652,14 +1781,20 @@ class TimePoint(DataPoint):
            self.year, self.month, self.day,
            self.hour, self.min, self.sec)
 
+
 class D600(TimePoint):
     pass
 
+
 class D601(TimePoint):
-    "used by GPSmap 60cs, no documentation as of 2004-09-26"
-    pass
+    "D601 time point.
+
+    Used by GPSmap 60cs, no documentation as of 2004-09-26.
+    """
+
 
 class D650(DataPoint):
+
     parts = ("takeoff_time", "landing_time", "takeoff_slat", "takeoff_slon",
              "landing_slat", "landing_slon", "night_time", "num_landings",
              "max_speed", "max_alt", "distance", "cross_country_flag",
@@ -1667,19 +1802,23 @@ class D650(DataPoint):
              "arrival_ident", "ac_id")
     fmt = "<L L l l l l L L f f f B s s s s s"
 
+
 # Position   ---------------------------------------------------
 
 class D700(DataPoint):
+
     parts = ("rlat", "rlon")
     fmt = "<d d"
     rlat = 0.0  # radians
     rlon = 0.0  # radians
+
 
 # Pvt ---------------------------------------------------------
 
 # Live position info
 
 class D800(DataPoint):
+
     parts = ("alt", "epe", "eph", "epv", "fix", "tow", "rlat", "rlon",
              "east", "north", "up", "msl_height", "leap_secs", "wn_days")
     fmt = "<f f f f h d d d f f f f h l"
@@ -1688,27 +1827,42 @@ class D800(DataPoint):
         return "tow: %g rlat: %g rlon: %g east: %g north %g" \
         % (self.tow, self.rlat, self.rlon, self.east, self.north)
 
+
 class D906(DataPoint):
+
     parts = ("start_time", "total_time", "total_distance", "begin_slat",
              "begin_slon", "end_slat", "end_slon", "calories",
              "track_index", "unused")
     fmt = "<l l f l l l l i b b"
 
+
 class D907(DataPoint):
-    "used by GPSmap 60cs, no documentation as of 2004-09-26"
-    pass
+    """D907 data point.
+
+    Used by GPSmap 60cs, no documentation as of 2004-09-26.
+    """
+
 
 class D908(DataPoint):
-    "used by GPSmap 60cs, no documentation as of 2004-09-26"
-    pass
+    "D908 data point.
+
+    Used by GPSmap 60cs, no documentation as of 2004-09-26.
+    """
+
 
 class D909(DataPoint):
-    "used by GPSmap 60cs, no documentation as of 2004-09-26"
-    pass
+    """D909 data point.
+
+    Used by GPSmap 60cs, no documentation as of 2004-09-26.
+    """
+
 
 class D910(DataPoint):
-    "used by GPSmap 60cs, no documentation as of 2004-09-26"
-    pass
+    """D910 data point.
+
+    Used by GPSmap 60cs, no documentation as of 2004-09-26.
+    """
+
 
 # Garmin models ==============================================
 
@@ -1792,6 +1946,7 @@ ModelIDs = (
    (76, "GPSMAP 230 Chinese"),
    (49, "GPSMAP 235 Sounder")
 )
+
 
 # Make sure you've got a really wide window to view this one!
 # This describes the protocol capabilities of products that do not
@@ -1930,27 +2085,26 @@ ModelProtocols = {
 
 # ====================================================================
 
+
 # Now some practical implementations
 
 
 class SerialLink(P000):
-    """
-      A serial link will look something like this, though real
-      implementations will probably override most of it.
-    """
+    """Protocol to communicate over a serial link."""
 
     def __init__(self, device, timeout = 5):
         self.timeout = timeout
         self.ser = serial.Serial(device, timeout=self.timeout, baudrate=9600)
 
     def initserial(self):
-        "Set up baud rate, handshaking, etc"
+        """Set up baud rate, handshaking, etc."""
         pass
 
     def read(self, n):
-        """
-        Read n bytes and return them. Real implementations should
-        raise a LinkException if there is a timeout > self.timeout
+        """Read n bytes and return them.
+
+        Real implementations should raise a LinkException if there is a
+        timeout > self.timeout
         """
         return self.ser.read(n)
 
@@ -1961,18 +2115,20 @@ class SerialLink(P000):
         self.timeout = secs
 
     def __del__(self):
-        """Should close down any opened resources"""
+        """Should close down any opened resources."""
         self.close()
 
     def close(self):
-        """Close the serial port"""
+        """Close the serial port."""
         if "ser" in self.__dict__:
             self.ser.close()
 
+
 class Garmin:
-    """
-    A representation of the GPS device, which is connected
-    via some physical connection, typically a SerialLink of some sort.
+    """A representation of the GPS device.
+
+    It is connected via some physical connection, typically a SerialLink
+    of some sort.
     """
 
     def __init__(self, physicalLayer):
@@ -2186,6 +2342,7 @@ class Garmin:
     def turnPowerOff(self):
         return self.command.turnPowerOff()
 
+
 # Callback examples functions
 
 def MyCallbackgetWaypoints(waypoint,recordnumber,totalWaypointsToGet,tp):
@@ -2211,10 +2368,12 @@ def MyCallbackgetWaypoints(waypoint,recordnumber,totalWaypointsToGet,tp):
     print "Commando :",tp
     print
 
+
 def MyCallbackputWaypoints(waypoint,recordnumber,totalWaypointsToSend,tp):
     # we get a tuple waypoint,recordnumber,totalWaypointsToSend,tp
 
     print "waypoint %s added to gps (total waypoint(s) : %s/%s) waypoint command : %s" % (waypoint.dataDict['ident'],recordnumber,totalWaypointsToSend,tp)
+
 
 def MyCallbackgetRoutes(point,recordnumber,totalpointsToGet,tp):
 
@@ -2235,6 +2394,7 @@ def MyCallbackgetRoutes(point,recordnumber,totalpointsToGet,tp):
 
             for x in point.dataDict: # or point.getDict()
                 print x, " --> ",point.dataDict[x]
+
 
 def MyCallbackputRoutes(point,recordnumber,totalPointsToSend,tp):
 
@@ -2269,6 +2429,7 @@ def MyCallbackgetTracks(point,recordnumber,totalPointsToGet,tp):
 
             print "Time are the seconds since midnight 31/12/89 and are only correct for the ACTIVE LOG !! (hmmm...)"
 
+
 def MyCallbackputTracks(point,recordnumber,totalPointsToSend,tp):
 
     if isinstance(point,TrackHdr):
@@ -2276,12 +2437,14 @@ def MyCallbackputTracks(point,recordnumber,totalPointsToSend,tp):
     else:
         print "   ", point.dataDict
 
+
 def MyCallbackgetAlmanac(satellite,recordnumber,totalPointsToGet,tp):
 
     print
 
     for x in satellite.dataDict:
         print "%7s --> %s" % (x,satellite.dataDict[x])
+
 
 # =================================================================
 # The following is test code. See other included files for more

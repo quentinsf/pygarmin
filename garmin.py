@@ -357,6 +357,10 @@ class A001:
                 known = True
                 ap_prot = "lap"
                 protos[ap_prot] = [eval(x)]
+            elif x == "A1000":
+                known = True
+                ap_prot = "run"
+                protos[ap_prot] = [eval(x)]
             elif x[0] == "A":
                 # No info about this Application Protocol
                 known = False
@@ -2250,6 +2254,14 @@ class Garmin:
         # self lapLink = A906(self.link, self.cmdProto,D906)
         if self.protos.has_key("lap"):
             self.lapLink = self.protos["lap"][0](self.link, self.cmdProto,self.protos["lap"][1])
+
+        runProtos = self.protos.get("run", [])
+        self.runTypes = runProtos[1:]
+        if runProtos:
+            self.runLink = runProtos[0](
+                self.link, self.cmdProto, self.runTypes)
+        else:
+            self.runLink = None
 
     def getWaypoints(self,callback = None):
         return self.wptLink.getData(callback)

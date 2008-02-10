@@ -822,6 +822,50 @@ class A800(TransferProtocol):
         self.link.sendPacket(self.link.Pid_Command_Data,
                              self.cmdproto.Cmnd_Stop_Pvt_Data)
 
+    def getData(self,callback):
+
+        #data = self.link.expectPacket(self.link.Pid_Pvt_Data)
+        # Otherwise Link Error: Expected msg type 51, got 114,
+        # What type is 114 ?
+
+        tp, data = self.link.readPacket()
+
+        p = self.datatypes[0]()
+        p.unpack(data)
+
+        if callback:
+
+            try:
+                callback(p,1,1,tp)
+            except:
+                raise
+
+        return p
+
+class A801:
+    "Used by ?, no documentation as of 2001-05-30"
+    pass
+
+class A802:
+    "Used by ?, no documentation as of 2001-05-30"
+    pass
+
+class A900:
+    "Used by GPS III+, no documentation as of 2000-09-18"
+    pass
+
+class A902:
+    "Used by etrex, no documentation as of 2001-05-30"
+    pass
+
+class A903:
+    "Used by etrex, no documentation as of 2001-05-30"
+    pass
+
+class A904:
+    "no documentation as of 2004-02-24"
+    pass
+
 class A906(MultiTransferProtocol):
     "Lap Transfer protocol"
 
@@ -2180,6 +2224,8 @@ class Garmin:
                 self.link, self.cmdProto, self.runTypes)
         else:
             self.runLink = None
+
+        # ex. self.prxLink = A400(LOO1,A010,D109)
 
         # ex. self.prxLink = A400(LOO1,A010,D109)
 

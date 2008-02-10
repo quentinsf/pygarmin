@@ -179,6 +179,28 @@ The default command is to display the product information.
                     sys.stdout.write('\n'+p)
         print '\n'
 
+        # print unknown protocols
+
+        if len(self.gps.protocols_unknown):
+            print
+            print "Product protocols who are not supported yet:"
+            print "--------------------------------------------"
+
+            for i in range(len(self.gps.protocols_unknown)):
+                p = self.gps.protocols_unknown[i]
+
+                if  p[0] == 'D':
+                    print p,
+                else:
+                    if i == 0:
+                        print p,
+                    else:
+                        print
+                        print p,
+
+            print
+            print
+
     def waypoints(self):
         fmtmap = {'xml-product': self.waypointsxmlproduct,
                   'xml-abstract': self.waypointsxmlabstract,
@@ -252,8 +274,8 @@ The default command is to display the product information.
         x.tagClose()
         x.tagClose()
 
-def print_(x):
-    print x
+def print_(x, index, numrecords, pid):
+    print x, index, numrecords, pid
 
 def main():
     app = Pygarmin()

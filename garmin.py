@@ -83,7 +83,6 @@ class P000:
 
 # The following is handy for debugging:
 
-#def hexdump(data): return ''.join(map(lambda x: "%02x" % ord(x), data)) or
 def hexdump(data): return ''.join(["%02x" % ord(x) for x in data])
 
 
@@ -110,9 +109,6 @@ class ProtocolException(GarminException):
 
 
 # Link protocols ===================================================
-
-#LinkException = "Link Error"
-
 
 class L000:
     """Basic Link Protocol."""
@@ -157,24 +153,20 @@ class L000:
         dle = self.phys.read(1)
 
         # Find the start of a message
-
         while dle != self.DLE:
             print "resync - expected DLE and got something else"
             dle = self.phys.read(1)
 
         # We've now found either the start or the end of a msg
         # Try reading the type.
-
         tp = self.phys.read(1)
 
         # if it was the end
-
         if tp == self.ETX:
             dle = self.phys.read(1)
             tp = self.phys.read(1)
 
         # Now we should be synchronised
-
         ptype = ord(tp)
         ld = self.readEscapedByte()
         datalen = ord(ld)
@@ -200,7 +192,6 @@ class L000:
 
     def expectPacket(self, ptype):
         "Expect and read a particular msg type. Return data."
-
         tp, data = self.readPacket()
 
         if tp != ptype:
@@ -210,18 +201,15 @@ class L000:
 
     def readAcknowledge(self, ptype):
         "Read an ack msg in response to a particular sent msg"
-
         if debug > 5: print "(>ack)",
 
         # tp is the ack, data is only 1 byte and is the msg command number
-
         tp, data = self.readPacket(0)
 
         if (tp & 0xff) != self.Pid_Ack_Byte or ord(data[0]) != ptype:
             raise LinkException, "Acknowledge error"
 
     def sendAcknowledge(self, ptype):
-
         if debug > 5: print "(<ack)",
 
         self.sendPacket(self.Pid_Ack_Byte, struct.pack("<h", ptype), 0)
@@ -245,8 +233,6 @@ class L000:
 
     def escape(self, data):
         "Escape any DLE characters"
-
-        #return string.join(string.split(data, self.DLE), self.DLE+self.DLE)
         return (self.DLE*2).join(data.split(self.DLE))
 
 
@@ -292,8 +278,6 @@ class L002(L000):
 
 # Application Protocols =======================================
 
-# ProtocolException = "Protocol Error"
-
 # A000 and A001 are used to find out what is on the other end of the
 # wire, and hence which other protocols we can use.
 
@@ -320,8 +304,6 @@ class A001:
         self.link=linkLayer
 
     def getProtocols(self):
-        # may raise LinkException here
-
         if debug > 3: print "Try reading protocols using PCP"
 
         data = self.link.expectPacket(self.link.Pid_Protocol_Array)
@@ -339,7 +321,6 @@ class A001:
         return self.protocols
 
     def getProtocolsNoPCP(self,prod_id, soft_ver):
-
         try:
             search_protocols = ModelProtocols[prod_id]
 
@@ -354,7 +335,6 @@ class A001:
             raise "No protocols known for this software version. Strange!"
 
         # Ok, now we have de protocol
-
         self.protocols = [x for x in search_protocol[1:] if x]
 
         self.protocols.append("A700")
@@ -363,41 +343,6 @@ class A001:
         self.protocols.append("D800")
 
         return self.protocols
-
-    """
-    def FormatA001(self):
-            # This is here to get the list of strings returned by A001 into
-            #the same format as used in the ModelProtocols dictionary
-
-            try:
-                    phys = eval(self.protocols[0])
-                    link = eval(self.protocols[1])
-                    cmnd = eval(self.protocols[2])
-
-                    tuples = {"1" : None, "2" : None, "3" : None, "4" : None,
-                                                            "5" : None, "6" : None, "7" : None, "8" : None,
-                                                            "9" : None}
-                    last_seen = None
-
-                    for i in range(3, len(self.protocols)):
-                            p = self.protocols[i]
-
-                            if p[0] == "A":
-                                    pclass = p[1]
-
-                                    if tuples[pclass] == None:
-                                            tuples[pclass] = []
-
-                                    last_seen = tuples[pclass]
-
-                            last_seen.append(eval(p))
-
-            except NameError:
-                    print sys.exc_info()[2]
-                    raise NameError, "Protocol %s not supported yet!" % sys.exc_info()[1]
-
-            return (None, link, cmnd, tuples["1"], tuples["2"], tuples["3"],tuples["4"], tuples["5"])
-            """
 
     def FormatA001(self):
         # This is here to get the list of strings returned by A001 into objects
@@ -466,7 +411,6 @@ class A001:
                     protos[ap_prot].append(eval(x))
                 else:
                     protos_unknown.append(x)
-
 
         if debug > 0:
             print "Processing protocols"
@@ -581,19 +525,6 @@ class SingleTransferProtocol(TransferProtocol):
         self.link.expectPacket(self.link.Pid_Xfer_Cmplt)
 
         return result
-    """
-    def putData(self, cmd, data_pid, records):
-            numrecords = len(records)
-
-            if debug > 3: print self.__doc__, "Sending %d records" % numrecords
-
-            self.link.sendPacket(self.link.Pid_Records, numrecords)
-
-            for i in records:
-                    self.link.sendPacket(data_pid, i.pack())
-
-            self.link.sendPacket(self.link.Pid_Xfer_Cmplt, cmd)
-    """
 
 
 class MultiTransferProtocol(TransferProtocol):
@@ -649,7 +580,6 @@ class T001:
     """T001 implementation.
 
     No documentation as of 2004-02-24."""
-    pass
 
 
 class A100(SingleTransferProtocol):
@@ -672,6 +602,7 @@ class A100(SingleTransferProtocol):
 
 class A101(SingleTransferProtocol):
     """Waypoint transfer protocol."""
+
     def getData(self, callback = None):
         return SingleTransferProtocol.getData(self, callback,
                                               self.cmdproto.Cmnd_Transfer_Wpt_Cats,
@@ -695,19 +626,15 @@ class A200(MultiTransferProtocol):
             routenr += 1
 
             # Copy the header fields
-
             header = {}
-
             for head in route[0].keys():
                 header[head] = route[0][head]
 
             # Give a routenr
-
             if not header.has_key('nmbr'): header['nmbr'] = routenr
 
             # Check route names
             # if no name, give it a name
-
             if not header.has_key('ident') or not header.has_key('cmnt'):
 
                 if header.has_key('ident'):
@@ -745,19 +672,15 @@ class A201(MultiTransferProtocol):
             routenr += 1
 
             # Copy the header fields
-
             header = {}
-
             for head in route[0].keys():
                 header[head] = route[0][head]
 
             # Give a routenr
-
             if not header.has_key('nmbr'): header['nmbr'] = routenr
 
             # Check route names
             # if no name, give it a name
-
             if not header.has_key('ident') or not header.has_key('cmnt'):
 
                 if header.has_key('ident'):
@@ -814,15 +737,12 @@ class A301(MultiTransferProtocol):
             tracknr += 1
 
             # Copy the header fields
-
             header = {}
-
             for head in track[0].keys():
                 header[head] = track[0][head]
 
             # Check track names
             # if no name, give it a name
-
             if not header.has_key('ident'):
                 header['ident'] = "TRACK" + str(tracknr)
 
@@ -835,7 +755,6 @@ class A301(MultiTransferProtocol):
                 trackPointInstance = self.datatypes[1](waypoint)
 
                 # First point in a track is always a new track segment
-
                 if firstSegment:
                     trackPointInstance.dataDict['new_trk'] = True
                     firstSegment = False
@@ -883,11 +802,10 @@ class A600(TransferProtocol):
         self.link.sendPacket(self.link.Pid_Command_Data,
                              self.cmdproto.Cmnd_Transfer_Time)
         data = self.link.expectPacket(self.link.Pid_Date_Time_Data)
-        p = self.datatypes[0]() # p =D600()
+        p = self.datatypes[0]()
         p.unpack(data)
 
         if callback:
-
             try:
                 callback(p,1,1,self.link.Pid_Command_Data)
             except:
@@ -930,11 +848,6 @@ class A800(TransferProtocol):
                              self.cmdproto.Cmnd_Stop_Pvt_Data)
 
     def getData(self,callback):
-
-        #data = self.link.expectPacket(self.link.Pid_Pvt_Data)
-        # Otherwise Link Error: Expected msg type 51, got 114,
-        # What type is 114 ?
-
         tp, data = self.link.readPacket()
 
         p = self.datatypes[0]()
@@ -1044,11 +957,8 @@ class DataPoint:
             print e
             print "Format: <" + self.fmt   + ">"
             print "Parts:  <" + ", ".join(self.parts) + ">"
-            #print "Parts:  <" + string.join(self.parts, ", ") + ">"
             print "Input:  <" + "><".join(bytes) + ">"
-            #print "Input:  <" + string.join(bytes, "><") + ">"
             raise
-            #raise Exception, e
 
 
 # Waypoints  ---------------------------------------------------
@@ -2021,68 +1931,6 @@ ModelProtocols = {
 112: ( (None,            "L001", "A010", "A100", "D152", "A200", "D201", "D152", "A300", "D300", None,           "A500", "D501" ), )
 }
 
-''' Old table, making strings of it
-ModelProtocols = {
-#                        Use a wide window for best viewing!
-#
-# ID    minver maxver    Link  Cmnd   Wpt,          Rte,                Trk,          Prx,          Alm
-7:   ( (None,            L001, A010, (A100, D100), (A200, D200, D100), None,         None,         (A500, D500) ), ),
-13:  ( (None,            L001, A010, (A100, D100), (A200, D200, D100), (A300, D300), (A400, D400), (A500, D500) ), ),
-14:  ( (None,            L001, A010, (A100, D100), (A200, D200, D100), None,         (A400, D400), (A500, D500) ), ),
-15:  ( (None,            L001, A010, (A100, D151), (A200, D200, D151), None,         (A400, D151), (A500, D500) ), ),
-18:  ( (None,            L001, A010, (A100, D100), (A200, D200, D100), (A300, D300), (A400, D400), (A500, D500) ), ),
-20:  ( (None,            L002, A011, (A100, D150), (A200, D201, D150), None,         (A400, D450), (A500, D550) ), ),
-22:  ( (None,            L001, A010, (A100, D152), (A200, D200, D152), (A300, D300), (A400, D152), (A500, D500) ), ),
-23:  ( (None,            L001, A010, (A100, D100), (A200, D200, D100), (A300, D300), (A400, D400), (A500, D500) ), ),
-24:  ( (None,            L001, A010, (A100, D100), (A200, D200, D100), (A300, D300), (A400, D400), (A500, D500) ), ),
-25:  ( (None,            L001, A010, (A100, D100), (A200, D200, D100), (A300, D300), (A400, D400), (A500, D500) ), ),
-29:  ( ((0.00, 4.00),    L001, A010, (A100, D101), (A200, D201, D101), (A300, D300), (A400, D101), (A500, D500) ),
-       ((4.00, MaxVer),  L001, A010, (A100, D102), (A200, D201, D102), (A300, D300), (A400, D102), (A500, D500) ), ),
-31:  ( (None,            L001, A010, (A100, D100), (A200, D201, D100), (A300, D300), None,         (A500, D500) ), ),
-33:  ( (None,            L002, A011, (A100, D150), (A200, D201, D150), None,         (A400, D450), (A500, D550) ), ),
-34:  ( (None,            L002, A011, (A100, D150), (A200, D201, D150), None,         (A400, D450), (A500, D550) ), ),
-35:  ( (None,            L001, A010, (A100, D100), (A200, D200, D100), (A300, D300), (A400, D400), (A500, D500) ), ),
-36:  ( ((0.00, 3.00),    L001, A010, (A100, D152), (A200, D200, D152), (A300, D300), (A400, D152), (A500, D500) ),
-       ((3.00, MaxVer),  L001, A010, (A100, D152), (A200, D200, D152), (A300, D300), None,         (A500, D500) ), ),
-39:  ( (None,            L001, A010, (A100, D151), (A200, D201, D151), (A300, D300), None,         (A500, D500) ), ),
-41:  ( (None,            L001, A010, (A100, D100), (A200, D201, D100), (A300, D300), None,         (A500, D500) ), ),
-42:  ( (None,            L001, A010, (A100, D100), (A200, D200, D100), (A300, D300), (A400, D400), (A500, D500) ), ),
-44:  ( (None,            L001, A010, (A100, D101), (A200, D201, D101), (A300, D300), (A400, D101), (A500, D500) ), ),
-45:  ( (None,            L001, A010, (A100, D152), (A200, D201, D152), (A300, D300), None,         (A500, D500) ), ),
-47:  ( (None,            L001, A010, (A100, D100), (A200, D201, D100), (A300, D300), None,         (A500, D500) ), ),
-48:  ( (None,            L001, A010, (A100, D154), (A200, D201, D154), (A300, D300), None,         (A500, D501) ), ),
-49:  ( (None,            L001, A010, (A100, D102), (A200, D201, D102), (A300, D300), (A400, D102), (A500, D501) ), ),
-50:  ( (None,            L001, A010, (A100, D152), (A200, D201, D152), (A300, D300), None,         (A500, D501) ), ),
-52:  ( (None,            L002, A011, (A100, D150), (A200, D201, D150), None,         (A400, D450), (A500, D550) ), ),
-53:  ( (None,            L001, A010, (A100, D152), (A200, D201, D152), (A300, D300), None,         (A500, D501) ), ),
-55:  ( (None,            L001, A010, (A100, D100), (A200, D201, D100), (A300, D300), None,         (A500, D500) ), ),
-56:  ( (None,            L001, A010, (A100, D100), (A200, D201, D100), (A300, D300), None,         (A500, D500) ), ),
-59:  ( (None,            L001, A010, (A100, D100), (A200, D201, D100), (A300, D300), None,         (A500, D500) ), ),
-61:  ( (None,            L001, A010, (A100, D100), (A200, D201, D100), (A300, D300), None,         (A500, D500) ), ),
-62:  ( (None,            L001, A010, (A100, D100), (A200, D201, D100), (A300, D300), None,         (A500, D500) ), ),
-64:  ( (None,            L002, A011, (A100, D150), (A200, D201, D150), None,         (A400, D450), (A500, D551) ), ),
-71:  ( (None,            L001, A010, (A100, D155), (A200, D201, D155), (A300, D300), None,         (A500, D501) ), ),
-72:  ( (None,            L001, A010, (A100, D104), (A200, D201, D104), (A300, D300), None,         (A500, D501) ), ),
-73:  ( (None,            L001, A010, (A100, D103), (A200, D201, D103), (A300, D300), None,         (A500, D501) ), ),
-74:  ( (None,            L001, A010, (A100, D100), (A200, D201, D100), (A300, D300), None,         (A500, D500) ), ),
-76:  ( (None,            L001, A010, (A100, D102), (A200, D201, D102), (A300, D300), (A400, D102), (A500, D501) ), ),
-77:  ( ((0.00, 3.01),    L001, A010, (A100, D100), (A200, D201, D100), (A300, D300), (A400, D400), (A500, D501) ),
-       ((3.01, 3.50),    L001, A010, (A100, D103), (A200, D201, D103), (A300, D300), (A400, D403), (A500, D501) ),
-       ((3.50, 3.61),    L001, A010, (A100, D103), (A200, D201, D103), (A300, D300), None,         (A500, D501) ),
-       ((3.61, MaxVer),  L001, A010, (A100, D103), (A200, D201, D103), (A300, D300), (A400, D403), (A500, D501) ), ),
-87:  ( (None,            L001, A010, (A100, D103), (A200, D201, D103), (A300, D300), (A400, D403), (A500, D501) ), ),
-88:  ( (None,            L001, A010, (A100, D102), (A200, D201, D102), (A300, D300), (A400, D102), (A500, D501) ), ),
-95:  ( (None,            L001, A010, (A100, D103), (A200, D201, D103), (A300, D300), (A400, D403), (A500, D501) ), ),
-96:  ( (None,            L001, A010, (A100, D103), (A200, D201, D103), (A300, D300), (A400, D403), (A500, D501) ), ),
-97:  ( (None,            L001, A010, (A100, D103), (A200, D201, D103), (A300, D300), None,         (A500, D501) ), ),
-98:  ( (None,            L002, A011, (A100, D150), (A200, D201, D150), None,         (A400, D450), (A500, D551) ), ),
-100: ( (None,            L001, A010, (A100, D103), (A200, D201, D103), (A300, D300), (A400, D403), (A500, D501) ), ),
-105: ( (None,            L001, A010, (A100, D103), (A200, D201, D103), (A300, D300), (A400, D403), (A500, D501) ), ),
-106: ( (None,            L001, A010, (A100, D103), (A200, D201, D103), (A300, D300), (A400, D403), (A500, D501) ), ),
-112: ( (None,            L001, A010, (A100, D152), (A200, D201, D152), (A300, D300), None,         (A500, D501) ), )
-}
-'''
-
 # ====================================================================
 
 
@@ -2141,9 +1989,7 @@ class Garmin:
         # Wait for the unit to announce its capabilities using A001.  If
         # that doesn't happen, try reading the protocols supported by the
         # unit from the Big Table.
-
         physicalLayer.settimeout(2)
-
         try:
             protocol = A001(self.link)
             self.protocols = protocol.getProtocols()
@@ -2161,85 +2007,6 @@ class Garmin:
                 raise Exception, "Couldn't determine product capabilities"
 
         physicalLayer.settimeout(5)
-
-        '''
-        # Testing software for not PCP gps.
-
-        print "Simulate a GPS"
-        self.prod_id = 29
-        self.soft_ver = 6.1
-        self.prod_descs = ['Test Gps']
-        self.link = L000(physicalLayer)
-        protocol = A001(self.link)
-        self.protocols = protocol.getProtocolsNoPCP(self.prod_id,self.soft_ver)
-        self.protos , self.protocols_unknown = protocol.FormatA001()
-        print self.protocols
-        print self.protos
-        print "End simulation"
-        print
-        '''
-
-        """ Old Code
-
-        # Examples :
-        # self.linkProto = __main__.L001
-        # wptProtos = [<class __main__.A100 >, <class __main__.D109>]
-        # rteProtos = [<class __main__.A201 >, <class __main__.D202>, <class __main__.D109 >, <class __main__.D210 >]
-        # trkProtos = [<class __main__.A301 >, <class __main__.D310 >, <class __main__.D301>]
-
-        (versions, self.linkProto, self.cmdProto, wptProtos, rteProtos,
-         trkProtos, prxProtos, almProtos) = protos
-
-        self.link = self.linkProto(physicalLayer)
-
-        # The datatypes we expect to receive
-
-        self.wptType = wptProtos[1]
-        self.rteTypes = rteProtos[1:]
-        self.trkTypes = trkProtos[1:]
-
-        # Now we set up 'links' through which we can get data of the
-        # appropriate types
-
-        # ex. self.commando = TransferProtocol(A010,L001)
-        # This is for sending simple commando's
-        # Like aborting the transfer, turn gps out, ..
-
-        self.command = TransferProtocol(self.link, self.cmdProto)
-
-        # ex. self.wptLink = A100(L001,A010,D109)
-
-        self.wptLink = wptProtos[0](self.link, self.cmdProto, self.wptType)
-
-        # ex. self.rteLink = A201(LOO1,AO10,(D202,D109,D210)
-        self.rteLink = rteProtos[0](self.link, self.cmdProto, self.rteTypes)
-
-        # ex; self.trkLink = A301(LOO1,AO10,(D310,D301))
-        self.trkLink = trkProtos[0](self.link, self.cmdProto, self.trkTypes)
-
-        # ex. self.prxLink = A400(LOO1,A010,D109)
-
-        if prxProtos != None:
-                self.prxType = prxProtos[1]
-                self.prxLink = prxProtos[0](self.link, self.cmdProto, self.prxType)
-
-        # ex self.almLink = A500(LOO1,A010,D501)
-
-        if almProtos != None:
-                self.almType = almProtos[1]
-                self.almLink = almProtos[0](self.link, self.cmdProto, self.almType)
-
-        self.timeLink = A600(self.link, self.cmdProto, D600)
-        self.pvtLink  = A800(self.link, self.cmdProto, D800)
-"""
-
-        # Ok now init
-        """  Protos could look like this :
-        protos = {'phys': ['P000'], 'data_time': ['A600', 'D600'], 'track': ['A301', 'D310', 'D301'],
-        'route': ['A201', 'D202', 'D109', 'D210'], 'link': ['L001'],
-        'waypoint': ['A100', 'D109'], 'almanac': ['A500', 'D501'], 'position': ['A700', 'D700'],
-        'command': ['A010'], 'proximity': ['A400', 'D109'], 'pvt': ['A800', 'D800']}
-        """
 
         self.link = self.protos["link"][0](physicalLayer)
         self.cmdProto = self.protos["command"][0]

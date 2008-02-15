@@ -2112,7 +2112,7 @@ class USBLink:
         """Unpack a raw USB package, which is a list of bytes.
 
         Return a tuple: (packet_id, data)"""
-        packet = ''.join(chr(b) for b in packet)
+        packet = ''.join(struct.pack("<B", byte) for byte in packet)
         header = packet[:12]
         data = packet[12:]
         packet_type, unused1, unused2, packet_id, reserved, data_size = (

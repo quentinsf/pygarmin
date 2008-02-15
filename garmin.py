@@ -333,7 +333,7 @@ class A001:
                     protos_unknown.append(x)
 
         log.info("Processing protocols")
-        log.inf("protos")
+        log.info("protos")
 
         return protos, protos_unknown
 

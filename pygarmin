@@ -17,8 +17,14 @@
 
 """
 
-import garmin, getopt, os, string, sys, xmlwriter
-import time
+import getopt
+import logging
+import string
+import sys
+import os
+
+import garmin
+import xmlwriter
 
 class Arguments(list):
 

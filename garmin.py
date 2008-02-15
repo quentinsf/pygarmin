@@ -31,10 +31,8 @@
 
 import os, sys, time
 import newstruct as struct
-import serial
 import math
 import logging
-import usb
 
 
 # Logging setup. If you want to see debug messages, add a logging
@@ -1939,6 +1937,9 @@ class SerialLink(P000):
     unit_id = None
 
     def __init__(self, device, timeout = 5):
+        # Import serial here, so that you don't have to have that module
+        # installed, if you're not using a serial link.
+        import serial
         self.timeout = timeout
         self.ser = serial.Serial(device, timeout=self.timeout, baudrate=9600)
 
@@ -2054,6 +2055,9 @@ class USBLink:
     Pid_Session_Started = 6
 
     def __init__(self):
+        # Import usb here, so that you don't have to have that module
+        # installed, if you're not using a usb link.
+        import usb
         self.garmin_dev = None
         for bus in usb.busses():
             for dev in bus.devices:

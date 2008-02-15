@@ -2070,12 +2070,15 @@ class USBLink:
             raise LinkException("No Garmin device found!")
         self.handle = self.garmin_dev.open()
         self.handle.claimInterface(0)
+        self.startSession()
+
+    def startSession(self):
+        """Start the USB session."""
         start_packet = self.constructPacket(0, self.Pid_Start_Session)
         sent = self.handle.bulkWrite(0x02, start_packet)
         start_packet = self.constructPacket(0, 0x10)
         sent = self.handle.bulkWrite(0x02, start_packet)
         packet = self.handle.interruptRead(0x81, 16)
-        packet = ''.join(chr(b) for b in packet)
         packet_id, unit_id = self.unpack(packet)
         [self.unit_id] = struct.unpack("<L", unit_id)
 
@@ -2106,6 +2109,10 @@ class USBLink:
         self.data_in_pipe = None
 
     def unpack(self, packet):
+        """Unpack a raw USB package, which is a list of bytes.
+
+        Return a tuple: (packet_id, data)"""
+        packet = ''.join(chr(b) for b in packet)
         header = packet[:12]
         data = packet[12:]
         packet_type, unused1, unused2, packet_id, reserved, data_size = (
@@ -2115,7 +2122,6 @@ class USBLink:
     def readPacket(self):
         """Read a packet over USB."""
         packet = self.handle.interruptRead(0x81, 1024)
-        packet = ''.join(chr(b) for b in packet)
         packet_id, data = self.unpack(packet)
         if packet_id == 0x11:
             #XXX: WTF?

@@ -2080,23 +2080,20 @@ class USBLink:
         [self.unit_id] = struct.unpack("<L", unit_id)
 
     def constructPacket(self, layer, packet_id, data=None):
-        package = [chr(layer)]
-        package.append(chr(0))
-        package.append(chr(0))
-        package.append(chr(0))
-        package.extend(list(struct.pack("<h", packet_id)))
-        package.append(chr(0))
-        package.append(chr(0))
+        """Construct an USB package to be sent."""
         if data:
             if isinstance(data, int):
-                data = struct.pack("<h",data)
-            package.extend(list(struct.pack("<l", len(data))))
-            package += list(data)
+                data = struct.pack("<h", data)
+            data_part = list(struct.pack("<l", len(data)))
+            data_part += list(data)
         else:
-            package.append(chr(0))
-            package.append(chr(0))
-            package.append(chr(0))
-            package.append(chr(0))
+            data_part = [chr(0)]*4
+
+        package = [chr(layer)]
+        package += [chr(0)]*3
+        package += list(struct.pack("<h", packet_id))
+        package += [chr(0)]*2
+        package += data_part
         return package
 
     def sendPacket(self, tp, data):

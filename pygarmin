@@ -80,6 +80,27 @@ class Arguments(list):
                                            (self.maxlength - n + 2) * ' ',
                                            desc)
 
+logging_levels = {
+    0: logging.NOTSET,
+    1: logging.CRITICAL,
+    2: logging.ERROR,
+    3: logging.WARNING,
+    4: logging.INFO,
+    5: logging.DEBUG,
+    6: garmin.VERBOSE,
+    }
+
+
+def setup_logging(debug_level):
+    """Set up logging for the garmin module.
+
+    The higher the debug level, the more output.
+    """
+    garmin_log = logging.getLogger('pygarmin')
+    garmin_log.addHandler(logging.StreamHandler())
+    garmin_log.setLevel(logging_levels[debug_level])
+
+
 class Pygarmin(object):
 
     def __init__(self):
@@ -108,7 +129,7 @@ The default command is to display the product information.
             sys.exit(1)
 
         if self.args.options.has_key('debug'):
-            garmin.debug = int(self.args.options['debug'])
+            setup_logging(int(self.args.options['debug']))
 
     def run(self):
         try:

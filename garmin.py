@@ -33,12 +33,15 @@ import os, sys, time
 import newstruct as struct
 import serial
 import math
+import logging
 import usb
 
-# Set this value to > 0 for some debugging output, and the higher
-# the number, the more you'll get.
 
-debug = 0
+# Logging setup. If you want to see debug messages, add a logging
+# handler for this logger.
+log = logging.getLogger('pygarmin')
+# Verbose debug.
+VERBOSE = 5
 
 
 # Introduction =====================================================
@@ -127,12 +130,12 @@ class L000:
     def sendPacket(self, ptype, data):
         """ Send a packet."""
         self.phys.sendPacket(ptype, data)
-        if debug > 5: print "< packet %3d : " % ptype, hexdump(data)
+        log.debug("< packet %3d : " % ptype, hexdump(data))
 
     def readPacket(self):
         """Read a packet."""
         ptype, data = self.phys.readPacket()
-        if debug > 5: print "> packet %3d : " % ptype, hexdump(data)
+        log.debug("> packet %3d : " % ptype, hexdump(data))
         return (ptype, data)
 
     def expectPacket(self, ptype):
@@ -141,8 +144,7 @@ class L000:
         if tp == 248 and ptype != 248:
             # No idea what packet type 248 is, it's not in the
             # specification. It seems safe to ignore it, though.
-            if debug > 3:
-                print "Got msg type 248, retrying..."
+            log.debug("Got msg type 248, retrying...")
             tp, data = self.readPacket()
 
         if tp != ptype:
@@ -220,7 +222,7 @@ class A001:
         self.link=linkLayer
 
     def getProtocols(self):
-        if debug > 3: print "Try reading protocols using PCP"
+        log.log(VERBOSE, "Try reading protocols using PCP")
 
         data = self.link.expectPacket(self.link.Pid_Protocol_Array)
         num = len(data)/3
@@ -231,8 +233,7 @@ class A001:
         for i in range(0, 2*num, 2):
             self.protocols.append(tup[i]+"%03d"%tup[i+1])
 
-        if debug > 0:
-            print "Protocols reported by A001:", self.protocols
+        log.info("Protocols reported by A001:", self.protocols)
 
         return self.protocols
 
@@ -323,8 +324,7 @@ class A001:
                 known = False
                 protos_unknown.append(x)
 
-                if debug > 0:
-                    print "Protocol %s not supported yet!" %x
+                log.info("Protocol %s not supported yet!")
 
             elif (x[0] == "D"):
                 if known:
@@ -332,11 +332,10 @@ class A001:
                 else:
                     protos_unknown.append(x)
 
-        if debug > 0:
-            print "Processing protocols"
-            print protos
+        log.info("Processing protocols")
+        log.inf("protos")
 
-        return protos,protos_unknown
+        return protos, protos_unknown
 
 
 # Commands  ---------------------------------------------------
@@ -395,7 +394,8 @@ class TransferProtocol:
         numrecords = len(sendData)
         x = 0
 
-        if debug > 3: print self.__doc__, "Sending %d records" % numrecords
+        log.log(
+            VERBOSE, "%s: Sending %d records" % (self.__doc__, numrecords))
 
         self.link.sendPacket(self.link.Pid_Records, numrecords)
 
@@ -428,7 +428,8 @@ class SingleTransferProtocol(TransferProtocol):
         data = self.link.expectPacket(self.link.Pid_Records)
         (numrecords,) = struct.unpack("<h", data)
 
-        if debug > 3: print self.__doc__, "Expecting %d records" % numrecords
+        log.log(
+            VERBOSE, "%s: Expecting %d records" % (self.__doc__, numrecords))
 
         result = []
 
@@ -459,7 +460,8 @@ class MultiTransferProtocol(TransferProtocol):
         data = self.link.expectPacket(self.link.Pid_Records)
         (numrecords,) = struct.unpack("<h", data)
 
-        if debug > 3: print self.__doc__, "Expecting %d records" % numrecords
+        log.log(
+            VERBOSE, "%s: Expecting %d records" % (self.__doc__, numrecords))
 
         data_pids = list(data_pids)
         result = []
@@ -1955,7 +1957,6 @@ class SerialLink(P000):
         escline = self.escape( ld + data + chk)
         bytes = self.DLE + tp + escline + self.EOM
         self.write(bytes)
-        if debug > 5: print "< packet %3d : " % ptype, hexdump(data)
         if readAck:
             self.readAcknowledge(ptype)
 
@@ -1985,20 +1986,19 @@ class SerialLink(P000):
             raise LinkException, "Invalid checksum"
         eom = self.read(2)
         assert(eom==self.EOM, "Invalid EOM seen")
-        if debug > 5: print "> packet %3d : " % ptype, hexdump(data)
         if sendAck:
             self.sendAcknowledge(ptype)
         return (ptype, data)
 
     def readAcknowledge(self, ptype):
         "Read an ack msg in response to a particular sent msg"
-        if debug > 5: print "(>ack)",
+        log.debug("(>ack)")
         tp, data = self.readPacket(0)
         if (tp & 0xff) != self.Pid_Ack_Byte or ord(data[0]) != ptype:
             raise LinkException, "Acknowledge error"
 
     def sendAcknowledge(self, ptype):
-        if debug > 5: print "(<ack)",
+        log.debug("(<ack)")
         self.sendPacket(self.Pid_Ack_Byte, struct.pack("<h", ptype), 0)
 
     def readEscapedByte(self):
@@ -2142,7 +2142,7 @@ class Garmin:
         product_data = A000(self.link).getProductData()
         (self.prod_id, self.soft_ver,self.prod_descs) = product_data
 
-        if debug > 1: print "Get supported protocols"
+        log.info("Getting supported protocols")
 
         # Wait for the unit to announce its capabilities using A001.  If
         # that doesn't happen, try reading the protocols supported by the
@@ -2155,7 +2155,7 @@ class Garmin:
 
         except LinkException, e:
 
-            if debug > 2: print "PCP not supported"
+            log.log(VERBOSE, "PCP not supported")
 
             try:
                 self.protocols = protocol.getProtocolsNoPCP(

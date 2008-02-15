@@ -41,14 +41,6 @@ import usb
 
 debug = 0
 
-_enable_partial_support = False
-def enable_partial_support():
-    """Don't require the GPS to be completely supported by pygarmin.
-
-    Enabling this might cause subtle problems.
-    """
-    global _enable_partial_support
-    _enable_partial_support = True
 
 # Introduction =====================================================
 

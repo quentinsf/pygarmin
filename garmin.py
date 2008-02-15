@@ -148,7 +148,7 @@ class L000:
         bytes = self.DLE + tp + escline + self.EOM
         self.phys.write(bytes)
 
-        log.debug("< packet %3d : " % ptype, hexdump(data))
+        log.debug("< packet %3d : %s" % (ptype, hexdump(data)))
 
         if readAck:
             self.readAcknowledge(ptype)
@@ -189,7 +189,7 @@ class L000:
         eom = self.phys.read(2)
         assert(eom==self.EOM, "Invalid EOM seen")
 
-        log.debug("> packet %3d : " % ptype, hexdump(data))
+        log.debug("> packet %3d : %s" % (ptype, hexdump(data)))
 
         if sendAck:
             self.sendAcknowledge(ptype)
@@ -321,7 +321,7 @@ class A001:
         for i in range(0, 2*num, 2):
             self.protocols.append(tup[i]+"%03d"%tup[i+1])
 
-        log.info("Protocols reported by A001:", self.protocols)
+        log.info("Protocols reported by A001: %s", self.protocols)
 
         return self.protocols
 
@@ -408,7 +408,7 @@ class A001:
                 known = False
                 protos_unknown.append(x)
 
-                log.info("Protocol %s not supported yet!")
+                log.info("Protocol %s not supported yet!" % x)
 
             elif (x[0] == "D"):
                 if known:
@@ -417,7 +417,7 @@ class A001:
                     protos_unknown.append(x)
 
         log.info("Processing protocols")
-        log.inf("protos")
+        log.info(protos)
 
         return protos, protos_unknown
 

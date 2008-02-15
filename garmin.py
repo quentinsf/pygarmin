@@ -21,6 +21,7 @@
    For the latest information about PyGarmin, please see
    http://pygarmin.sourceforge.net/
 
+   (c) 2007 Bjorn Tillenius <bjorn.tillenius@gmail.com>
    (c) 2003 Quentin Stafford-Fraser <www.qandr.org/quentin>
    (c) 2000 James A. H. Skillen <jahs@jahs.net>
    (c) 2001 Raymond Penners <raymond@dotsphinx.com>
@@ -32,11 +33,15 @@ import os, sys, time
 import newstruct as struct
 import serial
 import math
+import logging
 
-# Set this value to > 0 for some debugging output, and the higher
-# the number, the more you'll get.
 
-debug = 0
+# Logging setup. If you want to see debug messages, add a logging
+# handler for this logger.
+log = logging.getLogger('pygarmin')
+# Verbose debug.
+VERBOSE = 5
+
 
 # Introduction =====================================================
 
@@ -143,7 +148,7 @@ class L000:
         bytes = self.DLE + tp + escline + self.EOM
         self.phys.write(bytes)
 
-        if debug > 5: print "< packet %3d : " % ptype, hexdump(data)
+        log.debug("< packet %3d : " % ptype, hexdump(data))
 
         if readAck:
             self.readAcknowledge(ptype)
@@ -184,7 +189,7 @@ class L000:
         eom = self.phys.read(2)
         assert(eom==self.EOM, "Invalid EOM seen")
 
-        if debug > 5: print "> packet %3d : " % ptype, hexdump(data)
+        log.debug("> packet %3d : " % ptype, hexdump(data))
 
         if sendAck:
             self.sendAcknowledge(ptype)
@@ -202,7 +207,7 @@ class L000:
 
     def readAcknowledge(self, ptype):
         "Read an ack msg in response to a particular sent msg"
-        if debug > 5: print "(>ack)",
+        log.debug("(>ack)")
 
         # tp is the ack, data is only 1 byte and is the msg command number
         tp, data = self.readPacket(0)
@@ -211,7 +216,7 @@ class L000:
             raise LinkException, "Acknowledge error"
 
     def sendAcknowledge(self, ptype):
-        if debug > 5: print "(<ack)",
+        log.debug("(<ack)")
 
         self.sendPacket(self.Pid_Ack_Byte, struct.pack("<h", ptype), 0)
 
@@ -305,7 +310,7 @@ class A001:
         self.link=linkLayer
 
     def getProtocols(self):
-        if debug > 3: print "Try reading protocols using PCP"
+        log.log(VERBOSE, "Try reading protocols using PCP")
 
         data = self.link.expectPacket(self.link.Pid_Protocol_Array)
         num = len(data)/3
@@ -316,8 +321,7 @@ class A001:
         for i in range(0, 2*num, 2):
             self.protocols.append(tup[i]+"%03d"%tup[i+1])
 
-        if debug > 0:
-            print "Protocols reported by A001:", self.protocols
+        log.info("Protocols reported by A001:", self.protocols)
 
         return self.protocols
 
@@ -404,8 +408,7 @@ class A001:
                 known = False
                 protos_unknown.append(x)
 
-                if debug > 0:
-                    print "Protocol %s not supported yet!" %x
+                log.info("Protocol %s not supported yet!")
 
             elif (x[0] == "D"):
                 if known:
@@ -413,11 +416,10 @@ class A001:
                 else:
                     protos_unknown.append(x)
 
-        if debug > 0:
-            print "Processing protocols"
-            print protos
+        log.info("Processing protocols")
+        log.inf("protos")
 
-        return protos,protos_unknown
+        return protos, protos_unknown
 
 
 # Commands  ---------------------------------------------------
@@ -475,7 +477,8 @@ class TransferProtocol:
         numrecords = len(sendData)
         x = 0
 
-        if debug > 3: print self.__doc__, "Sending %d records" % numrecords
+        log.log(
+            VERBOSE, "%s: Sending %d records" % (self.__doc__, numrecords))
 
         self.link.sendPacket(self.link.Pid_Records, numrecords)
 
@@ -508,7 +511,8 @@ class SingleTransferProtocol(TransferProtocol):
         data = self.link.expectPacket(self.link.Pid_Records)
         (numrecords,) = struct.unpack("<h", data)
 
-        if debug > 3: print self.__doc__, "Expecting %d records" % numrecords
+        log.log(
+            VERBOSE, "%s: Expecting %d records" % (self.__doc__, numrecords))
 
         result = []
 
@@ -539,7 +543,8 @@ class MultiTransferProtocol(TransferProtocol):
         data = self.link.expectPacket(self.link.Pid_Records)
         (numrecords,) = struct.unpack("<h", data)
 
-        if debug > 3: print self.__doc__, "Expecting %d records" % numrecords
+        log.log(
+            VERBOSE, "%s: Expecting %d records" % (self.__doc__, numrecords))
 
         data_pids = list(data_pids)
         result = []
@@ -894,7 +899,7 @@ class A900:
 
 
 class A902:
-    "A902 implementation.
+    """A902 implementation.
 
     Used by etrex, no documentation as of 2001-05-30.
     """
@@ -908,7 +913,7 @@ class A903:
 
 
 class A904:
-    "A904 implementation.
+    """A904 implementation.
 
     No documentation as of 2004-02-24.
     """
@@ -1711,7 +1716,7 @@ class D600(TimePoint):
 
 
 class D601(TimePoint):
-    "D601 time point.
+    """D601 time point.
 
     Used by GPSmap 60cs, no documentation as of 2004-09-26.
     """
@@ -1768,7 +1773,7 @@ class D907(DataPoint):
 
 
 class D908(DataPoint):
-    "D908 data point.
+    """D908 data point.
 
     Used by GPSmap 60cs, no documentation as of 2004-09-26.
     """
@@ -1999,7 +2004,7 @@ class Garmin:
         product_data = A000(self.link).getProductData()
         (self.prod_id, self.soft_ver,self.prod_descs) = product_data
 
-        if debug > 1: print "Get supported protocols"
+        log.info("Getting supported protocols")
 
         # Wait for the unit to announce its capabilities using A001.  If
         # that doesn't happen, try reading the protocols supported by the
@@ -2012,7 +2017,7 @@ class Garmin:
 
         except LinkException, e:
 
-            if debug > 2: print "PCP not supported"
+            log.log(VERBOSE, "PCP not supported")
 
             try:
                 self.protocols = protocol.getProtocolsNoPCP(

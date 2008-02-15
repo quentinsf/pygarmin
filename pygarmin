@@ -53,13 +53,8 @@ class Arguments(list):
             if n > self.maxlength:
                 self.maxlength = n
 
-        try:
-            parsed, leftover = getopt.getopt(sys.argv[1:], ''.join(shortopts),
-                                             longopts)
-        except:
-            print '%s: %s' % (sys.argv[0], sys.exc_info()[1])
-            sys.exit(1)
-
+        parsed, leftover = getopt.getopt(sys.argv[1:], ''.join(shortopts),
+                                         longopts)
         for option, value in parsed:
             if option.startswith('--'):
                 option = option[2:]
@@ -153,24 +148,14 @@ The default command is to display the product information.
                 'info', 'protocols', 'waypoints', 'routes', 'tracks', 'laps',
                 'runs')
             if cmd in available_commands:
-                try:
-                    getattr(self, cmd)()
-                except:
-                    c, e = sys.exc_info()[0:2]
-                    print "%s: %s" % (c, e)
-                    sys.exit(-1)
+                getattr(self, cmd)()
 
     def device(self, arg):
         if arg.lower() == 'usb:':
             link = garmin.USBLink()
         else:
             link = garmin.SerialLink(arg)
-        try:
-            self.gps = garmin.Garmin(link)
-        except:
-            c, e = sys.exc_info()[0:2]
-            print "%s: %s" % (c, e)
-            sys.exit(-1)
+        self.gps = garmin.Garmin(link)
 
 ### commands
 

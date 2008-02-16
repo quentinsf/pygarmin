@@ -39,6 +39,7 @@ import logging
 # handler for this logger.
 log = logging.getLogger('pygarmin')
 usb_log = logging.getLogger('pygarmin.usb')
+usb_packet_log = logging.getLogger('pygarmin.usb.packet')
 # Verbose debug.
 VERBOSE = 5
 
@@ -2127,7 +2128,7 @@ class USBLink:
     def sendUSBPacket(self, packet):
         """Send a packet over the USB bus."""
         usb_log.debug("Sending %s bytes..." % len(packet))
-        usb_log.debug("< usb: %s" % (hexdump(packet)))
+        usb_packet_log.debug("< usb: %s" % (hexdump(packet)))
         sent = self.handle.bulkWrite(0x02, packet)
         usb_log.debug("Sent %s bytes" % sent)
 
@@ -2152,7 +2153,7 @@ class USBLink:
         usb_log.debug("Reading %s bytes..." % size)
         packet = self.handle.interruptRead(0x81, size)
         packet = ''.join(struct.pack("<B", byte) for byte in packet)
-        usb_log.debug("> usb: %s" % (hexdump(packet)))
+        usb_packet_log.debug("> usb: %s" % (hexdump(packet)))
         usb_log.debug("Read %s bytes" % len(packet))
         return packet
 

@@ -2145,9 +2145,6 @@ class USBLink:
         """Read a packet."""
         packet = self.readUSBPacket(size)
         packet_id, data = self.unpack(packet)
-        if packet_id == 0x11:
-            #XXX: WTF?
-            return self.readPacket()
         return packet_id, data
 
     def readUSBPacket(self, size):

@@ -2055,6 +2055,10 @@ class USBLink:
     Pid_Data_Available = 2
     Pid_Start_Session = 5
     Pid_Session_Started = 6
+    # These arent in the specification, but this is what Edge 305
+    # uses.
+    Pid_Start_Session2 = 16
+    Pid_Session_Started2 = 17
 
     def __init__(self):
         # Import usb here, so that you don't have to have that module
@@ -2078,13 +2082,25 @@ class USBLink:
         """Start the USB session."""
         start_packet = self.constructPacket(0, self.Pid_Start_Session)
         self.sendUSBPacket(start_packet)
-        # start_packet2 is not in the specification, but required for
-        # the Edge 305 to work.
-        start_packet2 = self.constructPacket(0, 0x10)
+        # Some devices use another start packet.
+        start_packet2 = self.constructPacket(0, self.Pid_Session_Started2)
         self.sendUSBPacket(start_packet2)
-        packet = self.readUSBPacket(16)
-        packet_id, unit_id = self.unpack(packet)
-        [self.unit_id] = struct.unpack("<L", unit_id)
+        self.unit_id = self.readSessionStartedPacket()
+
+    def readSessionStartedPacket(self):
+        """Read from the USB bus until session started packet is received."""
+        session_started = False
+        unit_id_data = None
+        while not session_started:
+            packet = self.readUSBPacket(16)
+            if len(packet) != 16:
+                continue
+            # We have something that could be the right packet.
+            packet_id, unit_id_data = self.unpack(packet)
+            if packet_id in [self.Pid_Session_Started,
+                             self.Pid_Session_Started2]:
+                session_started = True
+        [self.unit_id] = struct.unpack("<L", unit_id_data)
 
     def constructPacket(self, layer, packet_id, data=None):
         """Construct an USB package to be sent."""

@@ -89,6 +89,8 @@ class P000:
 # The following is handy for debugging:
 
 def hexdump(data):
+    if isinstance(data, int):
+        data = struct.pack('<H', data)
     return ''.join(["%02x" % ord(x) for x in data])
 
 

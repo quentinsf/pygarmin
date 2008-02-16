@@ -1735,7 +1735,10 @@ class D910(DataPoint):
 
 
 class D1011(DataPoint):
-    """A lap point."""
+    """A lap point.
+
+    Used by Edge 305.
+    """
 
     parts = ("index", "unused", "start_time", "total_time", "total_dist",
              "max_speed", "begin_lat", "begin_lon", "end_lat", "end_lon",
@@ -1748,6 +1751,15 @@ class D1011(DataPoint):
             self.index, degrees(self.begin_lat), degrees(self.begin_lon),
             time.asctime(time.gmtime(TimeEpoch+self.start_time)),
             int(self.total_time/100))
+
+
+class D1015(D1011):
+    """A lap point.
+
+    Used by Forerunner 305. This data type is not documented in the
+    specification, but there has been reports that this works.
+    """
+
 
 class D1009(DataPoint):
     """A run data point."""

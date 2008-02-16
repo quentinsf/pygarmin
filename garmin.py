@@ -2078,11 +2078,11 @@ class USBLink:
         """Start the USB session."""
         start_packet = self.constructPacket(0, self.Pid_Start_Session)
         self.sendUSBPacket(start_packet)
-        # This is not in the specification, but required for the Edge
-        # 305 to work.
+        # start_packet2 is not in the specification, but required for
+        # the Edge 305 to work.
         start_packet2 = self.constructPacket(0, 0x10)
         self.sendUSBPacket(start_packet2)
-        packet = self.handle.interruptRead(0x81, 16)
+        packet = self.readUSBPacket(16)
         packet_id, unit_id = self.unpack(packet)
         [self.unit_id] = struct.unpack("<L", unit_id)
 
@@ -2119,21 +2119,29 @@ class USBLink:
         """Unpack a raw USB package, which is a list of bytes.
 
         Return a tuple: (packet_id, data)"""
-        packet = ''.join(struct.pack("<B", byte) for byte in packet)
         header = packet[:12]
         data = packet[12:]
         packet_type, unused1, unused2, packet_id, reserved, data_size = (
             struct.unpack("<b h b h h l", header))
         return packet_id, data
 
-    def readPacket(self):
-        """Read a packet over USB."""
-        packet = self.handle.interruptRead(0x81, 1024)
+    def readPacket(self, size=1024):
+        """Read a packet."""
+        packet = self.readUSBPacket(size)
         packet_id, data = self.unpack(packet)
         if packet_id == 0x11:
             #XXX: WTF?
             return self.readPacket()
         return packet_id, data
+
+    def readUSBPacket(self, size):
+        """Read a packet over USB bus."""
+        usb_log.debug("Reading %s bytes..." % size)
+        packet = self.handle.interruptRead(0x81, size)
+        packet = ''.join(struct.pack("<B", byte) for byte in packet)
+        usb_log.debug("> usb: %s" % (hexdump(packet)))
+        usb_log.debug("Read %s bytes" % len(packet))
+        return packet
 
     def settimeout(self, timeout):
         pass

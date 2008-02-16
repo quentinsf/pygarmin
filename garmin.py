@@ -21,7 +21,7 @@
    For the latest information about PyGarmin, please see
    http://pygarmin.sourceforge.net/
 
-   (c) 2007 Bjorn Tillenius <bjorn.tillenius@gmail.com>
+   (c) 2007-2008 Bjorn Tillenius <bjorn.tillenius@gmail.com>
    (c) 2003 Quentin Stafford-Fraser <www.qandr.org/quentin>
    (c) 2000 James A. H. Skillen <jahs@jahs.net>
    (c) 2001 Raymond Penners <raymond@dotsphinx.com>
@@ -2077,9 +2077,11 @@ class USBLink:
     def startSession(self):
         """Start the USB session."""
         start_packet = self.constructPacket(0, self.Pid_Start_Session)
-        sent = self.handle.bulkWrite(0x02, start_packet)
-        start_packet = self.constructPacket(0, 0x10)
-        sent = self.handle.bulkWrite(0x02, start_packet)
+        self.sendUSBPacket(start_packet)
+        # This is not in the specification, but required for the Edge
+        # 305 to work.
+        start_packet2 = self.constructPacket(0, 0x10)
+        self.sendUSBPacket(start_packet2)
         packet = self.handle.interruptRead(0x81, 16)
         packet_id, unit_id = self.unpack(packet)
         [self.unit_id] = struct.unpack("<L", unit_id)
@@ -2102,13 +2104,16 @@ class USBLink:
         return package
 
     def sendPacket(self, tp, data):
-        """Send a packet over USB."""
+        """Send a packet."""
         packet = self.constructPacket(20, tp, data)
-        usb_log.debug("Sending: %s" % (hexdump(''.join(packet))))
+        self.sendUSBPacket(packet)
+
+    def sendUSBPacket(self, packet):
+        """Send a packet over the USB bus."""
+        usb_log.debug("Sending %s bytes..." % len(packet))
+        usb_log.debug("< usb: %s" % (hexdump(packet)))
         sent = self.handle.bulkWrite(0x02, packet)
         usb_log.debug("Sent %s bytes" % sent)
-        self.seen_data_available = False
-        self.data_in_pipe = None
 
     def unpack(self, packet):
         """Unpack a raw USB package, which is a list of bytes.

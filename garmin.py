@@ -127,14 +127,14 @@ class L000:
         self.phys = physicalLayer
 
     def sendPacket(self, ptype, data):
-        """ Send a packet."""
+        """Send a packet."""
         self.phys.sendPacket(ptype, data)
-        log.debug("< packet %3d : " % ptype, hexdump(data))
+        log.debug("< packet %3d : %s" % (ptype, hexdump(data)))
 
     def readPacket(self):
         """Read a packet."""
         ptype, data = self.phys.readPacket()
-        log.debug("> packet %3d : " % ptype, hexdump(data))
+        log.debug("> packet %3d : %s" % (ptype, hexdump(data)))
         return (ptype, data)
 
     def expectPacket(self, ptype):
@@ -232,7 +232,7 @@ class A001:
         for i in range(0, 2*num, 2):
             self.protocols.append(tup[i]+"%03d"%tup[i+1])
 
-        log.info("Protocols reported by A001:", self.protocols)
+        log.info("Protocols reported by A001: %s", self.protocols)
 
         return self.protocols
 
@@ -323,7 +323,7 @@ class A001:
                 known = False
                 protos_unknown.append(x)
 
-                log.info("Protocol %s not supported yet!")
+                log.info("Protocol %s not supported yet!" % x)
 
             elif (x[0] == "D"):
                 if known:
@@ -332,7 +332,7 @@ class A001:
                     protos_unknown.append(x)
 
         log.info("Processing protocols")
-        log.info("protos")
+        log.info(protos)
 
         return protos, protos_unknown
 

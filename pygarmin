@@ -11,6 +11,7 @@
    For the latest information about PyGarmin, please see
    http://pygarmin.sourceforge.net/
 
+   (c) 2007      Bjorn Tillenius <bjorn.tillenius@gmail.com>
    (c) 2000-2003 James A. H. Skillen <jahs@jahs.net>
    (c) 2001      Raymond Penners <raymond@dotsphinx.com>
 
@@ -24,7 +25,6 @@ import os
 
 import garmin
 import xmlwriter
-
 
 class Arguments(list):
 
@@ -53,13 +53,8 @@ class Arguments(list):
             if n > self.maxlength:
                 self.maxlength = n
 
-        try:
-            parsed, leftover = getopt.getopt(sys.argv[1:], ''.join(shortopts),
-                                             longopts)
-        except:
-            print '%s: %s' % (sys.argv[0], sys.exc_info()[1])
-            sys.exit(1)
-
+        parsed, leftover = getopt.getopt(sys.argv[1:], ''.join(shortopts),
+                                         longopts)
         for option, value in parsed:
             if option.startswith('--'):
                 option = option[2:]
@@ -112,7 +107,8 @@ class Pygarmin(object):
     def __init__(self):
         self.args = Arguments(
             {'d' : ('debug', 'LEVEL', 'Set debug level, 0-6'),
-             'f' : ('format', 'FORMAT', 'Output format (pygarmin, xml-abstract, xml-product)')},
+             'f' : ('format', 'FORMAT',
+                    'Output format (pygarmin, xml-abstract, xml-product)')},
             'Usage: %s [OPTIONS] DEVICE [COMMAND] ...',
 """
 Communicate with a Garmin GPS connected to DEVICE, where COMMAND is one of:
@@ -148,21 +144,18 @@ The default command is to display the product information.
             sys.exit(0)
 
         for cmd in self.args:
-            if cmd in ('info', 'protocols', 'waypoints', 'routes', 'tracks'):
-                try:
-                    getattr(self, cmd)()
-                except:
-                    c, e = sys.exc_info()[0:2]
-                    print "%s: %s" % (c, e)
-                    sys.exit(-1)
+            available_commands = (
+                'info', 'protocols', 'waypoints', 'routes', 'tracks', 'laps',
+                'runs')
+            if cmd in available_commands:
+                getattr(self, cmd)()
 
     def device(self, arg):
-        try:
-            self.gps = garmin.Garmin(garmin.SerialLink(arg))
-        except:
-            c, e = sys.exc_info()[0:2]
-            print "%s: %s" % (c, e)
-            sys.exit(-1)
+        if arg.lower() == 'usb:':
+            link = garmin.USBLink()
+        else:
+            link = garmin.SerialLink(arg)
+        self.gps = garmin.Garmin(link)
 
 ### commands
 
@@ -172,6 +165,14 @@ The default command is to display the product information.
         print 'GPS Product ID: %i' % self.gps.prod_id
         print 'Software version: %2.2f' % self.gps.soft_ver
         print
+
+    def laps(self):
+        print '*** Laps ***'
+        self.gps.getLaps(print_)
+
+    def runs(self):
+        print '*** Runs ***'
+        self.gps.getRuns(print_)
 
     def protocols(self):
         print '*** Product Protocols ***'

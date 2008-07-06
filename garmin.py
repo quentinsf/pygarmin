@@ -21,7 +21,7 @@
    For the latest information about PyGarmin, please see
    http://pygarmin.sourceforge.net/
 
-   (c) 2007 Bjorn Tillenius <bjorn.tillenius@gmail.com>
+   (c) 2007-2008 Bjorn Tillenius <bjorn.tillenius@gmail.com>
    (c) 2003 Quentin Stafford-Fraser <www.qandr.org/quentin>
    (c) 2000 James A. H. Skillen <jahs@jahs.net>
    (c) 2001 Raymond Penners <raymond@dotsphinx.com>
@@ -31,7 +31,6 @@
 
 import os, sys, time
 import newstruct as struct
-import serial
 import math
 import logging
 
@@ -39,6 +38,8 @@ import logging
 # Logging setup. If you want to see debug messages, add a logging
 # handler for this logger.
 log = logging.getLogger('pygarmin')
+usb_log = logging.getLogger('pygarmin.usb')
+usb_packet_log = logging.getLogger('pygarmin.usb.packet')
 # Verbose debug.
 VERBOSE = 5
 
@@ -89,6 +90,8 @@ class P000:
 # The following is handy for debugging:
 
 def hexdump(data):
+    if isinstance(data, int):
+        data = struct.pack('<H', data)
     return ''.join(["%02x" % ord(x) for x in data])
 
 
@@ -119,127 +122,37 @@ class ProtocolException(GarminException):
 class L000:
     """Basic Link Protocol."""
 
-    Pid_Ack_Byte = 6
-    Pid_Nak_Byte = 21
     Pid_Protocol_Array = 253
     Pid_Product_Rqst = 254
     Pid_Product_Data = 255
 
-    # DataLinkEscape etc
-    DLE                  = "\x10"
-    ETX                  = "\x03"
-    EOM                  = DLE+ETX
-
     def __init__(self, physicalLayer):
         self.phys = physicalLayer
 
-    def sendPacket(self, ptype, data, readAck=1):
-        " Send a message. By default this will also wait for the ack."
-
-        if type(data) == type(""):
-            ld = chr(len(data))
-        else: # XXX assume 16-bit integer for now
-            ld = chr(2)
-            data = struct.pack("<h",data)
-
-        tp = chr(ptype)
-        chk = self.checksum( tp + ld + data)
-        escline = self.escape( ld + data + chk)
-        bytes = self.DLE + tp + escline + self.EOM
-        self.phys.write(bytes)
-
+    def sendPacket(self, ptype, data):
+        """Send a packet."""
+        self.phys.sendPacket(ptype, data)
         log.debug("< packet %3d : %s" % (ptype, hexdump(data)))
 
-        if readAck:
-            self.readAcknowledge(ptype)
-
-    def readPacket(self, sendAck=1):
-        " Read a message. By default this will also send the ack."
-
-        dle = self.phys.read(1)
-
-        # Find the start of a message
-        while dle != self.DLE:
-            print "resync - expected DLE and got something else"
-            dle = self.phys.read(1)
-
-        # We've now found either the start or the end of a msg
-        # Try reading the type.
-        tp = self.phys.read(1)
-
-        # if it was the end
-        if tp == self.ETX:
-            dle = self.phys.read(1)
-            tp = self.phys.read(1)
-
-        # Now we should be synchronised
-        ptype = ord(tp)
-        ld = self.readEscapedByte()
-        datalen = ord(ld)
-        data = ""
-
-        for i in range(0, datalen):
-            data = data + self.readEscapedByte()
-
-        ck = self.readEscapedByte()
-
-        if ck != self.checksum(tp + ld + data):
-            raise LinkException, "Invalid checksum"
-
-        eom = self.phys.read(2)
-        assert(eom==self.EOM, "Invalid EOM seen")
-
+    def readPacket(self):
+        """Read a packet."""
+        ptype, data = self.phys.readPacket()
         log.debug("> packet %3d : %s" % (ptype, hexdump(data)))
-
-        if sendAck:
-            self.sendAcknowledge(ptype)
-
         return (ptype, data)
 
     def expectPacket(self, ptype):
         "Expect and read a particular msg type. Return data."
         tp, data = self.readPacket()
+        if tp == 248 and ptype != 248:
+            # No idea what packet type 248 is, it's not in the
+            # specification. It seems safe to ignore it, though.
+            log.debug("Got msg type 248, retrying...")
+            tp, data = self.readPacket()
 
         if tp != ptype:
             raise LinkException, "Expected msg type %d, got %d" % (ptype, tp)
 
         return data
-
-    def readAcknowledge(self, ptype):
-        "Read an ack msg in response to a particular sent msg"
-        log.debug("(>ack)")
-
-        # tp is the ack, data is only 1 byte and is the msg command number
-        tp, data = self.readPacket(0)
-
-        if (tp & 0xff) != self.Pid_Ack_Byte or ord(data[0]) != ptype:
-            raise LinkException, "Acknowledge error"
-
-    def sendAcknowledge(self, ptype):
-        log.debug("(<ack)")
-
-        self.sendPacket(self.Pid_Ack_Byte, struct.pack("<h", ptype), 0)
-
-    def readEscapedByte(self):
-        c = self.phys.read(1)
-
-        if c == self.DLE:
-            c = self.phys.read(1)
-
-        return c
-
-    def checksum(self, data):
-        sum = 0
-
-        for i in data:
-            sum = sum + ord(i)
-
-        sum = sum % 256
-        return chr((256-sum) % 256)
-
-    def escape(self, data):
-        "Escape any DLE characters"
-        return (self.DLE*2).join(data.split(self.DLE))
 
 
 # L001 builds on L000
@@ -264,6 +177,7 @@ class L001(L000):
     Pid_FlightBook_Record = 134 # packet with FlightBook data
     Pid_Lap = 149 # part of Forerunner data
     Pid_Wpt_Cat = 152
+    Pid_Run = 990
 
 # L002 builds on L000
 
@@ -403,6 +317,10 @@ class A001:
                 known = True
                 ap_prot = "lap"
                 protos[ap_prot] = [eval(x)]
+            elif x == "A1000":
+                known = True
+                ap_prot = "run"
+                protos[ap_prot] = [eval(x)]
             elif x[0] == "A":
                 # No info about this Application Protocol
                 known = False
@@ -439,6 +357,7 @@ class A010:
     Cmnd_Stop_Pvt_Data = 50        # stop transmitting PVT data
     Cmnd_FlightBook_Transfer = 92  # transfer flight records
     Cmnd_Transfer_Laps = 117       # transfer laps
+    Cmnd_Transfer_Runs = 450       # transfer runs
     Cmnd_Transfer_Wpt_Cats = 121   # transfer waypoint categories
 
 
@@ -919,13 +838,22 @@ class A904:
     """
 
 
-class A906(SingleTransferProtocol):
+class A906(MultiTransferProtocol):
     """Lap transfer protocol."""
 
     def getData(self,callback):
-        return SingleTransferProtocol.getData(
-            self, callback, self.cmdproto.Cmnd_Transfer_Laps,
-            self.link.Pid_Lap)
+        return MultiTransferProtocol.getData(
+            self, callback,
+            self.cmdproto.Cmnd_Transfer_Laps, self.link.Pid_Lap)
+
+
+class A1000(MultiTransferProtocol):
+    """Run Transfer Protocol."""
+
+    def getData(self, callback):
+        return MultiTransferProtocol.getData(
+            self, callback,
+            self.cmdproto.Cmnd_Transfer_Runs, self.link.Pid_Run)
 
 
 class A907(TransferProtocol):
@@ -1600,6 +1528,19 @@ class D302(TrackPoint):
     fmt = "<l l L f f f b"
 
 
+class D304(TrackPoint):
+
+    parts = (
+        "slat", "slon", "time", "alt", "distance", "heart_rate", "cadence",
+        "sensor")
+    fmt = "<l l L f f B B B"
+    alt = 0.0
+    distance = 0.0
+    heart_rate = 0
+    cadence = 0
+    sensor = False
+
+
 # Track headers ----------------------------------------------
 
 class TrackHdr(DataPoint):
@@ -1621,7 +1562,7 @@ class D310(TrackHdr):
 class D311(TrackHdr):
 
     parts = ("index",)
-    fmt = "<i"
+    fmt = "<H"
 
 
 class D312(TrackHdr):
@@ -1793,6 +1734,47 @@ class D910(DataPoint):
     """
 
 
+class D1011(DataPoint):
+    """A lap point.
+
+    Used by Edge 305.
+    """
+
+    parts = ("index", "unused", "start_time", "total_time", "total_dist",
+             "max_speed", "begin_lat", "begin_lon", "end_lat", "end_lon",
+             "calories", "avg_heart_rate", "max_heart_rate",
+             "intensity", "avg_cadence", "trigger_method")
+    fmt = "<H H L L f f l l l l H B B B B B"
+
+    def __repr__(self):
+        return "<Lap %i (%3.5f, %3.5f) %s (duration %i seconds)>" % (
+            self.index, degrees(self.begin_lat), degrees(self.begin_lon),
+            time.asctime(time.gmtime(TimeEpoch+self.start_time)),
+            int(self.total_time/100))
+
+
+class D1015(D1011):
+    """A lap point.
+
+    Used by Forerunner 305. This data type is not documented in the
+    specification, but there has been reports that this works.
+    """
+
+
+class D1009(DataPoint):
+    """A run data point."""
+
+    parts = ("track_index", "first_lap_index", "last_lap_index",
+             "sport_type", "program_type",
+             "multisport", "unused1", "unused2",
+             "quick_workout_time", "quick_workout_distance")
+    fmt = "<H H H B B B B H L f"
+
+    def __repr__(self):
+        return "<Run %i, lap %i to %i>" % (
+            self.track_index, self.first_lap_index, self.last_lap_index)
+
+
 # Garmin models ==============================================
 
 # For reference, here are some of the product ID numbers used by
@@ -1959,13 +1941,99 @@ ModelProtocols = {
 class SerialLink(P000):
     """Protocol to communicate over a serial link."""
 
+    Pid_Ack_Byte = 6
+    Pid_Nak_Byte = 21
+
+    # DataLinkEscape etc
+    DLE                  = "\x10"
+    ETX                  = "\x03"
+    EOM                  = DLE+ETX
+
+    unit_id = None
+
     def __init__(self, device, timeout = 5):
+        # Import serial here, so that you don't have to have that module
+        # installed, if you're not using a serial link.
+        import serial
         self.timeout = timeout
         self.ser = serial.Serial(device, timeout=self.timeout, baudrate=9600)
 
     def initserial(self):
         """Set up baud rate, handshaking, etc."""
         pass
+
+    def sendPacket(self, ptype, data, readAck=1):
+        " Send a message. By default this will also wait for the ack."
+        if type(data) == type(""):
+            ld = chr(len(data))
+        else: # XXX assume 16-bit integer for now
+            ld = chr(2)
+            data = struct.pack("<h",data)
+        tp = chr(ptype)
+        chk = self.checksum( tp + ld + data)
+        escline = self.escape( ld + data + chk)
+        bytes = self.DLE + tp + escline + self.EOM
+        self.write(bytes)
+        if readAck:
+            self.readAcknowledge(ptype)
+
+    def readPacket(self, sendAck=1):
+        " Read a message. By default this will also send the ack."
+        dle = self.read(1)
+        # Find the start of a message
+        while dle != self.DLE:
+            print "resync - expected DLE and got something else: %r" % dle
+            dle = self.read(1)
+        # We've now found either the start or the end of a msg
+        # Try reading the type.
+        tp = self.read(1)
+        if tp == self.ETX:
+            # It was the end!
+            dle = self.read(1)
+            tp = self.read(1)
+        # Now we should be synchronised
+        ptype = ord(tp)
+        ld = self.readEscapedByte()
+        datalen = ord(ld)
+        data = ""
+        for i in range(0, datalen):
+            data = data + self.readEscapedByte()
+        ck = self.readEscapedByte()
+        if ck != self.checksum(tp + ld + data):
+            raise LinkException, "Invalid checksum"
+        eom = self.read(2)
+        assert(eom==self.EOM, "Invalid EOM seen")
+        if sendAck:
+            self.sendAcknowledge(ptype)
+        return (ptype, data)
+
+    def readAcknowledge(self, ptype):
+        "Read an ack msg in response to a particular sent msg"
+        log.debug("(>ack)")
+        tp, data = self.readPacket(0)
+        if (tp & 0xff) != self.Pid_Ack_Byte or ord(data[0]) != ptype:
+            raise LinkException, "Acknowledge error"
+
+    def sendAcknowledge(self, ptype):
+        log.debug("(<ack)")
+        self.sendPacket(self.Pid_Ack_Byte, struct.pack("<h", ptype), 0)
+
+    def readEscapedByte(self):
+        c = self.read(1)
+        if c == self.DLE:
+            c = self.read(1)
+        return c
+
+    def checksum(self, data):
+        sum = 0
+        for i in data:
+            sum = sum + ord(i)
+        sum = sum % 256
+        return chr((256-sum) % 256)
+
+    def escape(self, data):
+        "Escape any DLE characters"
+        return string.join(string.split(data, self.DLE), self.DLE+self.DLE)
 
     def read(self, n):
         """Read n bytes and return them.
@@ -1991,6 +2059,123 @@ class SerialLink(P000):
             self.ser.close()
 
 
+class USBLink:
+    """Implementation of the Garmin USB protocol.
+
+    It will talk to the first Garmin GPS device it finds.
+    """
+
+    Pid_Data_Available = 2
+    Pid_Start_Session = 5
+    Pid_Session_Started = 6
+    # These arent in the specification, but this is what Edge 305
+    # uses.
+    Pid_Start_Session2 = 16
+    Pid_Session_Started2 = 17
+
+    def __init__(self):
+        # Import usb here, so that you don't have to have that module
+        # installed, if you're not using a usb link.
+        import usb
+        self.garmin_dev = None
+        for bus in usb.busses():
+            for dev in bus.devices:
+                if dev.idVendor == 2334:
+                    self.garmin_dev = dev
+                    break
+            if self.garmin_dev:
+                break
+        else:
+            raise LinkException("No Garmin device found!")
+        self.handle = self.garmin_dev.open()
+        self.handle.claimInterface(0)
+        self.startSession()
+
+    def startSession(self):
+        """Start the USB session."""
+        start_packet = self.constructPacket(0, self.Pid_Start_Session)
+        self.sendUSBPacket(start_packet)
+        # Some devices use another start packet.
+        start_packet2 = self.constructPacket(0, self.Pid_Session_Started2)
+        self.sendUSBPacket(start_packet2)
+        self.unit_id = self.readSessionStartedPacket()
+
+    def readSessionStartedPacket(self):
+        """Read from the USB bus until session started packet is received."""
+        session_started = False
+        unit_id_data = None
+        while not session_started:
+            packet = self.readUSBPacket(16)
+            if len(packet) != 16:
+                continue
+            # We have something that could be the right packet.
+            packet_id, unit_id_data = self.unpack(packet)
+            if packet_id in [self.Pid_Session_Started,
+                             self.Pid_Session_Started2]:
+                session_started = True
+        [self.unit_id] = struct.unpack("<L", unit_id_data)
+
+    def constructPacket(self, layer, packet_id, data=None):
+        """Construct an USB package to be sent."""
+        if data:
+            if isinstance(data, int):
+                data = struct.pack("<h", data)
+            data_part = list(struct.pack("<l", len(data)))
+            data_part += list(data)
+        else:
+            data_part = [chr(0)]*4
+
+        package = [chr(layer)]
+        package += [chr(0)]*3
+        package += list(struct.pack("<h", packet_id))
+        package += [chr(0)]*2
+        package += data_part
+        return package
+
+    def sendPacket(self, tp, data):
+        """Send a packet."""
+        packet = self.constructPacket(20, tp, data)
+        self.sendUSBPacket(packet)
+
+    def sendUSBPacket(self, packet):
+        """Send a packet over the USB bus."""
+        usb_log.debug("Sending %s bytes..." % len(packet))
+        usb_packet_log.debug("< usb: %s" % (hexdump(packet)))
+        sent = self.handle.bulkWrite(0x02, packet)
+        usb_log.debug("Sent %s bytes" % sent)
+
+    def unpack(self, packet):
+        """Unpack a raw USB package, which is a list of bytes.
+
+        Return a tuple: (packet_id, data)"""
+        header = packet[:12]
+        data = packet[12:]
+        packet_type, unused1, unused2, packet_id, reserved, data_size = (
+            struct.unpack("<b h b h h l", header))
+        return packet_id, data
+
+    def readPacket(self, size=1024):
+        """Read a packet."""
+        packet = self.readUSBPacket(size)
+        packet_id, data = self.unpack(packet)
+        return packet_id, data
+
+    def readUSBPacket(self, size):
+        """Read a packet over USB bus."""
+        usb_log.debug("Reading %s bytes..." % size)
+        packet = self.handle.interruptRead(0x81, size)
+        packet = ''.join(struct.pack("<B", byte) for byte in packet)
+        usb_packet_log.debug("> usb: %s" % (hexdump(packet)))
+        usb_log.debug("Read %s bytes" % len(packet))
+        return packet
+
+    def settimeout(self, timeout):
+        pass
+
+    def close(self):
+        self.handle.releaseInterface()
+
+
 class Garmin:
     """A representation of the GPS device.
 
@@ -1999,7 +2184,7 @@ class Garmin:
     """
 
     def __init__(self, physicalLayer):
-
+        self.unit_id = physicalLayer.unit_id
         self.link = L000(physicalLayer)      # at least initially
         product_data = A000(self.link).getProductData()
         (self.prod_id, self.soft_ver,self.prod_descs) = product_data
@@ -2087,6 +2272,14 @@ class Garmin:
             self.lapLink = self.protos["lap"][0](
                 self.link, self.cmdProto,self.protos["lap"][1])
 
+        runProtos = self.protos.get("run", [])
+        self.runTypes = runProtos[1:]
+        if runProtos:
+            self.runLink = runProtos[0](
+                self.link, self.cmdProto, self.runTypes)
+        else:
+            self.runLink = None
+
     def getWaypoints(self,callback = None):
         return self.wptLink.getData(callback)
 
@@ -2104,6 +2297,16 @@ class Garmin:
 
     def putTracks(self,data,callback = None):
         return self.trkLink.putData(data,callback)
+
+    def getLaps(self, callback=None):
+        assert self.lapLink is not None, (
+            "No lap protocol specified for this GPS.")
+        return self.lapLink.getData(callback)
+
+    def getRuns(self, callback=None):
+        assert self.runLink is not None, (
+            "No run protocol supported for this GPS.")
+        return self.runLink.getData(callback)
 
     def getProxPoints(self, callback = None):
         return self.prxLink.getData(callback)

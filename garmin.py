@@ -2089,7 +2089,17 @@ class USBLink:
             raise LinkException("No Garmin device found!")
         self.handle = self.garmin_dev.open()
         self.handle.claimInterface(0)
-        self.startSession()
+
+        try:
+            self.startSession()
+        except usb.USBError, error:
+            if error.message == "No error":
+                # I'm not sure why we get a "No error" error something,
+                # but I suspect the device wasn't in a good state.
+                # Simply restarting the session once seems to solve it.
+                self.startSession()
+            else:
+                raise
 
     def startSession(self):
         """Start the USB session."""

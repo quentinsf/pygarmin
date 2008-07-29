@@ -136,7 +136,7 @@ The default command is to display the product information.
         try:
             self.device(self.args[0])
         except IOError:
-            sys.stderr.write(sys.exc_info()[1] + '\n')
+            sys.stderr.write(str(sys.exc_info()[1]) + '\n')
             sys.exit(1)
 
         if len(self.args) == 1:

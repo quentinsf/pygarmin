@@ -1,7 +1,7 @@
 PyGarmin
 ========
 
-![PyGarmin](raw/master/pygarmin.png)
+![PyGarmin](pygarmin.png)
 
 PyGarmin is a set of Python classes for interfacing with (mostly older) Garmin GPS equipment.
 

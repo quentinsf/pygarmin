@@ -33,6 +33,7 @@ import os, sys, time
 import newstruct as struct
 import math
 import logging
+import string
 
 
 # Logging setup. If you want to see debug messages, add a logging
@@ -1473,10 +1474,12 @@ class D202(RouteHdr):
     parts = ("ident",)
     fmt="<s"
 
-
-class D210(DataPoint):
-    parts = ("class", "subclass", "ident")
-    fmt = "<i 18s s"
+# I don't think this should be here. D210 is a RouteLink, and 
+# is defined below.
+#
+# class D210(DataPoint):
+#     parts = ("class", "subclass", "ident")
+#     fmt = "<i 18s s"
 
 
 # Route links  -----------------------------------------------
@@ -2341,9 +2344,6 @@ class Garmin:
 
     def getPvt(self,callback = None):
         return self.pvtLink.getData(callback)
-
-    def getLaps(self,callback = None):
-        return self.lapLink.getData(callback)
 
     def abortTransfer(self):
         return self.command.abortTransfer()

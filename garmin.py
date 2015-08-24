@@ -2002,7 +2002,7 @@ class SerialLink(P000):
         if ck != self.checksum(tp + ld + data):
             raise LinkException, "Invalid checksum"
         eom = self.read(2)
-        assert(eom==self.EOM, "Invalid EOM seen")
+        assert eom==self.EOM, "Invalid EOM seen"
         if sendAck:
             self.sendAcknowledge(ptype)
         return (ptype, data)

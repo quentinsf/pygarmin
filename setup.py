@@ -1,11 +1,16 @@
 #!/usr/bin/env python
 
-from distutils.core import setup
+from setuptools import setup
 
 setup(name="pygarmin",
-      version="0.7",
-      description="Python Interface to Garmin GPS Equipment",
-      author="Quentin Stafford-Fraser",
-      author_email="quentinsf@users.sourceforge.net",
-      url="http://pygarmin.sourceforge.net",
-      py_modules=["garmin", "newstruct", "datum", "refdatum"])
+      # packages = ['pygarmin'],
+      scripts = ['pygarmin', 'gnome-pygarmin'],
+      version = "0.8",
+      description = "A Python interface to older Garmin GPS equipment",
+      author = "Quentin Stafford-Fraser",
+      author_email = "quentin@pobox.com",
+      url = "http://github.com/quentinsf/pygarmin",
+      keywords = 'gps gis',
+      py_modules = ["garmin", "newstruct", "datum", "refdatum", "xmlwriter"],
+      install_requires = ['pyserial'],
+    )

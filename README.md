@@ -5,31 +5,27 @@ PyGarmin
 
 PyGarmin is a set of Python classes for interfacing with (mostly older) Garmin GPS equipment.
 
-PyGarmin lived on SourceForge and Launchpad before finding its final resting place here.
-
-
 Background
 ----------
 
-PyGarmin is a set of [Python] classes which implement
-the protocol used by [Garmin] GPS receivers to talk to
-each other and to other machines. It is based on the official
-[protocol specification]. The
-project was started by [Quentin Stafford-Fraser]
-but several others have helped to make it what it is today.
+PyGarmin is a set of [Python] classes which implement the protocol used by
+[Garmin] GPS receivers to talk to each other and to other machines. It is based
+on the official [protocol specification]. The project was started by [Quentin
+Stafford-Fraser] but several others have helped to make it what it is today.
 
 PyGarmin is not a complete application. Some simple applications are now
 included, one of which is called pygarmin, but it is primarily just a toolkit
-to help you write applications.  This is a project which is in
-development. No support. No guarantees. And so forth.
+to help you write applications.  This is a project which is in development.
+No support. No guarantees. And so forth.
 
-Having said all of that, this has been used to transfer information to and
-from several different Garmin receivers, mostly under Linux, though there is
-some Windows support now and people have used it on Mac OS X as well. If you
-use PyGarmin, it will probably be much quicker than writing your own software
-from scratch.
+Having said all of that, this has been used to transfer information to and from
+several different Garmin receivers, mostly under Linux, though there is some
+Windows support now and people have used it on Mac OS X as well. If you use
+PyGarmin, it will probably be much quicker than writing your own software from
+scratch.
 
-We suggest you read these docs first. The code looks quites scary if you don't know what's happening, though it's actually pretty simple.
+We suggest you read these docs first. The code looks quites scary if you don't
+know what's happening, though it's actually pretty simple.
 
 
 Basics
@@ -60,47 +56,48 @@ The class <tt>garmin.Garmin</tt> will connect to your GPS, read its product
 ID and software version, and then look up the appropriate classes in the
 table. It creates instances of the protocol classes and notes the datatype
 classes for each type of data used in the transmisisons. It also has some
-friendly methods like 'getWaypoints', which do what you would expect. What you
-get back when you call this is a list of objects, each of which is an instance
-of a class derived from garmin.Waypoint, but the precise type of the objects
-will depend on the GPS you're talking to.
+friendly methods like 'getWaypoints', which do what you would expect.
+What you get back when you call this is a list of objects, each of which is  an
+instance of a class derived from garmin.Waypoint, but the precise type of the
+objects will depend on the GPS you're talking to.
 
+Installation
+------------
+
+Pygarmin makes use of the PySerial package for talking to serial ports.  If you don't have it already you can do a standard
+
+    pip install -r requirements.txt
+
+to get it.
+
+You may also need to set suitable permissions on the serial port (e.g /dev/ttyS0) that you're planning to use.
 
 Example Code
 ------------
-OK. Here's a simple Python program.  You may need to set suitable permissions on the serial port (e.g /dev/ttyS0) before running it.
+OK. Here's a simple Python program. 
 
-<pre>
- #! /usr/local/bin/python
+     #! /usr/bin/env python
 
- import garmin
+     import garmin
 
- # Create a 'physical layer' connection using serial port
- phys = garmin.UnixSerialLink("/dev/ttyS0")
+     # Create a 'physical layer' connection using serial port
+     phys = garmin.UnixSerialLink("/dev/ttyS0")
 
- # Create a Garmin object using this connection
- gps = garmin.Garmin(phys)
+     # Create a Garmin object using this connection
+     gps = garmin.Garmin(phys)
 
+     # Get the waypoints from the GPS
+     # (This may take a little while)
+     waypoints = gps.getWaypoints()
 
- # Get the waypoints from the GPS
- # (This may take a little while)
- waypoints = gps.getWaypoints()
+     # Print the waypoints
+     for w in waypoints:
+         print w.ident,
+         lat = garmin.degrees(w.slat)
+         lon = garmin.degrees(w.slon)
+         print lat, lon, w.cmnt
 
- # Print the waypoints
- for w in waypoints:
-     print w.ident,
-     lat = garmin.degrees(w.slat)
-     lon = garmin.degrees(w.slon)
-     print lat, lon, w.cmnt
-</pre>
-
-Simple, eh? This should work for almost any model, because
-all waypoints will have an identity, a latitude &amp;
-longitude, and a comment field. The latitude and longitude
-are stored in 'semicircle' coordinates (basically degrees,
-but scaled to fill a signed long integer), and so the fields
-are called 'slat' and 'slon'. The function
-`garmin.degrees()` converts these to degrees.
+Simple, eh? This should work for almost any model, because all waypoints will have an identity, a latitude &amp; longitude, and a comment field. The latitude and longitude are stored in 'semicircle' coordinates (basically degrees, but scaled to fill a signed long integer), and so the fields are called 'slat' and 'slon'. The function `garmin.degrees()` converts these to degrees.
 
 
 More details
@@ -108,15 +105,13 @@ More details
 
 There are 3 levels of protocol documented:
 
-<pre>
- ................
-|  Application   | (highest level)
- ................
-|  Link layer    |
- ................
-| Physical layer | (lowest level)
- ................
-</pre>
+     ................
+    |  Application   | (highest level)
+     ................
+    |  Link layer    |
+     ................
+    | Physical layer | (lowest level)
+     ................
 
 The specification documents the various different versions of these under
 labels of Pxxx, Lxxx, Axxx etc, where xxx is a number, and this convention is
@@ -147,9 +142,7 @@ isn't covered, it should be easy to add. They're only a few lines each.
 Licence
 -------
 
-This software is released under the GNU General Public Licence v2. It
-comes with no warranties, explicit or implied, and you use it at your
-own risk.
+This software is released under the GNU General Public Licence v2. It comes with no warranties, explicit or implied, and you use it at your own risk.
 
 
 Acknowledgements
@@ -165,9 +158,9 @@ Thanks are due to, amongst others:
 
 and probably others, to whom our apologies!
 
-The logo was designed by Quentin Stafford-Fraser.
+The logo was designed by [Quentin Stafford-Fraser].
 
 [Python]: http://www.python.org
 [Garmin]: http://www.garmin.com
 [protocol specification]: http://www.garmin.com/support/commProtocol.html
-[Quentin Stafford-Fraser]: http://www.qandr.org/quentin
+[Quentin Stafford-Fraser]: http://quentinsf.com

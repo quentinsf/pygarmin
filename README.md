@@ -76,28 +76,48 @@ Example Code
 ------------
 OK. Here's a simple Python program. 
 
-     #! /usr/bin/env python
-
+     #!/usr/bin/env python
+     import logging
      import garmin
-
+     
+     c_handler = logging.StreamHandler()
+     garmin.log.addHandler(c_handler)
+     
+     # uncomment to enable debug logging
+     # garmin.log.setLevel(10)
+     
      # Create a 'physical layer' connection using serial port
-     phys = garmin.UnixSerialLink("/dev/ttyS0")
-
+     phys = garmin.SerialLink("/dev/ttyUSB0")
+     
      # Create a Garmin object using this connection
      gps = garmin.Garmin(phys)
-
+     
      # Get the waypoints from the GPS
      # (This may take a little while)
      waypoints = gps.getWaypoints()
-
+     
+     # Get the tracks from the GPS
+     # (This may take a little while)
+     tracks = gps.getTracks()
+     
      # Print the waypoints
+     print('# Waypoints:')
      for w in waypoints:
-         print w.ident,
          lat = garmin.degrees(w.slat)
          lon = garmin.degrees(w.slon)
-         print lat, lon, w.cmnt
+         print(w.ident, lat, lon, w.cmnt)
+     
+     # Print the tracks
+     print('\n\n# Tracks:')
+     for t in tracks:
+         print(t)
+     
+     # Put a new waypoint
+     print('Storing a new waypoint..')
+     new_wpt = {'ident': 'CLUB91', 'cmnt': 'DRINKING', 'slat': 606532864, 'slon': 57654672, 'smbl': 13}
+     gps.putWaypoints([new_wpt])
 
-Simple, eh? This should work for almost any model, because all waypoints will have an identity, a latitude &amp; longitude, and a comment field. The latitude and longitude are stored in 'semicircle' coordinates (basically degrees, but scaled to fill a signed long integer), and so the fields are called 'slat' and 'slon'. The function `garmin.degrees()` converts these to degrees.
+This should work for almost any model, because all waypoints will have an identity, a latitude &amp; longitude, and a comment field. The latitude and longitude are stored in 'semicircle' coordinates (basically degrees, but scaled to fill a signed long integer), and so the fields are called 'slat' and 'slon'. The function `garmin.degrees()` converts these to degrees.
 
 
 More details

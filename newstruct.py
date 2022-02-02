@@ -18,9 +18,6 @@
 from struct import *
 import struct
 
-import string
-_string = string
-del string
 
 import re
 
@@ -32,12 +29,17 @@ def pack(fmt, *args):
     fmt = [ endian ]
     args = list(args)
     for i in range(len(tokens)):
+        if isinstance(args[i], str): args[i] = args[i].encode()
         if tokens[i][1] == "s" and tokens[i][0] == "":
-            args[i] = args[i] + "\000"
+            if isinstance(args[i], str):
+                args[i] = args[i].encode()
+            if isinstance(args[i], dict):
+                args[i] = str(args[i]).encode()
+            args[i] = args[i] + b"\000"
             tokens[i][0] = str(len(args[i]))
-        fmt.append(_string.join(tokens[i], ''))
-    args.insert(0, _string.join(fmt))
-    return apply(struct.pack, tuple(args))
+        fmt.append(''.join(tokens[i]))
+    args.insert(0, ''.join(fmt))
+    return struct.pack(*args)
 
 def _parse(fmt):
     if START.match(fmt) is not None:
@@ -61,18 +63,18 @@ def unpack(fmt, string):
     for i in range(len(tokens)):
         if tokens[i][1] == "s" and tokens[i][0] == "":
             if len(buffer) > 1:
-                format = _string.join(buffer)
+                format = ''.join(buffer)
                 size = struct.calcsize(format)
                 unpacked = unpacked + list(struct.unpack(format, string[:size]))
                 string = string[size:]
                 buffer = [ endian ]
-            index = _string.find(string, "\000")
+            index = string.find(b'\x00')
             unpacked.append(string[:index])
             string = string[index+1:]
         else:
-            buffer.append(_string.join(tokens[i], ""))
+            buffer.append(''.join(tokens[i]))
     if len(buffer) > 1:
-        format = _string.join(buffer)
+        format = ''.join(buffer)
         size = struct.calcsize(format)
         unpacked = unpacked + list(struct.unpack(format, string[:size]))
     return tuple(unpacked)

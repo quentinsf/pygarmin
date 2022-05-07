@@ -36,7 +36,6 @@ from struct import pack
 import newstruct as struct
 import math
 import logging
-import string
 
 
 # Logging setup. If you want to see debug messages, add a logging

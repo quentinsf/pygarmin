@@ -29,7 +29,9 @@
 
 """
 
-import os, sys, time
+import os
+import sys
+import time
 from struct import pack
 import newstruct as struct
 import math
@@ -176,12 +178,24 @@ class L001(L000):
     Pid_Pvt_Data = 51
     Pid_Rte_Link_Data = 98
     Pid_Trk_Hdr = 99
-    Pid_FlightBook_Record = 134 # packet with FlightBook data
-    Pid_Lap = 149 # part of Forerunner data
+    Pid_FlightBook_Record = 134  # packet with FlightBook data
+    Pid_Lap = 149  # part of Forerunner data
     Pid_Wpt_Cat = 152
     Pid_Run = 990
+    Pid_Workout = 991
+    Pid_Workout_Occurrence = 992
+    Pid_Fitness_User_Profile = 993
+    Pid_Workout_Limits = 994
+    Pid_Course = 1061
+    Pid_Course_Lap = 1062
+    Pid_Course_Point = 1063
+    Pid_Course_Trk_Hdr = 1064
+    Pid_Course_Trk_Data = 1065
+    Pid_Course_Limits = 1066
+    Pid_External_Time_Sync_Data = 6724
 
 # L002 builds on L000
+
 
 class L002(L000):
     """Link Protocol 2."""
@@ -203,6 +217,7 @@ class L002(L000):
 # A000 and A001 are used to find out what is on the other end of the
 # wire, and hence which other protocols we can use.
 
+
 class A000:
     """Product data protocol."""
 
@@ -214,17 +229,17 @@ class A000:
         log.debug('getproductdata: %s' % self.link.Pid_Product_Rqst)
         self.link.sendPacket(self.link.Pid_Product_Rqst, b"")
         data = self.link.expectPacket(self.link.Pid_Product_Data)
-        (prod_id, soft_ver)   = struct.unpack(fmt, data[:4])
+        (prod_id, soft_ver) = struct.unpack(fmt, data[:4])
         prod_descs = data[4:-1].split(b"\0")
 
-        return (prod_id, soft_ver/100.0, prod_descs)
+        return (prod_id, soft_ver / 100.0, prod_descs)
 
 
 class A001:
     """Protocol capabilities protocol."""
 
     def __init__(self, linkLayer):
-        self.link=linkLayer
+        self.link = linkLayer
 
     def getProtocols(self):
         log.log(VERBOSE, "Try reading protocols using PCP")
@@ -249,8 +264,7 @@ class A001:
             for search_protocol in search_protocols:
                 vrange = search_protocol[0]
 
-                if ((vrange == None) or
-                    ((soft_ver >= vrange[0]) and (soft_ver < vrange[1]))):
+                if vrange is None or (soft_ver >= vrange[0] and soft_ver < vrange[1]):
                     break
 
         except:
@@ -282,7 +296,7 @@ class A001:
                 protos["command"] = [eval(x)]
             elif x == "A100":
                 known = True
-                ap_prot = "waypoint" # Application Protocol
+                ap_prot = "waypoint"  # Application Protocol
                 protos[ap_prot] = [eval(x)]
             elif x in ["A200", "A201"]:
                 known = True
@@ -561,7 +575,8 @@ class A200(MultiTransferProtocol):
                 header[head] = route[0][head]
 
             # Give a routenr
-            if 'nmbr' not in header: header['nmbr'] = routenr
+            if 'nmbr' not in header:
+                header['nmbr'] = routenr
 
             # Check route names
             # if no name, give it a name
@@ -608,7 +623,8 @@ class A201(MultiTransferProtocol):
                 header[head] = route[0][head]
 
             # Give a routenr
-            if 'nmbr' not in header: header['nmbr'] = routenr
+            if 'nmbr' not in header:
+                header['nmbr'] = routenr
 
             headerInstance = self.datatypes[0]()
 
@@ -664,7 +680,7 @@ class A301(MultiTransferProtocol):
             self, callback, self.cmdproto.Cmnd_Transfer_Trk,
             self.link.Pid_Trk_Hdr, self.link.Pid_Trk_Data)
 
-    def putData (self, data, callback):
+    def putData(self, data, callback):
         sendData = []
         header = {}
 
@@ -827,7 +843,6 @@ class A902:
     """
 
 
-
 class A903:
     """A903 implementation.
 
@@ -905,7 +920,7 @@ class DataPoint:
                 self.__dict__[self.parts[i]] = bits[i]
         except Exception as e:
             print(e)
-            print("Format: <" + self.fmt   + ">")
+            print("Format: <" + self.fmt + ">")
             print("Parts:  <" + ", ".join(self.parts) + ">")
             print("Input:  <" + "><".join(bytes) + ">")
             raise
@@ -918,15 +933,15 @@ class DataPoint:
 # coordinates. Here's the conversion:
 
 def degrees(semi):
-    return semi * 180.0 / (1<<31)
+    return semi * 180.0 / (1 << 31)
 
 
 def semi(deg):
-    return int(deg * ((1<<31) / 180))
+    return int(deg * ((1 << 31) / 180))
 
 
 def radian(semi):
-    return semi * math.pi / (1<<31)
+    return semi * math.pi / (1 << 31)
 
 
 # Distance between two waypoints (in metres)
@@ -941,10 +956,11 @@ def distance(wp1, wp2):
     rlon2 = radian(wp2.slon)
     dlon = rlon2 - rlon1
     dlat = rlat2 - rlat1
-    a =  (
-        math.pow(math.sin(dlat/2), 2) +
-        math.cos(rlat1)*math.cos(rlat2)*math.pow(math.sin(dlon/2), 2))
-    c = 2*math.atan2(math.sqrt(a), math.sqrt(1-a))
+    a = (math.pow(math.sin(dlat/2), 2)
+         + math.cos(rlat1)
+         * math.cos(rlat2)
+         * math.pow(math.sin(dlon/2), 2))
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
     return R*c
 
 
@@ -977,7 +993,7 @@ class Waypoint(DataPoint):
             'comment': self.cmnt,
             'latitude': self.slat,
             'longitude': self.slon,
-            }
+        }
         return self.data
 
 
@@ -1309,10 +1325,10 @@ class D108(Waypoint):
 
     def __str__(self):
         return "%s (%3.5f, %3.5f, %3f) '%s' class %d symbl %d" % (
-           self.ident,
-           degrees(self.slat), degrees(self.slon),
-           self.alt, self.cmnt.strip(),
-           self.wpt_class, self.smbl)
+            self.ident,
+            degrees(self.slat), degrees(self.slon),
+            self.alt, self.cmnt.strip(),
+            self.wpt_class, self.smbl)
 
 
 class D109(Waypoint):
@@ -1359,10 +1375,10 @@ class D109(Waypoint):
 
     def __str__(self):
         return "%s (%3.5f, %3.5f, %3f) '%s' class %d symbl %d" % (
-           self.ident,
-           degrees(self.slat), degrees(self.slon),
-           self.alt, self.cmnt.strip(),
-           self.wpt_class, self.smbl)
+            self.ident,
+            degrees(self.slat), degrees(self.slon),
+            self.alt, self.cmnt.strip(),
+            self.wpt_class, self.smbl)
 
 
 class D110(Waypoint):
@@ -1469,6 +1485,7 @@ class D200(RouteHdr):
     parts = ("route_num",)
     fmt = "<b"
 
+
 class D201(RouteHdr):
 
     parts = ("route_num", "cmnt")
@@ -1479,9 +1496,9 @@ class D201(RouteHdr):
 class D202(RouteHdr):
 
     parts = ("ident",)
-    fmt="<s"
+    fmt = "<s"
 
-# I don't think this should be here. D210 is a RouteLink, and 
+# I don't think this should be here. D210 is a RouteLink, and
 # is defined below.
 #
 # class D210(DataPoint):
@@ -1508,7 +1525,7 @@ class TrackPoint(DataPoint):
 
     slat = 0
     slon = 0
-    time = 0 # secs since midnight 31/12/89?
+    time = 0  # secs since midnight 31/12/89?
 
     def __repr__(self):
         return "<Trackpoint (%3.5f, %3.5f) %s (at %i)>" % (
@@ -1560,6 +1577,7 @@ class TrackHdr(DataPoint):
     def __repr__(self):
         return "<TrackHdr %s (at %i)>" % (self.trk_ident,
                                           id(self))
+
 
 class D310(TrackHdr):
 
@@ -1647,8 +1665,8 @@ class TimePoint(DataPoint):
 
     # Not sure what the last four bytes are. Not in docs.
     # hmm... eTrex just sends 8 bytes, no trailing 4 bytes
-    parts = ("month", "day", "year", "hour", "min", "sec") #, "unknown")
-    fmt = "<b b H h b b" #L"
+    parts = ("month", "day", "year", "hour", "min", "sec")  # , "unknown")
+    fmt = "<b b H h b b"  # L"
     month = 0         # month (1-12)
     day = 0           # day (1-32)
     year = 0          # year
@@ -1658,8 +1676,8 @@ class TimePoint(DataPoint):
 
     def __str__(self):
         return "%d-%.2d-%.2d %.2d:%.2d:%.2d UTC" % (
-           self.year, self.month, self.day,
-           self.hour, self.min, self.sec)
+            self.year, self.month, self.day,
+            self.hour, self.min, self.sec)
 
 
 class D600(TimePoint):
@@ -1705,7 +1723,7 @@ class D800(DataPoint):
 
     def __str__(self):
         return "tow: %g rlat: %g rlon: %g east: %g north %g" \
-        % (self.tow, self.rlat, self.rlon, self.east, self.north)
+            % (self.tow, self.rlat, self.rlon, self.east, self.north)
 
 
 class D906(DataPoint):
@@ -1792,80 +1810,80 @@ class D1009(DataPoint):
 # mapping in either direction!
 
 ModelIDs = (
-   (52, "GNC 250"),
-   (64, "GNC 250 XL"),
-   (33, "GNC 300"),
-   (98, "GNC 300 XL"),
-   (77, "GPS 12"),
-   (87, "GPS 12"),
-   (96, "GPS 12"),
-   (77, "GPS 12 XL"),
-   (96, "GPS 12 XL"),
-   (106, "GPS 12 XL Chinese"),
-   (105, "GPS 12 XL Japanese"),
-   (47, "GPS 120"),
-   (55, "GPS 120 Chinese"),
-   (74, "GPS 120 XL"),
-   (61, "GPS 125 Sounder"),
-   (95, "GPS 126"),
-   (100, "GPS 126 Chinese"),
-   (95, "GPS 128"),
-   (100, "GPS 128 Chinese"),
-   (20, "GPS 150"),
-   (64, "GPS 150 XL"),
-   (34, "GPS 155"),
-   (98, "GPS 155 XL"),
-   (34, "GPS 165"),
-   (41, "GPS 38"),
-   (56, "GPS 38 Chinese"),
-   (62, "GPS 38 Japanese"),
-   (31, "GPS 40"),
-   (41, "GPS 40"),
-   (56, "GPS 40 Chinese"),
-   (62, "GPS 40 Japanese"),
-   (31, "GPS 45"),
-   (41, "GPS 45"),
-   (56, "GPS 45 Chinese"),
-   (41, "GPS 45 XL"),
-   (96, "GPS 48"),
-   (7,  "GPS 50"),
-   (14, "GPS 55"),
-   (15, "GPS 55 AVD"),
-   (18, "GPS 65"),
-   (13, "GPS 75"),
-   (23, "GPS 75"),
-   (42, "GPS 75"),
-   (25, "GPS 85"),
-   (39, "GPS 89"),
-   (45, "GPS 90"),
-   (112, "GPS 92"),
-   (24, "GPS 95"),
-   (35, "GPS 95"),
-   (22, "GPS 95 AVD"),
-   (36, "GPS 95 AVD"),
-   (36, "GPS 95 XL"),
-   (59, "GPS II"),
-   (73, "GPS II Plus"),
-   (97, "GPS II Plus"),
-   (72, "GPS III"),
-   (71, "GPS III Pilot"),
-   (291, "GPSMAP 60cs"),
-   (50, "GPSCOM 170"),
-   (53, "GPSCOM 190"),
-   (49, "GPSMAP 130"),
-   (76, "GPSMAP 130 Chinese"),
-   (49, "GPSMAP 135 Sounder"),
-   (49, "GPSMAP 175"),
-   (48, "GPSMAP 195"),
-   (29, "GPSMAP 205"),
-   (44, "GPSMAP 205"),
-   (29, "GPSMAP 210"),
-   (88, "GPSMAP 215"),
-   (29, "GPSMAP 220"),
-   (88, "GPSMAP 225"),
-   (49, "GPSMAP 230"),
-   (76, "GPSMAP 230 Chinese"),
-   (49, "GPSMAP 235 Sounder")
+    (52,  "GNC 250"),
+    (64,  "GNC 250 XL"),
+    (33,  "GNC 300"),
+    (98,  "GNC 300 XL"),
+    (77,  "GPS 12"),
+    (87,  "GPS 12"),
+    (96,  "GPS 12"),
+    (77,  "GPS 12 XL"),
+    (96,  "GPS 12 XL"),
+    (106, "GPS 12 XL Chinese"),
+    (105, "GPS 12 XL Japanese"),
+    (47,  "GPS 120"),
+    (55,  "GPS 120 Chinese"),
+    (74,  "GPS 120 XL"),
+    (61,  "GPS 125 Sounder"),
+    (95,  "GPS 126"),
+    (100, "GPS 126 Chinese"),
+    (95,  "GPS 128"),
+    (100, "GPS 128 Chinese"),
+    (20,  "GPS 150"),
+    (64,  "GPS 150 XL"),
+    (34,  "GPS 155"),
+    (98,  "GPS 155 XL"),
+    (34,  "GPS 165"),
+    (41,  "GPS 38"),
+    (56,  "GPS 38 Chinese"),
+    (62,  "GPS 38 Japanese"),
+    (31,  "GPS 40"),
+    (41,  "GPS 40"),
+    (56,  "GPS 40 Chinese"),
+    (62,  "GPS 40 Japanese"),
+    (31,  "GPS 45"),
+    (41,  "GPS 45"),
+    (56,  "GPS 45 Chinese"),
+    (41,  "GPS 45 XL"),
+    (96,  "GPS 48"),
+    (7,   "GPS 50"),
+    (14,  "GPS 55"),
+    (15,  "GPS 55 AVD"),
+    (18,  "GPS 65"),
+    (13,  "GPS 75"),
+    (23,  "GPS 75"),
+    (42,  "GPS 75"),
+    (25,  "GPS 85"),
+    (39,  "GPS 89"),
+    (45,  "GPS 90"),
+    (112, "GPS 92"),
+    (24,  "GPS 95"),
+    (35,  "GPS 95"),
+    (22,  "GPS 95 AVD"),
+    (36,  "GPS 95 AVD"),
+    (36,  "GPS 95 XL"),
+    (59,  "GPS II"),
+    (73,  "GPS II Plus"),
+    (97,  "GPS II Plus"),
+    (72,  "GPS III"),
+    (71,  "GPS III Pilot"),
+    (291, "GPSMAP 60cs"),
+    (50,  "GPSCOM 170"),
+    (53,  "GPSCOM 190"),
+    (49,  "GPSMAP 130"),
+    (76,  "GPSMAP 130 Chinese"),
+    (49,  "GPSMAP 135 Sounder"),
+    (49,  "GPSMAP 175"),
+    (48,  "GPSMAP 195"),
+    (29,  "GPSMAP 205"),
+    (44,  "GPSMAP 205"),
+    (29,  "GPSMAP 210"),
+    (88,  "GPSMAP 215"),
+    (29,  "GPSMAP 220"),
+    (88,  "GPSMAP 225"),
+    (49,  "GPSMAP 230"),
+    (76,  "GPSMAP 230 Chinese"),
+    (49,  "GPSMAP 235 Sounder"),
 )
 
 
@@ -1883,63 +1901,63 @@ ModelIDs = (
 MaxVer = 999.99
 
 ModelProtocols = {
-#                        Use a wide window for best viewing!
-#
-# ID    minver maxver    Link     Cmnd   Wpt,            Rte,                    Trk,             Prx,           Alm
-7:   ( (None,            "L001", "A010", "A100", "D100", "A200", "D200", "D100", None,           None,           "A500", "D500" ), ),
-13:  ( (None,            "L001", "A010", "A100", "D100", "A200", "D200", "D100", "A300", "D300", "A400", "D400", "A500", "D500" ), ),
-14:  ( (None,            "L001", "A010", "A100", "D100", "A200", "D200", "D100", None,           "A400", "D400", "A500", "D500" ), ),
-15:  ( (None,            "L001", "A010", "A100", "D151", "A200", "D200", "D151", None,           "A400", "D151", "A500", "D500" ), ),
-18:  ( (None,            "L001", "A010", "A100", "D100", "A200", "D200", "D100", "A300", "D300", "A400", "D400", "A500", "D500" ), ),
-20:  ( (None,            "L002", "A011", "A100", "D150", "A200", "D201", "D150", None,           "A400", "D450", "A500", "D550" ), ),
-22:  ( (None,            "L001", "A010", "A100", "D152", "A200", "D200", "D152", "A300", "D300", "A400", "D152", "A500", "D500" ), ),
-23:  ( (None,            "L001", "A010", "A100", "D100", "A200", "D200", "D100", "A300", "D300", "A400", "D400", "A500", "D500" ), ),
-24:  ( (None,            "L001", "A010", "A100", "D100", "A200", "D200", "D100", "A300", "D300", "A400", "D400", "A500", "D500" ), ),
-25:  ( (None,            "L001", "A010", "A100", "D100", "A200", "D200", "D100", "A300", "D300", "A400", "D400", "A500", "D500" ), ),
-29:  ( ((0.00, 4.00),    "L001", "A010", "A100", "D101", "A200", "D201", "D101", "A300", "D300", "A400", "D101", "A500", "D500" ),
-       ((4.00, MaxVer),  "L001", "A010", "A100", "D102", "A200", "D201", "D102", "A300", "D300", "A400", "D102", "A500", "D500" ), ),
-31:  ( (None,            "L001", "A010", "A100", "D100", "A200", "D201", "D100", "A300", "D300", None    ,       "A500", "D500" ), ),
-33:  ( (None,            "L002", "A011", "A100", "D150", "A200", "D201", "D150", None,           "A400", "D450", "A500", "D550" ), ),
-34:  ( (None,            "L002", "A011", "A100", "D150", "A200", "D201", "D150", None,           "A400", "D450", "A500", "D550" ), ),
-35:  ( (None,            "L001", "A010", "A100", "D100", "A200", "D200", "D100", "A300", "D300", "A400", "D400", "A500", "D500" ), ),
-36:  ( ((0.00, 3.00),    "L001", "A010", "A100", "D152", "A200", "D200", "D152", "A300", "D300", "A400", "D152", "A500", "D500" ),
-       ((3.00, MaxVer),  "L001", "A010", "A100", "D152", "A200", "D200", "D152", "A300", "D300", None,           "A500", "D500" ), ),
-39:  ( (None,            "L001", "A010", "A100", "D151", "A200", "D201", "D151", "A300", "D300", None,           "A500", "D500" ), ),
-41:  ( (None,            "L001", "A010", "A100", "D100", "A200", "D201", "D100", "A300", "D300", None,           "A500", "D500" ), ),
-42:  ( (None,            "L001", "A010", "A100", "D100", "A200", "D200", "D100", "A300", "D300", "A400", "D400", "A500", "D500" ), ),
-44:  ( (None,            "L001", "A010", "A100", "D101", "A200", "D201", "D101", "A300", "D300", "A400", "D101", "A500", "D500" ), ),
-45:  ( (None,            "L001", "A010", "A100", "D152", "A200", "D201", "D152", "A300", "D300", None,           "A500", "D500" ), ),
-47:  ( (None,            "L001", "A010", "A100", "D100", "A200", "D201", "D100", "A300", "D300", None,           "A500", "D500" ), ),
-48:  ( (None,            "L001", "A010", "A100", "D154", "A200", "D201", "D154", "A300", "D300", None,           "A500", "D501" ), ),
-49:  ( (None,            "L001", "A010", "A100", "D102", "A200", "D201", "D102", "A300", "D300", "A400", "D102", "A500", "D501" ), ),
-50:  ( (None,            "L001", "A010", "A100", "D152", "A200", "D201", "D152", "A300", "D300", None,           "A500", "D501" ), ),
-52:  ( (None,            "L002", "A011", "A100", "D150", "A200", "D201", "D150", None,           "A400", "D450", "A500", "D550" ), ),
-53:  ( (None,            "L001", "A010", "A100", "D152", "A200", "D201", "D152", "A300", "D300", None,           "A500", "D501" ), ),
-55:  ( (None,            "L001", "A010", "A100", "D100", "A200", "D201", "D100", "A300", "D300", None,           "A500", "D500" ), ),
-56:  ( (None,            "L001", "A010", "A100", "D100", "A200", "D201", "D100", "A300", "D300", None,           "A500", "D500" ), ),
-59:  ( (None,            "L001", "A010", "A100", "D100", "A200", "D201", "D100", "A300", "D300", None,           "A500", "D500" ), ),
-61:  ( (None,            "L001", "A010", "A100", "D100", "A200", "D201", "D100", "A300", "D300", None,           "A500", "D500" ), ),
-62:  ( (None,            "L001", "A010", "A100", "D100", "A200", "D201", "D100", "A300", "D300", None,           "A500", "D500" ), ),
-64:  ( (None,            "L002", "A011", "A100", "D150", "A200", "D201", "D150", None,           "A400", "D450", "A500", "D551" ), ),
-71:  ( (None,            "L001", "A010", "A100", "D155", "A200", "D201", "D155", "A300", "D300", None,           "A500", "D501" ), ),
-72:  ( (None,            "L001", "A010", "A100", "D104", "A200", "D201", "D104", "A300", "D300", None,           "A500", "D501" ), ),
-73:  ( (None,            "L001", "A010", "A100", "D103", "A200", "D201", "D103", "A300", "D300", None,           "A500", "D501" ), ),
-74:  ( (None,            "L001", "A010", "A100", "D100", "A200", "D201", "D100", "A300", "D300", None,           "A500", "D500" ), ),
-76:  ( (None,            "L001", "A010", "A100", "D102", "A200", "D201", "D102", "A300", "D300", "A400", "D102", "A500", "D501" ), ),
-77:  ( ((0.00, 3.01),    "L001", "A010", "A100", "D100", "A200", "D201", "D100", "A300", "D300", "A400", "D400", "A500", "D501" ),
-       ((3.01, 3.50),    "L001", "A010", "A100", "D103", "A200", "D201", "D103", "A300", "D300", "A400", "D403", "A500", "D501" ),
-       ((3.50, 3.61),    "L001", "A010", "A100", "D103", "A200", "D201", "D103", "A300", "D300", None,           "A500", "D501" ),
-       ((3.61, MaxVer),  "L001", "A010", "A100", "D103", "A200", "D201", "D103", "A300", "D300", "A400", "D403", "A500", "D501" ), ),
-87:  ( (None,            "L001", "A010", "A100", "D103", "A200", "D201", "D103", "A300", "D300", "A400", "D403", "A500", "D501" ), ),
-88:  ( (None,            "L001", "A010", "A100", "D102", "A200", "D201", "D102", "A300", "D300", "A400", "D102", "A500", "D501" ), ),
-95:  ( (None,            "L001", "A010", "A100", "D103", "A200", "D201", "D103", "A300", "D300", "A400", "D403", "A500", "D501" ), ),
-96:  ( (None,            "L001", "A010", "A100", "D103", "A200", "D201", "D103", "A300", "D300", "A400", "D403", "A500", "D501" ), ),
-97:  ( (None,            "L001", "A010", "A100", "D103", "A200", "D201", "D103", "A300", "D300", None,           "A500", "D501" ), ),
-98:  ( (None,            "L002", "A011", "A100", "D150", "A200", "D201", "D150", None,           "A400", "D450", "A500", "D551" ), ),
-100: ( (None,            "L001", "A010", "A100", "D103", "A200", "D201", "D103", "A300", "D300", "A400", "D403", "A500", "D501" ), ),
-105: ( (None,            "L001", "A010", "A100", "D103", "A200", "D201", "D103", "A300", "D300", "A400", "D403", "A500", "D501" ), ),
-106: ( (None,            "L001", "A010", "A100", "D103", "A200", "D201", "D103", "A300", "D300", "A400", "D403", "A500", "D501" ), ),
-112: ( (None,            "L001", "A010", "A100", "D152", "A200", "D201", "D152", "A300", "D300", None,           "A500", "D501" ), )
+    # Use a wide window for best viewing!
+    #
+    # ID   minver maxver    Link    Cmnd    Wpt,            Rte,                    Trk,            Prx,            Alm
+    7:   ((None,            "L001", "A010", "A100", "D100", "A200", "D200", "D100", None,           None,           "A500", "D500"),),
+    13:  ((None,            "L001", "A010", "A100", "D100", "A200", "D200", "D100", "A300", "D300", "A400", "D400", "A500", "D500"),),
+    14:  ((None,            "L001", "A010", "A100", "D100", "A200", "D200", "D100", None,           "A400", "D400", "A500", "D500"),),
+    15:  ((None,            "L001", "A010", "A100", "D151", "A200", "D200", "D151", None,           "A400", "D151", "A500", "D500"),),
+    18:  ((None,            "L001", "A010", "A100", "D100", "A200", "D200", "D100", "A300", "D300", "A400", "D400", "A500", "D500"),),
+    20:  ((None,            "L002", "A011", "A100", "D150", "A200", "D201", "D150", None,           "A400", "D450", "A500", "D550"),),
+    22:  ((None,            "L001", "A010", "A100", "D152", "A200", "D200", "D152", "A300", "D300", "A400", "D152", "A500", "D500"),),
+    23:  ((None,            "L001", "A010", "A100", "D100", "A200", "D200", "D100", "A300", "D300", "A400", "D400", "A500", "D500"),),
+    24:  ((None,            "L001", "A010", "A100", "D100", "A200", "D200", "D100", "A300", "D300", "A400", "D400", "A500", "D500"),),
+    25:  ((None,            "L001", "A010", "A100", "D100", "A200", "D200", "D100", "A300", "D300", "A400", "D400", "A500", "D500"),),
+    29:  (((0.00, 4.00),    "L001", "A010", "A100", "D101", "A200", "D201", "D101", "A300", "D300", "A400", "D101", "A500", "D500"),
+          ((4.00, MaxVer),  "L001", "A010", "A100", "D102", "A200", "D201", "D102", "A300", "D300", "A400", "D102", "A500", "D500"),),
+    31:  ((None,            "L001", "A010", "A100", "D100", "A200", "D201", "D100", "A300", "D300", None,           "A500", "D500"),),
+    33:  ((None,            "L002", "A011", "A100", "D150", "A200", "D201", "D150", None,           "A400", "D450", "A500", "D550"),),
+    34:  ((None,            "L002", "A011", "A100", "D150", "A200", "D201", "D150", None,           "A400", "D450", "A500", "D550"),),
+    35:  ((None,            "L001", "A010", "A100", "D100", "A200", "D200", "D100", "A300", "D300", "A400", "D400", "A500", "D500"),),
+    36:  (((0.00, 3.00),    "L001", "A010", "A100", "D152", "A200", "D200", "D152", "A300", "D300", "A400", "D152", "A500", "D500"),
+          ((3.00, MaxVer),  "L001", "A010", "A100", "D152", "A200", "D200", "D152", "A300", "D300", None,           "A500", "D500"),),
+    39:  ((None,            "L001", "A010", "A100", "D151", "A200", "D201", "D151", "A300", "D300", None,           "A500", "D500"),),
+    41:  ((None,            "L001", "A010", "A100", "D100", "A200", "D201", "D100", "A300", "D300", None,           "A500", "D500"),),
+    42:  ((None,            "L001", "A010", "A100", "D100", "A200", "D200", "D100", "A300", "D300", "A400", "D400", "A500", "D500"),),
+    44:  ((None,            "L001", "A010", "A100", "D101", "A200", "D201", "D101", "A300", "D300", "A400", "D101", "A500", "D500"),),
+    45:  ((None,            "L001", "A010", "A100", "D152", "A200", "D201", "D152", "A300", "D300", None,           "A500", "D500"),),
+    47:  ((None,            "L001", "A010", "A100", "D100", "A200", "D201", "D100", "A300", "D300", None,           "A500", "D500"),),
+    48:  ((None,            "L001", "A010", "A100", "D154", "A200", "D201", "D154", "A300", "D300", None,           "A500", "D501"),),
+    49:  ((None,            "L001", "A010", "A100", "D102", "A200", "D201", "D102", "A300", "D300", "A400", "D102", "A500", "D501"),),
+    50:  ((None,            "L001", "A010", "A100", "D152", "A200", "D201", "D152", "A300", "D300", None,           "A500", "D501"),),
+    52:  ((None,            "L002", "A011", "A100", "D150", "A200", "D201", "D150", None,           "A400", "D450", "A500", "D550"),),
+    53:  ((None,            "L001", "A010", "A100", "D152", "A200", "D201", "D152", "A300", "D300", None,           "A500", "D501"),),
+    55:  ((None,            "L001", "A010", "A100", "D100", "A200", "D201", "D100", "A300", "D300", None,           "A500", "D500"),),
+    56:  ((None,            "L001", "A010", "A100", "D100", "A200", "D201", "D100", "A300", "D300", None,           "A500", "D500"),),
+    59:  ((None,            "L001", "A010", "A100", "D100", "A200", "D201", "D100", "A300", "D300", None,           "A500", "D500"),),
+    61:  ((None,            "L001", "A010", "A100", "D100", "A200", "D201", "D100", "A300", "D300", None,           "A500", "D500"),),
+    62:  ((None,            "L001", "A010", "A100", "D100", "A200", "D201", "D100", "A300", "D300", None,           "A500", "D500"),),
+    64:  ((None,            "L002", "A011", "A100", "D150", "A200", "D201", "D150", None,           "A400", "D450", "A500", "D551"),),
+    71:  ((None,            "L001", "A010", "A100", "D155", "A200", "D201", "D155", "A300", "D300", None,           "A500", "D501"),),
+    72:  ((None,            "L001", "A010", "A100", "D104", "A200", "D201", "D104", "A300", "D300", None,           "A500", "D501"),),
+    73:  ((None,            "L001", "A010", "A100", "D103", "A200", "D201", "D103", "A300", "D300", None,           "A500", "D501"),),
+    74:  ((None,            "L001", "A010", "A100", "D100", "A200", "D201", "D100", "A300", "D300", None,           "A500", "D500"),),
+    76:  ((None,            "L001", "A010", "A100", "D102", "A200", "D201", "D102", "A300", "D300", "A400", "D102", "A500", "D501"),),
+    77:  (((0.00, 3.01),    "L001", "A010", "A100", "D100", "A200", "D201", "D100", "A300", "D300", "A400", "D400", "A500", "D501"),
+          ((3.01, 3.50),    "L001", "A010", "A100", "D103", "A200", "D201", "D103", "A300", "D300", "A400", "D403", "A500", "D501"),
+          ((3.50, 3.61),    "L001", "A010", "A100", "D103", "A200", "D201", "D103", "A300", "D300", None,           "A500", "D501"),
+          ((3.61, MaxVer),  "L001", "A010", "A100", "D103", "A200", "D201", "D103", "A300", "D300", "A400", "D403", "A500", "D501"),),
+    87:  ((None,            "L001", "A010", "A100", "D103", "A200", "D201", "D103", "A300", "D300", "A400", "D403", "A500", "D501"),),
+    88:  ((None,            "L001", "A010", "A100", "D102", "A200", "D201", "D102", "A300", "D300", "A400", "D102", "A500", "D501"),),
+    95:  ((None,            "L001", "A010", "A100", "D103", "A200", "D201", "D103", "A300", "D300", "A400", "D403", "A500", "D501"),),
+    96:  ((None,            "L001", "A010", "A100", "D103", "A200", "D201", "D103", "A300", "D300", "A400", "D403", "A500", "D501"),),
+    97:  ((None,            "L001", "A010", "A100", "D103", "A200", "D201", "D103", "A300", "D300", None,           "A500", "D501"),),
+    98:  ((None,            "L002", "A011", "A100", "D150", "A200", "D201", "D150", None,           "A400", "D450", "A500", "D551"),),
+    100: ((None,            "L001", "A010", "A100", "D103", "A200", "D201", "D103", "A300", "D300", "A400", "D403", "A500", "D501"),),
+    105: ((None,            "L001", "A010", "A100", "D103", "A200", "D201", "D103", "A300", "D300", "A400", "D403", "A500", "D501"),),
+    106: ((None,            "L001", "A010", "A100", "D103", "A200", "D201", "D103", "A300", "D300", "A400", "D403", "A500", "D501"),),
+    112: ((None,            "L001", "A010", "A100", "D152", "A200", "D201", "D152", "A300", "D300", None,           "A500", "D501"),)
 }
 
 # ====================================================================
@@ -1955,13 +1973,13 @@ class SerialLink(P000):
     Pid_Nak_Byte = 21
 
     # DataLinkEscape etc
-    DLE                  = b"\x10"
-    ETX                  = b"\x03"
-    EOM                  = DLE + ETX
+    DLE = b"\x10"
+    ETX = b"\x03"
+    EOM = DLE + ETX
 
     unit_id = None
 
-    def __init__(self, device, timeout = 5):
+    def __init__(self, device, timeout=5):
         # Import serial here, so that you don't have to have that module
         # installed, if you're not using a serial link.
         import serial
@@ -1973,10 +1991,10 @@ class SerialLink(P000):
         pass
 
     def sendPacket(self, ptype, data, readAck=1):
-        " Send a message. By default this will also wait for the ack."
+        "Send a message. By default this will also wait for the ack."
         if isinstance(data, bytes):
             ld = pack('B', len(data))
-        else: # XXX assume 16-bit integer for now
+        else:  # XXX assume 16-bit integer for now
             log.debug('assuming 16-bit')
             ld = pack('B', 2)
             data = struct.pack("<h", data)
@@ -1985,8 +2003,8 @@ class SerialLink(P000):
         else:
             tp = ptype
         log.debug('data to checksum: (%s + %s + %s = %s' % (repr(tp), repr(ld), repr(data), repr(tp+ld+data)))
-        chk = self.checksum( tp + ld + data)
-        escline = self.escape( ld + data + chk)
+        chk = self.checksum(tp + ld + data)
+        escline = self.escape(ld + data + chk)
         byte_data = self.DLE + tp + escline + self.EOM
         log.debug('writing data: %s' % repr(byte_data))
         self.write(byte_data)
@@ -1994,7 +2012,7 @@ class SerialLink(P000):
             self.readAcknowledge(ptype)
 
     def readPacket(self, sendAck=1):
-        " Read a message. By default this will also send the ack."
+        "Read a message. By default this will also send the ack."
         dle = self.read(1)
         # Find the start of a message
         while dle != self.DLE:
@@ -2018,7 +2036,7 @@ class SerialLink(P000):
         if ck != self.checksum(tp + ld + data):
             raise LinkException("Invalid checksum")
         eom = self.read(2)
-        assert eom==self.EOM, "Invalid EOM seen"
+        assert eom == self.EOM, "Invalid EOM seen"
         if sendAck:
             self.sendAcknowledge(ptype)
 
@@ -2053,7 +2071,7 @@ class SerialLink(P000):
 
     def escape(self, data):
         "Escape any DLE characters"
-        return (self.DLE+self.DLE).join(data.split(self.DLE))
+        return (self.DLE + self.DLE).join(data.split(self.DLE))
 
     def read(self, n):
         """Read n bytes and return them.
@@ -2215,7 +2233,7 @@ class Garmin:
 
     def __init__(self, physicalLayer):
         self.unit_id = physicalLayer.unit_id
-        self.link = L000(physicalLayer)      # at least initially
+        self.link = L000(physicalLayer)  # at least initially
         product_data = A000(self.link).getProductData()
         (self.prod_id, self.soft_ver, self.prod_descs) = product_data
 
@@ -2294,7 +2312,7 @@ class Garmin:
 
         # self.pvtLink = A800(self.link, self.cmdProto, D800)
         if "pvt" in self.protos:
-            self.pvtLink  = self.protos["pvt"][0](
+            self.pvtLink = self.protos["pvt"][0](
                 self.link, self.cmdProto, self.protos["pvt"][1])
 
         # self lapLink = A906(self.link, self.cmdProto, D906)
@@ -2378,7 +2396,7 @@ def MyCallbackgetWaypoints(waypoint, recordnumber, totalWaypointsToGet, tp):
 
     print("---  waypoint ", " %s / %s " % (recordnumber, totalWaypointsToGet), "---")
 
-    print("str output --> ", waypoint) # or repr(waypoint)
+    print("str output --> ", waypoint)  # or repr(waypoint)
     print()
 
     if recordnumber != totalWaypointsToGet:
@@ -2403,7 +2421,7 @@ def MyCallbackputWaypoints(waypoint, recordnumber, totalWaypointsToSend, tp):
 
 def MyCallbackgetRoutes(point, recordnumber, totalpointsToGet, tp):
 
-    #print point.__class__
+    # print point.__class__
 
     if isinstance(point, (RouteHdr)):
         print("Route: ", point)
@@ -2478,40 +2496,40 @@ def MyCallbackgetAlmanac(satellite, recordnumber, totalPointsToGet, tp):
 def main():
 
     if os.name == 'nt':
-        #0 is com1, 1 is com2 etc
-        serialDevice =  0
+        # 0 is com1, 1 is com2 etc
+        serialDevice = 0
     else:
-        serialDevice =  "/dev/ttyUSB0"
+        serialDevice = "/dev/ttyUSB0"
 
         if sys.platform[:-1] == "freebsd":
-            serialDevice =  "/dev/cuaa0" # For FreeBsd
+            serialDevice = "/dev/cuaa0"  # For FreeBsd
 
     phys = SerialLink(serialDevice)
 
     gps = Garmin(phys)
 
-    print("GPS Product ID: %d Descriptions: %s Software version: %2.2f\n" % \
-                             (gps.prod_id, gps.prod_descs, gps.soft_ver))
+    print("GPS Product ID: %d Descriptions: %s Software version: %2.2f\n" %
+          (gps.prod_id, gps.prod_descs, gps.soft_ver))
 
     # Show gps information
 
     if 1:
         print(f'''
-GPS Product ID: {gps.prod_id}
-GPS version   : {gps.soft_ver}
-GPS           : {gps.prod_descs[0]}
-MapSource info: {gps.prod_descs[1:]}
+        GPS Product ID: {gps.prod_id}
+        GPS version   : {gps.soft_ver}
+        GPS           : {gps.prod_descs[0]}
+        MapSource info: {gps.prod_descs[1:]}
 
-Product protocols:
-------------------
-                ''')
+        Product protocols:
+        ------------------
+        ''')
 
         # Some code from pygarmin, small but smart
 
         for i in range(len(gps.protocols)):
             p = gps.protocols[i]
 
-            if  p[0] == 'D':
+            if p[0] == 'D':
                 print(p, end=' ')
             else:
                 if i == 0:
@@ -2531,7 +2549,7 @@ Product protocols:
             for i in range(len(gps.protocols_unknown)):
                 p = gps.protocols_unknown[i]
 
-                if  p[0] == 'D':
+                if p[0] == 'D':
                     print(p, end=' ')
                 else:
                     if i == 0:
@@ -2577,9 +2595,9 @@ Product protocols:
 
         data2 = {}
         data2['ident'] = "02TEST"
-        data2['cmnt'] ="A TEST POINT"
+        data2['cmnt'] = "A TEST POINT"
         data2['slat'] = 624447295
-        data2['slon']= -2529985
+        data2['slon'] = -2529985
 
         data3 = {'ident': "CLUB91", 'cmnt': "DRINKING", 'slat': 606532864, 'slon': 57654672, 'smbl': 13}
 
@@ -2592,7 +2610,6 @@ Product protocols:
 
         print()
         print("Are there 3 waypoints added to your gps ??")
-
 
     # Show Routes
 
@@ -2710,9 +2727,8 @@ Product protocols:
         print("If you leave the header empty, the computer will generate one for you (TRACK1, TRACK2,....)")
         print("It's possible to send track to the ACTIVE LOG.but you can't send time to tracks")
 
-
         header1 = {'ident': 'TEST TRACK'}
-        #header1 = {'ident':'ACTIVE LOG'}  # for sending track's to the ACTIVE LOG
+        # header1 = {'ident':'ACTIVE LOG'}  # for sending track's to the ACTIVE LOG
         data1_1 = {'slat': 608528384, 'slon': 46271488}
         data2_1 = {'slat': 608531200, 'slon': 46260224}
         data3_1 = {'slat': 608529664, 'slon': 46262272}
@@ -2736,7 +2752,7 @@ Product protocols:
         else:
             gps.putTracks([(header1, data1_1, data2_1, data3_1),
                            (header2, data1_2, data2_2, data3_2,
-                           data4_2, data5_2, data6_2)], MyCallbackputTracks)
+                            data4_2, data5_2, data6_2)], MyCallbackputTracks)
 
             print("Two track logs added?")
 
@@ -2755,8 +2771,8 @@ Product protocols:
         print("Sending 2 proximity waypoints:")
         print("------------------------------")
 
-        data1 = {'ident':'WATER', 'slat': 608688816, 'slon': 45891108, 'dist':300}
-        data2 = {'ident':'AERPRT', 'slat': 607132209, 'slon': 53673984, 'dist':400}
+        data1 = {'ident': 'WATER', 'slat': 608688816, 'slon': 45891108, 'dist': 300}
+        data2 = {'ident': 'AERPRT', 'slat': 607132209, 'slon': 53673984, 'dist': 400}
         gps.putProxPoints([data1, data2])
 
         print("Check your waypoint and proximity waypoint menu on your gps!")

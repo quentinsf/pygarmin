@@ -32,8 +32,8 @@
 import os
 import sys
 import time
-from struct import pack
-import newstruct as struct
+import struct
+import newstruct
 import math
 import logging
 
@@ -94,7 +94,7 @@ class P000:
 
 def hexdump(data):
     if isinstance(data, int):
-        data = struct.pack('<H', data)
+        data = newstruct.pack('<H', data)
     return ''.join(["%02x" % x for x in data])
 
 
@@ -246,7 +246,7 @@ class A001:
         data = self.link.expectPacket(self.link.Pid_Protocol_Array)
         num = int(len(data)/3)
         fmt = "<" + num * "ch"
-        tup = struct.unpack(fmt, data)
+        tup = newstruct.unpack(fmt, data)
         self.protocols = []
 
         for i in range(0, 2*num, 2):
@@ -444,7 +444,7 @@ class SingleTransferProtocol(TransferProtocol):
     def getData(self, callback, cmd, pid):
         self.link.sendPacket(self.link.Pid_Command_Data, cmd)
         data = self.link.expectPacket(self.link.Pid_Records)
-        (numrecords,) = struct.unpack("<h", data)
+        (numrecords,) = newstruct.unpack("<h", data)
 
         log.log(
             VERBOSE, "%s: Expecting %d records" % (self.__doc__, numrecords))
@@ -474,7 +474,7 @@ class MultiTransferProtocol(TransferProtocol):
         self.link.sendPacket(self.link.Pid_Command_Data, cmd)
 
         data = self.link.expectPacket(self.link.Pid_Records)
-        (numrecords,) = struct.unpack("<h", data)
+        (numrecords,) = newstruct.unpack("<h", data)
 
         log.log(
             VERBOSE, "%s: Expecting %d records" % (self.__doc__, numrecords))
@@ -908,13 +908,13 @@ class DataPoint:
             arg = arg + (v,)
             log.debug('got value %s' % repr(v))
         log.debug('arg: %s' % repr(arg))
-        return struct.pack(*arg)
+        return newstruct.pack(*arg)
 
     def unpack(self, bytes):
-        # print struct.calcsize(self.fmt), self.fmt
+        # print newstruct.calcsize(self.fmt), self.fmt
         # print len(bytes), repr(bytes)
         try:
-            bits = struct.unpack(self.fmt, bytes)
+            bits = newstruct.unpack(self.fmt, bytes)
             for i in range(len(self.parts)):
                 self.__dict__[self.parts[i]] = bits[i]
         except Exception as e:
@@ -1992,13 +1992,13 @@ class SerialLink(P000):
     def sendPacket(self, ptype, data, readAck=1):
         "Send a message. By default this will also wait for the ack."
         if isinstance(data, bytes):
-            ld = pack('B', len(data))
+            ld = struct.pack('B', len(data))
         else:  # XXX assume 16-bit integer for now
             log.debug('assuming 16-bit')
-            ld = pack('B', 2)
-            data = struct.pack("<h", data)
+            ld = struct.pack('B', 2)
+            data = newstruct.pack("<h", data)
         if isinstance(ptype, int):
-            tp = pack('B', ptype)
+            tp = struct.pack('B', ptype)
         else:
             tp = ptype
         log.debug('data to checksum: (%s + %s + %s = %s' % (repr(tp), repr(ld), repr(data), repr(tp+ld+data)))
@@ -2051,7 +2051,7 @@ class SerialLink(P000):
 
     def sendAcknowledge(self, ptype):
         log.debug("(<ack)")
-        self.sendPacket(self.Pid_Ack_Byte, struct.pack("<h", ptype), 0)
+        self.sendPacket(self.Pid_Ack_Byte, newstruct.pack("<h", ptype), 0)
 
     def readEscapedByte(self):
         c = self.read(1)
@@ -2064,7 +2064,7 @@ class SerialLink(P000):
         for i in data:
             sum = sum + i
         sum = sum % 256
-        ret = pack('B', ((256-sum) % 256))
+        ret = struct.pack('B', ((256-sum) % 256))
         log.debug('returning from checksum: %s' % repr(ret))
         return ret
 
@@ -2160,21 +2160,23 @@ class USBLink:
             if packet_id in [self.Pid_Session_Started,
                              self.Pid_Session_Started2]:
                 session_started = True
-        [self.unit_id] = struct.unpack("<L", unit_id_data)
+
+        [self.unit_id] = newstruct.unpack("<L", unit_id_data)
 
     def constructPacket(self, layer, packet_id, data=None):
         """Construct an USB package to be sent."""
         if data:
             if isinstance(data, int):
-                data = struct.pack("<h", data)
-            data_part = list(struct.pack("<l", len(data)))
+                data = newstruct.pack("<h", data)
+
+            data_part = list(newstruct.pack("<l", len(data)))
             data_part += list(data)
         else:
             data_part = [chr(0)]*4
 
         package = [chr(layer)]
         package += [chr(0)]*3
-        package += list(struct.pack("<h", packet_id))
+        package += list(newstruct.pack("<h", packet_id))
         package += [chr(0)]*2
         package += data_part
         return package
@@ -2198,7 +2200,7 @@ class USBLink:
         header = packet[:12]
         data = packet[12:]
         packet_type, unused1, unused2, packet_id, reserved, data_size = (
-            struct.unpack("<b h b h h l", header))
+            newstruct.unpack("<b h b h h l", header))
         return packet_id, data
 
     def readPacket(self, size=1024):
@@ -2211,7 +2213,7 @@ class USBLink:
         """Read a packet over USB bus."""
         usb_log.debug("Reading %s bytes..." % size)
         packet = self.handle.interruptRead(0x81, size)
-        packet = ''.join(struct.pack("<B", byte) for byte in packet)
+        packet = ''.join(newstruct.pack("<B", byte) for byte in packet)
         usb_packet_log.debug("> usb: %s" % (hexdump(packet)))
         usb_log.debug("Read %s bytes" % len(packet))
         return packet

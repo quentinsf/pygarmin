@@ -145,15 +145,15 @@ class L000:
 
     def expectPacket(self, ptype):
         "Expect and read a particular msg type. Return data."
-        tp, data = self.readPacket()
-        if tp == 248 and ptype != 248:
+        packet_id, data = self.readPacket()
+        if packet_id == 248 and ptype != 248:
             # No idea what packet type 248 is, it's not in the
             # specification. It seems safe to ignore it, though.
             log.debug("Got msg type 248, retrying...")
-            tp, data = self.readPacket()
+            packet_id, data = self.readPacket()
 
-        if tp != ptype:
-            raise LinkException("Expected msg type %s, got %s" % (repr(ptype), repr(tp)))
+        if packet_id != ptype:
+            raise LinkException("Expected msg type %s, got %s" % (repr(ptype), repr(packet_id)))
 
         return data
 
@@ -228,10 +228,10 @@ class A000:
         log.debug('getproductdata: %s' % self.link.Pid_Product_Rqst)
         self.link.sendPacket(self.link.Pid_Product_Rqst, b"")
         data = self.link.expectPacket(self.link.Pid_Product_Data)
-        (prod_id, soft_ver) = struct.unpack(fmt, data[:4])
-        prod_descs = data[4:-1].split(b"\0")
+        (product_id, software_version) = struct.unpack(fmt, data[:4])
+        product_description = data[4:-1].split(b"\0")
 
-        return (prod_id, soft_ver / 100.0, prod_descs)
+        return (product_id, software_version / 100.0, product_description)
 
 
 class A001:
@@ -417,14 +417,14 @@ class TransferProtocol:
 
         self.link.sendPacket(self.link.Pid_Records, numrecords)
 
-        for tp, data in sendData:
-            log.debug('tp: %s, data: %s' % (repr(tp), repr(data)))
-            self.link.sendPacket(tp, data.pack())
+        for packet_id, data in sendData:
+            log.debug('packet_id: %s, data: %s' % (repr(packet_id), repr(data)))
+            self.link.sendPacket(packet_id, data.pack())
 
             if callback:
                 try:
                     x += 1
-                    callback(data, x, numrecords, tp)
+                    callback(data, x, numrecords, packet_id)
                 except:
                     raise
 
@@ -484,9 +484,9 @@ class MultiTransferProtocol(TransferProtocol):
         last = []
 
         for i in range(numrecords):
-            tp, data = self.link.readPacket()
+            packet_id, data = self.link.readPacket()
 
-            if tp == hdr_pid:
+            if packet_id == hdr_pid:
 
                 if last:
                     result.append(last)
@@ -495,7 +495,7 @@ class MultiTransferProtocol(TransferProtocol):
                 index = 0
             else:
                 try:
-                    index = data_pids.index(tp) + 1
+                    index = data_pids.index(packet_id) + 1
                 except ValueError:
                     raise ProtocolException("Expected header or point")
 
@@ -505,7 +505,7 @@ class MultiTransferProtocol(TransferProtocol):
 
             if callback:
                 try:
-                    callback(p, i + 1, numrecords, tp)
+                    callback(p, i + 1, numrecords, packet_id)
                 except:
                     raise
 
@@ -799,7 +799,7 @@ class A800(TransferProtocol):
             self.link.Pid_Command_Data, self.cmdproto.Cmnd_Stop_Pvt_Data)
 
     def getData(self, callback):
-        tp, data = self.link.readPacket()
+        packet_id, data = self.link.readPacket()
 
         p = self.datatypes[0]()
         p.unpack(data)
@@ -807,7 +807,7 @@ class A800(TransferProtocol):
         if callback:
 
             try:
-                callback(p, 1, 1, tp)
+                callback(p, 1, 1, packet_id)
             except:
                 raise
 
@@ -1992,21 +1992,25 @@ class SerialLink(P000):
     def sendPacket(self, ptype, data, readAck=1):
         "Send a message. By default this will also wait for the ack."
         if isinstance(data, bytes):
-            ld = struct.pack('B', len(data))
+            data_size = struct.pack('B', len(data))
         else:  # XXX assume 16-bit integer for now
             log.debug('assuming 16-bit')
-            ld = struct.pack('B', 2)
             data = newstruct.pack("<h", data)
+            data_size = struct.pack('B', 2)
         if isinstance(ptype, int):
-            tp = struct.pack('B', ptype)
+            packet_id = struct.pack('B', ptype)
         else:
-            tp = ptype
-        log.debug('data to checksum: (%s + %s + %s = %s' % (repr(tp), repr(ld), repr(data), repr(tp+ld+data)))
-        chk = self.checksum(tp + ld + data)
-        escline = self.escape(ld + data + chk)
-        byte_data = self.DLE + tp + escline + self.EOM
-        log.debug('writing data: %s' % repr(byte_data))
-        self.write(byte_data)
+            packet_id = ptype
+        log.debug('data to checksum: (%s + %s + %s = %s' % (repr(packet_id), repr(data_size), repr(data), repr(packet_id+data_size+data)))
+        checksum = self.checksum(packet_id + data_size + data)
+        packet = (self.DLE
+                  + packet_id
+                  + self.escape(data_size)
+                  + self.escape(data)
+                  + self.escape(checksum)
+                  + self.EOM)
+        log.debug('writing data: %s' % repr(packet))
+        self.write(packet)
         if readAck:
             self.readAcknowledge(ptype)
 
@@ -2019,20 +2023,20 @@ class SerialLink(P000):
             dle = self.read(1)
         # We've now found either the start or the end of a msg
         # Try reading the type.
-        tp = self.read(1)
-        if tp == self.ETX:
+        packet_id = self.read(1)
+        if packet_id == self.ETX:
             # It was the end!
             dle = self.read(1)
-            tp = self.read(1)
+            packet_id = self.read(1)
         # Now we should be synchronised
-        ptype = ord(tp)
-        ld = self.readEscapedByte()
-        datalen = ord(ld)
+        ptype = ord(packet_id)
+        data_size = self.readEscapedByte()
+        datalen = ord(data_size)
         data = b""
         for i in range(0, datalen):
             data = data + self.readEscapedByte()
-        ck = self.readEscapedByte()
-        if ck != self.checksum(tp + ld + data):
+        checksum = self.readEscapedByte()
+        if checksum != self.checksum(packet_id + data_size + data):
             raise LinkException("Invalid checksum")
         eom = self.read(2)
         assert eom == self.EOM, "Invalid EOM seen"
@@ -2045,8 +2049,8 @@ class SerialLink(P000):
     def readAcknowledge(self, ptype):
         "Read an ack msg in response to a particular sent msg"
         log.debug("(>ack)")
-        tp, data = self.readPacket(0)
-        if (tp & 0xff) != self.Pid_Ack_Byte or data[0] != ptype:
+        packet_id, data = self.readPacket(0)
+        if (packet_id & 0xff) != self.Pid_Ack_Byte or data[0] != ptype:
             raise LinkException("Acknowledge error")
 
     def sendAcknowledge(self, ptype):
@@ -2181,9 +2185,9 @@ class USBLink:
         package += data_part
         return package
 
-    def sendPacket(self, tp, data):
+    def sendPacket(self, packet_id, data):
         """Send a packet."""
-        packet = self.constructPacket(20, tp, data)
+        packet = self.constructPacket(20, packet_id, data)
         self.sendUSBPacket(packet)
 
     def sendUSBPacket(self, packet):
@@ -2390,9 +2394,9 @@ class Garmin:
 
 # Callback examples functions
 
-def MyCallbackgetWaypoints(waypoint, recordnumber, totalWaypointsToGet, tp):
+def MyCallbackgetWaypoints(waypoint, recordnumber, totalWaypointsToGet, packet_id):
     # We get a tuple back (waypoint, recordnumber, totalWaypointsToGet)
-    # tp is the command to send/get from the gps, look at the docs (Garmin GPS Interface Specification)
+    # packet_id is the command to send/get from the gps, look at the docs (Garmin GPS Interface Specification)
     # pag 9, 10 or 4.2 L001 and L002 link Protocol
 
     print("---  waypoint ", " %s / %s " % (recordnumber, totalWaypointsToGet), "---")
@@ -2410,17 +2414,17 @@ def MyCallbackgetWaypoints(waypoint, recordnumber, totalWaypointsToGet, tp):
         for x in waypoint.getDict():
             print(x, " --> ", waypoint.getDict()[x])
 
-    print("Command: ", tp)
+    print("Command: ", packet_id)
     print()
 
 
-def MyCallbackputWaypoints(waypoint, recordnumber, totalWaypointsToSend, tp):
-    # we get a tuple waypoint, recordnumber, totalWaypointsToSend, tp
+def MyCallbackputWaypoints(waypoint, recordnumber, totalWaypointsToSend, packet_id):
+    # we get a tuple waypoint, recordnumber, totalWaypointsToSend, packet_id
 
-    print("waypoint %s added to gps (total waypoint(s): %s/%s) waypoint command: %s" % (waypoint.ident, recordnumber, totalWaypointsToSend, tp))
+    print("waypoint %s added to gps (total waypoint(s): %s/%s) waypoint command: %s" % (waypoint.ident, recordnumber, totalWaypointsToSend, packet_id))
 
 
-def MyCallbackgetRoutes(point, recordnumber, totalpointsToGet, tp):
+def MyCallbackgetRoutes(point, recordnumber, totalpointsToGet, packet_id):
 
     # print point.__class__
 
@@ -2441,7 +2445,7 @@ def MyCallbackgetRoutes(point, recordnumber, totalpointsToGet, tp):
                 print(x, " --> ", point.getDict()[x])
 
 
-def MyCallbackputRoutes(point, recordnumber, totalPointsToSend, tp):
+def MyCallbackputRoutes(point, recordnumber, totalPointsToSend, packet_id):
 
     if isinstance(point, RouteHdr):
         print()
@@ -2450,7 +2454,7 @@ def MyCallbackputRoutes(point, recordnumber, totalPointsToSend, tp):
         print("   waypoint added", point.ident)
 
 
-def MyCallbackgetTracks(point, recordnumber, totalPointsToGet, tp):
+def MyCallbackgetTracks(point, recordnumber, totalPointsToGet, packet_id):
 
     if isinstance(point, TrackHdr):
         print("Track: ", point)
@@ -2474,7 +2478,7 @@ def MyCallbackgetTracks(point, recordnumber, totalPointsToGet, tp):
             print("Time are the seconds since midnight 31/12/89 and are only correct for the ACTIVE LOG !! (hmmm...)")
 
 
-def MyCallbackputTracks(point, recordnumber, totalPointsToSend, tp):
+def MyCallbackputTracks(point, recordnumber, totalPointsToSend, packet_id):
 
     if isinstance(point, TrackHdr):
         print("Track: ", point)
@@ -2482,7 +2486,7 @@ def MyCallbackputTracks(point, recordnumber, totalPointsToSend, tp):
         print("   ", point)
 
 
-def MyCallbackgetAlmanac(satellite, recordnumber, totalPointsToGet, tp):
+def MyCallbackgetAlmanac(satellite, recordnumber, totalPointsToGet, packet_id):
 
     print()
 
@@ -2803,7 +2807,7 @@ def main():
         print("Date and time:")
         print("--------------")
 
-        def MyCallbackgetTime(timeInfo, recordnumber, totalPointsToGet, tp):
+        def MyCallbackgetTime(timeInfo, recordnumber, totalPointsToGet, packet_id):
             print(timeInfo)
 
         print(gps.getTime(MyCallbackgetTime))
@@ -2816,7 +2820,7 @@ def main():
 
         gps.pvtOn()
 
-        def MyCallbackgetPvt(pvt, recordnumber, totalPointsToGet, tp):
+        def MyCallbackgetPvt(pvt, recordnumber, totalPointsToGet, packet_id):
             print(pvt.getDict())
 
         try:

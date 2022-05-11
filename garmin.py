@@ -125,9 +125,10 @@ class ProtocolException(GarminException):
 class L000:
     """Basic Link Protocol."""
 
-    Pid_Protocol_Array = 253
+    Pid_Protocol_Array = 253  # may not be implemented in all devices
     Pid_Product_Rqst = 254
     Pid_Product_Data = 255
+    Pid_Ext_Product_Data = 248  # may not be implemented in all devices
 
     def __init__(self, physicalLayer):
         self.phys = physicalLayer
@@ -146,9 +147,12 @@ class L000:
     def expectPacket(self, ptype):
         "Expect and read a particular msg type. Return data."
         packet_id, data = self.readPacket()
-        if packet_id == 248 and ptype != 248:
-            # No idea what packet type 248 is, it's not in the
-            # specification. It seems safe to ignore it, though.
+        if packet_id == self.Pid_Ext_Product_Data:
+            # The Ext_Product_Data_Type contains zero or more null-terminated
+            # strings that are used during manufacturing to identify other
+            # properties of the device and are not formatted for display to the
+            # end user. According to the specification the host should ignore
+            # it.
             log.debug("Got msg type 248, retrying...")
             packet_id, data = self.readPacket()
 

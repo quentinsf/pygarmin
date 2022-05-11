@@ -1993,30 +1993,44 @@ class SerialLink(P000):
         """Set up baud rate, handshaking, etc."""
         pass
 
-    def sendPacket(self, ptype, data, readAck=1):
-        "Send a message. By default this will also wait for the ack."
-        if isinstance(data, bytes):
-            data_size = struct.pack('B', len(data))
-        else:  # XXX assume 16-bit integer for now
-            log.debug('assuming 16-bit')
-            data = newstruct.pack("<h", data)
-            data_size = struct.pack('B', 2)
-        if isinstance(ptype, int):
-            packet_id = struct.pack('B', ptype)
-        else:
-            packet_id = ptype
-        log.debug('data to checksum: (%s + %s + %s = %s' % (repr(packet_id), repr(data_size), repr(data), repr(packet_id+data_size+data)))
-        checksum = self.checksum(packet_id + data_size + data)
-        packet = (self.DLE
-                  + packet_id
-                  + self.escape(data_size)
-                  + self.escape(data)
-                  + self.escape(checksum)
-                  + self.EOM)
-        log.debug('writing data: %s' % repr(packet))
-        self.write(packet)
-        if readAck:
-            self.readAcknowledge(ptype)
+    def settimeout(self, secs):
+        self.timeout = secs
+
+    def read(self, n):
+        """Read n bytes and return them.
+
+        Real implementations should raise a LinkException if there is a
+        timeout > self.timeout
+        """
+        return self.ser.read(n)
+
+    def write(self, data):
+        self.ser.write(data)
+
+    def readEscapedByte(self):
+        c = self.read(1)
+        if c == self.DLE:
+            c = self.read(1)
+        return c
+
+    def escape(self, data):
+        """Escape any DLE characters, aka "DLE Stuffing".
+
+        If any byte in the Size, Data, or Checksum fields is equal to
+        DLE, then a second DLE is inserted immediately following the byte. This
+        extra DLE is not included in the size or checksum calculation. This
+        procedure allows the DLE character to be used to delimit the boundaries
+        of a packet."""
+        return (self.DLE + self.DLE).join(data.split(self.DLE))
+
+    def checksum(self, data):
+        sum = 0
+        for i in data:
+            sum = sum + i
+        sum = sum % 256
+        ret = struct.pack('B', ((256-sum) % 256))
+        log.debug('returning from checksum: %s' % repr(ret))
+        return ret
 
     def readPacket(self, sendAck=1):
         "Read a message. By default this will also send the ack."
@@ -2050,6 +2064,31 @@ class SerialLink(P000):
         log.debug('returning (ptype, data): (%s, %s)' % (repr(ptype), repr(data)))
         return (ptype, data)
 
+    def sendPacket(self, ptype, data, readAck=1):
+        "Send a message. By default this will also wait for the ack."
+        if isinstance(data, bytes):
+            data_size = struct.pack('B', len(data))
+        else:  # XXX assume 16-bit integer for now
+            log.debug('assuming 16-bit')
+            data = newstruct.pack("<h", data)
+            data_size = struct.pack('B', 2)
+        if isinstance(ptype, int):
+            packet_id = struct.pack('B', ptype)
+        else:
+            packet_id = ptype
+        log.debug('data to checksum: (%s + %s + %s = %s' % (repr(packet_id), repr(data_size), repr(data), repr(packet_id+data_size+data)))
+        checksum = self.checksum(packet_id + data_size + data)
+        packet = (self.DLE
+                  + packet_id
+                  + self.escape(data_size)
+                  + self.escape(data)
+                  + self.escape(checksum)
+                  + self.EOM)
+        log.debug('writing data: %s' % repr(packet))
+        self.write(packet)
+        if readAck:
+            self.readAcknowledge(ptype)
+
     def readAcknowledge(self, ptype):
         "Read an ack msg in response to a particular sent msg"
         log.debug("(>ack)")
@@ -2060,39 +2099,6 @@ class SerialLink(P000):
     def sendAcknowledge(self, ptype):
         log.debug("(<ack)")
         self.sendPacket(self.Pid_Ack_Byte, newstruct.pack("<h", ptype), 0)
-
-    def readEscapedByte(self):
-        c = self.read(1)
-        if c == self.DLE:
-            c = self.read(1)
-        return c
-
-    def checksum(self, data):
-        sum = 0
-        for i in data:
-            sum = sum + i
-        sum = sum % 256
-        ret = struct.pack('B', ((256-sum) % 256))
-        log.debug('returning from checksum: %s' % repr(ret))
-        return ret
-
-    def escape(self, data):
-        "Escape any DLE characters"
-        return (self.DLE + self.DLE).join(data.split(self.DLE))
-
-    def read(self, n):
-        """Read n bytes and return them.
-
-        Real implementations should raise a LinkException if there is a
-        timeout > self.timeout
-        """
-        return self.ser.read(n)
-
-    def write(self, data):
-        self.ser.write(data)
-
-    def settimeout(self, secs):
-        self.timeout = secs
 
     def __del__(self):
         """Should close down any opened resources."""

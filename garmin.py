@@ -2293,17 +2293,17 @@ class Garmin:
             self.wptLink = self.protos["waypoint"][0](
                 self.link, self.cmdProto, self.protos["waypoint"][1])
 
-        # ex. self.rteLink = A201(LOO1, AO10, (D202, D109, D210)
+        # ex. self.rteLink = A201(L001, A010, (D202, D109, D210)
         if "route" in self.protos:
             self.rteLink = self.protos["route"][0](
                 self.link, self.cmdProto, self.protos["route"][1:])
 
-        # ex. self.trkLink = A301(LOO1, AO10, (D310, D301))
+        # ex. self.trkLink = A301(L001, A010, (D310, D301))
         if "track" in self.protos:
             self.trkLink = self.protos["track"][0](
                 self.link, self.cmdProto, self.protos["track"][1:])
 
-        # ex. self.prxLink = A400(LOO1, A010, D109)
+        # ex. self.prxLink = A400(L001, A010, D109)
         if "proximity" in self.protos:
             self.prxLink = self.protos["proximity"][0](
                 self.link, self.cmdProto, self.protos["proximity"][1])
@@ -2313,7 +2313,7 @@ class Garmin:
             self.almLink = self.protos["almanac"][0](
                 self.link, self.cmdProto, self.protos["almanac"][1])
 
-        # self.timeLink = A600(LOO1, A010, D600)
+        # self.timeLink = A600(L001, A010, D600)
         if "data_time" in self.protos:
             self.timeLink = self.protos["data_time"][0](
                 self.link, self.cmdProto, self.protos["data_time"][1])

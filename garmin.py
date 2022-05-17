@@ -32,6 +32,7 @@
 import os
 import sys
 import time
+from collections import namedtuple
 import struct
 import newstruct
 import math
@@ -80,15 +81,9 @@ TimeEpoch = 631065600
 # methods, which can be used by the higher protocol levels. Later, we
 # subclass this as something which handles Unix serial ports.
 
-class P000:
-    """Physical layer for communicating with Garmin."""
 
-    def read(self, n):
-        pass
-
-    def write(self, n):
-        pass
-
+# Declaring namedtuple()
+Packet = namedtuple('Packet', ['id', 'data'])
 
 # The following is handy for debugging:
 
@@ -119,6 +114,19 @@ class ProtocolException(GarminException):
     def __str__(self):
         return "Protocol Error"
 
+# class Packet:
+
+#     def __init__(self, id, size, data, checksum):
+#         self.data = data
+
+class P000:
+    """Physical layer for communicating with Garmin."""
+
+    def read(self):
+        pass
+
+    def write(self, data):
+        pass
 
 # Link protocols ===================================================
 
@@ -133,33 +141,32 @@ class L000:
     def __init__(self, physicalLayer):
         self.phys = physicalLayer
 
-    def sendPacket(self, ptype, data):
+    def sendPacket(self, packet_id, data):
         """Send a packet."""
-        self.phys.sendPacket(ptype, data)
-        log.debug("< packet %s: %s" % (ptype, data))
+        self.phys.sendPacket(packet_id, data)
+        log.debug("< packet %s: %s" % (packet_id, data))
 
     def readPacket(self):
         """Read a packet."""
-        ptype, data = self.phys.readPacket()
-        log.debug("> packet %3d: %s" % (ptype, hexdump(data)))
-        return (ptype, data)
+        packet = self.phys.readPacket()
+        log.debug("> packet %3d: %s" % (packet.id, hexdump(packet.data)))
+        return packet
 
-    def expectPacket(self, ptype):
-        "Expect and read a particular msg type. Return data."
-        packet_id, data = self.readPacket()
-        if packet_id == self.Pid_Ext_Product_Data:
+    def expectPacket(self, packet_id):
+        "Expect and read a particular packet type. Return data."
+        packet = self.readPacket()
+        if packet.id == self.Pid_Ext_Product_Data:
             # The Ext_Product_Data_Type contains zero or more null-terminated
             # strings that are used during manufacturing to identify other
             # properties of the device and are not formatted for display to the
             # end user. According to the specification the host should ignore
             # it.
-            log.debug("Got msg type 248, retrying...")
-            packet_id, data = self.readPacket()
+            log.debug(f"Got packet type {self.Pid_Ext_Product_Data}, retrying...")
 
-        if packet_id != ptype:
-            raise LinkException("Expected msg type %s, got %s" % (repr(ptype), repr(packet_id)))
+        if packet.id != packet_id:
+            raise ProtocolException(f"Expected {packet_id}, got {packet.id}")
 
-        return data
+        return packet
 
 
 # L001 builds on L000
@@ -1972,13 +1979,11 @@ ModelProtocols = {
 class SerialLink(P000):
     """Protocol to communicate over a serial link."""
 
-    Pid_Ack_Byte = 6
-    Pid_Nak_Byte = 21
-
-    # DataLinkEscape etc
-    DLE = b"\x10"
-    ETX = b"\x03"
-    EOM = DLE + ETX
+    # Control characters
+    DLE = 16  # Data Link Escape
+    ETX = 3  # End of Text
+    Pid_Ack_Byte = 6  # Acknowledge
+    Pid_Nak_Byte = 21  # Negative Acknowledge
 
     unit_id = None
 
@@ -1996,23 +2001,6 @@ class SerialLink(P000):
     def settimeout(self, secs):
         self.timeout = secs
 
-    def read(self, n):
-        """Read n bytes and return them.
-
-        Real implementations should raise a LinkException if there is a
-        timeout > self.timeout
-        """
-        return self.ser.read(n)
-
-    def write(self, data):
-        self.ser.write(data)
-
-    def readEscapedByte(self):
-        c = self.read(1)
-        if c == self.DLE:
-            c = self.read(1)
-        return c
-
     def escape(self, data):
         """Escape any DLE characters, aka "DLE Stuffing".
 
@@ -2021,84 +2009,151 @@ class SerialLink(P000):
         extra DLE is not included in the size or checksum calculation. This
         procedure allows the DLE character to be used to delimit the boundaries
         of a packet."""
-        return (self.DLE + self.DLE).join(data.split(self.DLE))
+        return data.replace(bytes([self.DLE]), bytes([self.DLE, self.DLE]))
+
+    def unescape(self, data):
+        """Unescape any DLE characters, aka "DLE unstuffing"."""
+        return data.replace(bytes([self.DLE, self.DLE]), bytes([self.DLE]))
 
     def checksum(self, data):
         sum = 0
         for i in data:
             sum = sum + i
-        sum = sum % 256
-        ret = struct.pack('B', ((256-sum) % 256))
-        log.debug('returning from checksum: %s' % repr(ret))
-        return ret
+        sum %= 256
+        checksum = (256 - sum) % 256
+        return checksum
 
-    def readPacket(self, sendAck=1):
-        "Read a message. By default this will also send the ack."
-        dle = self.read(1)
-        # Find the start of a message
-        while dle != self.DLE:
-            print("resync - expected DLE and got something else: %r" % dle)
-            dle = self.read(1)
-        # We've now found either the start or the end of a msg
-        # Try reading the type.
-        packet_id = self.read(1)
-        if packet_id == self.ETX:
-            # It was the end!
-            dle = self.read(1)
-            packet_id = self.read(1)
-        # Now we should be synchronised
-        ptype = ord(packet_id)
-        data_size = self.readEscapedByte()
-        datalen = ord(data_size)
-        data = b""
-        for i in range(0, datalen):
-            data = data + self.readEscapedByte()
-        checksum = self.readEscapedByte()
-        if checksum != self.checksum(packet_id + data_size + data):
-            raise LinkException("Invalid checksum")
-        eom = self.read(2)
-        assert eom == self.EOM, "Invalid EOM seen"
-        if sendAck:
-            self.sendAcknowledge(ptype)
+    def decode(self, buffer):
+        header = self.DLE
+        trailer = [self.DLE, self.ETX]
+        # Only the size, data, and checksum fields have to be unescaped, but
+        # unescaping the whole packet doesn't hurt
+        packet = self.unescape(buffer)
+        packet_start = packet[0]
+        packet_end = list(packet[-2:])
 
-        log.debug('returning (ptype, data): (%s, %s)' % (repr(ptype), repr(data)))
-        return (ptype, data)
-
-    def sendPacket(self, ptype, data, readAck=1):
-        "Send a message. By default this will also wait for the ack."
-        if isinstance(data, bytes):
-            data_size = struct.pack('B', len(data))
-        else:  # XXX assume 16-bit integer for now
-            log.debug('assuming 16-bit')
-            data = newstruct.pack("<h", data)
-            data_size = struct.pack('B', 2)
-        if isinstance(ptype, int):
-            packet_id = struct.pack('B', ptype)
+        if packet_start != header:
+            log.debug("Invalid packet: doesn't start with DLE character")
+        elif packet_end != trailer:
+            log.debug("Invalid packet: doesn't end with DLE and ETX character")
         else:
-            packet_id = ptype
-        log.debug('data to checksum: (%s + %s + %s = %s' % (repr(packet_id), repr(data_size), repr(data), repr(packet_id+data_size+data)))
-        checksum = self.checksum(packet_id + data_size + data)
-        packet = (self.DLE
-                  + packet_id
-                  + self.escape(data_size)
-                  + self.escape(data)
-                  + self.escape(checksum)
-                  + self.EOM)
-        log.debug('writing data: %s' % repr(packet))
-        self.write(packet)
+            id = packet[1]
+            size = packet[2]
+            data = packet[3:-3]
+            checksum = packet[-3]
+
+            if size != len(data):
+                raise ProtocolException("Invalid packet: wrong size of packet data")
+            # 2's complement of the sum of all bytes from byte 1 to byte n-3
+            if checksum != self.checksum(packet[1:-3]):
+                raise ProtocolException("Invalid packet: checksum failed")
+
+            return Packet(id, data)
+
+    def read(self):
+        DLE = bytes([self.DLE])
+        ETX = bytes([self.ETX])
+        buffer = bytearray()
+        packet = bytearray()
+
+        while True:
+            # Buffer two bytes, because all DLEs occur in pairs except at packet
+            # boundaries
+            buffer += self.ser.read(2-len(buffer))
+            if len(buffer) != 2:
+                raise LinkException("Invalid packet: unexpected end")
+            elif len(packet) == 0:
+                # Packet header
+                if buffer.startswith(DLE):
+                    packet += bytes([buffer.pop(0)])
+                else:
+                    raise LinkException("Invalid packet: doesn't start with DLE")
+            elif buffer.startswith(DLE):
+                # Escape DLE
+                if buffer == DLE + DLE:
+                    packet += buffer
+                    buffer.clear()
+                # Packet trailer
+                elif buffer == DLE + ETX:
+                    packet += buffer
+                    break
+                else:
+                    raise LinkException("Invalid packet: doesn't end with DLE + ETX")
+            else:
+                packet += bytes([buffer.pop(0)])
+
+        return bytes(packet)
+
+    def write(self, buffer):
+        self.ser.write(buffer)
+
+    def readPacket(self, sendAck=True):
+        buffer = self.read()
+        packet = self.decode(buffer)
+        if sendAck:
+            self.sendAcknowledge(packet.id)
+
+        return packet
+
+    def encode(self, packet_id, data):
+        log.info("Encode packet")
+        size = len(data)
+        log.debug(f"size: {size}")
+        checksum = self.checksum(bytes([packet_id])
+                                 + bytes([size])
+                                 + data)
+        log.debug(f"checksum: {checksum}")
+        packet = bytes([self.DLE]) \
+            + bytes([packet_id]) \
+            + self.escape(bytes([size])) \
+            + self.escape(data) \
+            + self.escape(bytes([checksum])) \
+            + bytes([self.DLE]) \
+            + bytes([self.ETX])
+
+        return packet
+
+    def sendPacket(self, packet_id, data, readAck=True):
+        if isinstance(data, bytes):
+            pass
+        elif isinstance(data, int):
+            # The packet data contains a 16-bit unsigned integer that indicates
+            # a particular command.
+            data = data.to_bytes(2, byteorder='little')
+        elif data is None:
+             # The packet data is not used and may have a zero size
+            data = bytes()
+        else:
+            data_type = type(data).__name__
+            raise ProtocolException(f"Invalid data type: should be 'bytes' or 'int', but is {data_type}")
+
+        buffer = self.encode(packet_id, data)
+        self.write(buffer)
+
         if readAck:
-            self.readAcknowledge(ptype)
+            self.readAcknowledge(packet_id)
 
-    def readAcknowledge(self, ptype):
+    def readAcknowledge(self, packet_id):
         "Read an ack msg in response to a particular sent msg"
-        log.debug("(>ack)")
-        packet_id, data = self.readPacket(0)
-        if (packet_id & 0xff) != self.Pid_Ack_Byte or data[0] != ptype:
-            raise LinkException("Acknowledge error")
+        log.info("Read ACK")
+        packet = self.readPacket(sendAck=False)
+        expected_pid = packet_id
+        received_pid = int.from_bytes(packet.data, byteorder='little')
 
-    def sendAcknowledge(self, ptype):
-        log.debug("(<ack)")
-        self.sendPacket(self.Pid_Ack_Byte, newstruct.pack("<h", ptype), 0)
+        if packet.id == self.Pid_Nak_Byte:
+            log.info("NAK packet received")
+            raise LinkException("Transmission error in the previous received packet")
+        elif packet.id == self.Pid_Ack_Byte:
+            log.info("ACK packet received")
+            if expected_pid != received_pid:
+                raise ProtocolException(f"Device expected {expected_pid}, got {received_pid}")
+        else:
+            raise GarminException("Neither ACK nor NAK packet received")
+
+    def sendAcknowledge(self, packet_id):
+        log.info("Send ACK")
+        data = packet_id.to_bytes(1, byteorder='little')
+        self.sendPacket(self.Pid_Ack_Byte, data, readAck=False)
 
     def __del__(self):
         """Should close down any opened resources."""

@@ -2323,7 +2323,6 @@ class Garmin:
         # Wait for the unit to announce its capabilities using A001.  If
         # that doesn't happen, try reading the protocols supported by the
         # unit from the Big Table.
-        physicalLayer.settimeout(2)
         try:
             protocol = A001(self.link)
             self.protocols = protocol.getProtocols()
@@ -2339,8 +2338,6 @@ class Garmin:
                 self.protos, self.protocols_unknown = protocol.FormatA001()
             except KeyError:
                 raise Exception("Couldn't determine product capabilities")
-
-        physicalLayer.settimeout(5)
 
         self.link = self.protos["link"][0](physicalLayer)
         self.cmdProto = self.protos["command"][0]

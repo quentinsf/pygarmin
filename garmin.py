@@ -1988,8 +1988,6 @@ class SerialLink(P000):
     Pid_Ack_Byte = 6  # Acknowledge
     Pid_Nak_Byte = 21  # Negative Acknowledge
 
-    unit_id = None
-
     def __init__(self, port):
         # Import serial here, so that you don't have to have that module
         # installed, if you're not using a serial link.
@@ -1999,6 +1997,7 @@ class SerialLink(P000):
         self.ser = serial.Serial(port,
                                  timeout=self.timeout,
                                  baudrate=self.baudrate)
+        self.unit_id = None
 
     def set_timeout(self, seconds):
         self.ser.timeout = self.timeout = seconds

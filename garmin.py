@@ -32,7 +32,6 @@
 import os
 import sys
 import time
-from collections import namedtuple
 import struct
 import newstruct
 import math
@@ -82,9 +81,6 @@ TimeEpoch = 631065600
 # subclass this as something which handles Unix serial ports.
 
 
-# Declaring namedtuple()
-Packet = namedtuple('Packet', ['id', 'data'])
-
 # The following is handy for debugging:
 
 def hexdump(data):
@@ -114,10 +110,7 @@ class ProtocolException(GarminException):
     def __str__(self):
         return "Protocol Error"
 
-# class Packet:
 
-#     def __init__(self, id, size, data, checksum):
-#         self.data = data
 
 class P000:
     """Physical layer for communicating with Garmin."""
@@ -150,8 +143,8 @@ class L000:
         """Read a packet."""
         while True:
             packet = self.phys.readPacket()
-            log.debug("> packet %3d: %s" % (packet.id, hexdump(packet.data)))
-            if packet.id == self.Pid_Ext_Product_Data:
+            log.debug("> packet %3d: %s" % (packet['id'], hexdump(packet['data'])))
+            if packet['id'] == self.Pid_Ext_Product_Data:
                 # The Ext_Product_Data_Type contains zero or more null-terminated
                 # strings that are used during manufacturing to identify other
                 # properties of the device and are not formatted for display to the
@@ -166,8 +159,8 @@ class L000:
     def expectPacket(self, packet_id):
         "Expect and read a particular packet type. Return data."
         packet = self.readPacket()
-        if packet.id != packet_id:
-            raise ProtocolException(f"Expected {packet_id}, got {packet.id}")
+        if packet['id'] != packet_id:
+            raise ProtocolException(f"Expected {packet_id}, got {packet['id']}")
 
         return packet
 
@@ -457,18 +450,18 @@ class SingleTransferProtocol(TransferProtocol):
 
     def getData(self, callback, cmd, pid):
         self.link.sendPacket(self.link.Pid_Command_Data, cmd)
-        data = self.link.expectPacket(self.link.Pid_Records)
-        (numrecords,) = newstruct.unpack("<h", data)
 
         log.log(
             VERBOSE, "%s: Expecting %d records" % (self.__doc__, numrecords))
+        packet = self.link.expectPacket(self.link.Pid_Records)
+        numrecords = int.from_bytes(packet['data'], byteorder='little')
 
         result = []
 
         for i in range(numrecords):
-            data = self.link.expectPacket(pid)
+            packet = self.link.expectPacket(pid)
             p = self.datatypes[0]()
-            p.unpack(data)
+            p.unpack(packet['data'])
             result.append(p)
 
             if callback:
@@ -487,8 +480,8 @@ class MultiTransferProtocol(TransferProtocol):
 
         self.link.sendPacket(self.link.Pid_Command_Data, cmd)
 
-        data = self.link.expectPacket(self.link.Pid_Records)
-        (numrecords,) = newstruct.unpack("<h", data)
+        packet = self.link.expectPacket(self.link.Pid_Records)
+        numrecords = int.from_bytes(packet['data'], byteorder='little')
 
         log.log(
             VERBOSE, "%s: Expecting %d records" % (self.__doc__, numrecords))
@@ -498,9 +491,9 @@ class MultiTransferProtocol(TransferProtocol):
         last = []
 
         for i in range(numrecords):
-            packet_id, data = self.link.readPacket()
+            packet = self.link.readPacket()
 
-            if packet_id == hdr_pid:
+            if packet['id'] == hdr_pid:
 
                 if last:
                     result.append(last)
@@ -509,17 +502,17 @@ class MultiTransferProtocol(TransferProtocol):
                 index = 0
             else:
                 try:
-                    index = data_pids.index(packet_id) + 1
+                    index = data_pids.index(packet['id']) + 1
                 except ValueError:
                     raise ProtocolException("Expected header or point")
 
             p = self.datatypes[index]()
-            p.unpack(data)
+            p.unpack(packet['data'])
             last.append(p)
 
             if callback:
                 try:
-                    callback(p, i + 1, numrecords, packet_id)
+                    callback(p, i + 1, numrecords, packet['id'])
                 except:
                     raise
 
@@ -766,9 +759,9 @@ class A600(TransferProtocol):
     def getData(self, callback):
         self.link.sendPacket(
             self.link.Pid_Command_Data, self.cmdproto.Cmnd_Transfer_Time)
-        data = self.link.expectPacket(self.link.Pid_Date_Time_Data)
+        packet = self.link.expectPacket(self.link.Pid_Date_Time_Data)
         p = self.datatypes[0]()
-        p.unpack(data)
+        p.unpack(packet['data'])
 
         if callback:
             try:
@@ -813,15 +806,15 @@ class A800(TransferProtocol):
             self.link.Pid_Command_Data, self.cmdproto.Cmnd_Stop_Pvt_Data)
 
     def getData(self, callback):
-        packet_id, data = self.link.readPacket()
+        packet = self.link.readPacket()
 
         p = self.datatypes[0]()
-        p.unpack(data)
+        p.unpack(packet['data'])
 
         if callback:
 
             try:
-                callback(p, 1, 1, packet_id)
+                callback(p, 1, 1, packet['id'])
             except:
                 raise
 
@@ -2058,7 +2051,7 @@ class SerialLink(P000):
             if checksum != self.checksum(packet[1:-3]):
                 raise ProtocolException("Invalid packet: checksum failed")
 
-            return Packet(id, data)
+            return {'id': id, 'data': data}
 
     def read(self):
         DLE = bytes([self.DLE])
@@ -2101,7 +2094,6 @@ class SerialLink(P000):
         buffer = self.read()
         packet = self.decode(buffer)
         if sendAck:
-            self.sendAcknowledge(packet.id)
 
         return packet
 
@@ -2120,6 +2112,7 @@ class SerialLink(P000):
             + self.escape(bytes([checksum])) \
             + bytes([self.DLE]) \
             + bytes([self.ETX])
+            self.sendAcknowledge(packet['id'])
 
         return packet
 
@@ -2148,13 +2141,13 @@ class SerialLink(P000):
         log.info("Read ACK")
         packet = self.readPacket(sendAck=False)
         expected_pid = packet_id
-        received_pid = int.from_bytes(packet.data, byteorder='little')
+        received_pid = int.from_bytes(packet['data'], byteorder='little')
 
-        if packet.id == self.Pid_Nak_Byte:
-            log.info("NAK packet received")
+        if packet['id'] == self.Pid_Nak_Byte:
+            log.info("Received NAK packet")
             raise LinkException("Transmission error in the previous received packet")
-        elif packet.id == self.Pid_Ack_Byte:
-            log.info("ACK packet received")
+        elif packet['id'] == self.Pid_Ack_Byte:
+            log.info("Received ACK packet")
             if expected_pid != received_pid:
                 raise ProtocolException(f"Device expected {expected_pid}, got {received_pid}")
         else:

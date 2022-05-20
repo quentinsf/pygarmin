@@ -148,21 +148,24 @@ class L000:
 
     def readPacket(self):
         """Read a packet."""
-        packet = self.phys.readPacket()
-        log.debug("> packet %3d: %s" % (packet.id, hexdump(packet.data)))
+        while True:
+            packet = self.phys.readPacket()
+            log.debug("> packet %3d: %s" % (packet.id, hexdump(packet.data)))
+            if packet.id == self.Pid_Ext_Product_Data:
+                # The Ext_Product_Data_Type contains zero or more null-terminated
+                # strings that are used during manufacturing to identify other
+                # properties of the device and are not formatted for display to the
+                # end user. According to the specification the host should ignore
+                # it.
+                log.debug(f"Got packet type {self.Pid_Ext_Product_Data}, ignoring...")
+            else:
+                break
+
         return packet
 
     def expectPacket(self, packet_id):
         "Expect and read a particular packet type. Return data."
         packet = self.readPacket()
-        if packet.id == self.Pid_Ext_Product_Data:
-            # The Ext_Product_Data_Type contains zero or more null-terminated
-            # strings that are used during manufacturing to identify other
-            # properties of the device and are not formatted for display to the
-            # end user. According to the specification the host should ignore
-            # it.
-            log.debug(f"Got packet type {self.Pid_Ext_Product_Data}, retrying...")
-
         if packet.id != packet_id:
             raise ProtocolException(f"Expected {packet_id}, got {packet.id}")
 
@@ -1987,19 +1990,27 @@ class SerialLink(P000):
 
     unit_id = None
 
-    def __init__(self, device, timeout=5):
+    def __init__(self, port):
         # Import serial here, so that you don't have to have that module
         # installed, if you're not using a serial link.
         import serial
-        self.timeout = timeout
-        self.ser = serial.Serial(device, timeout=self.timeout, baudrate=9600)
+        self.timeout = 1
+        self.baudrate = 9600
+        self.ser = serial.Serial(port,
+                                 timeout=self.timeout,
+                                 baudrate=self.baudrate)
 
-    def initserial(self):
-        """Set up baud rate, handshaking, etc."""
-        pass
+    def set_timeout(self, seconds):
+        self.ser.timeout = self.timeout = seconds
 
-    def settimeout(self, secs):
-        self.timeout = secs
+    def get_timeout(self):
+        return self.ser.timeout
+
+    def set_baudrate(self, value):
+        self.ser.baudrate = value
+
+    def get_baudrate(self):
+        return self.ser.baudrate
 
     def escape(self, data):
         """Escape any DLE characters, aka "DLE Stuffing".

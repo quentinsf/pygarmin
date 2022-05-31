@@ -400,7 +400,7 @@ class TransferProtocol:
         self.link = link
         self.cmdproto = cmdproto
 
-        if type(datatypes) == list:
+        if isinstance(datatypes, list):
             self.datatypes = datatypes
         else:
             self.datatypes = (datatypes,)
@@ -2801,7 +2801,7 @@ def main():
 
             # Check for multiple tracks
 
-            if type(track) == list:
+            if isinstance(track, list):
                 print()
                 print("Track name:", track[0])
 

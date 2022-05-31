@@ -231,14 +231,31 @@ class A000:
         self.link = linkLayer
 
     def getProductData(self):
-        fmt = "<hh"
-        log.debug('getproductdata: %s' % self.link.Pid_Product_Rqst)
-        self.link.sendPacket(self.link.Pid_Product_Rqst, b"")
-        data = self.link.expectPacket(self.link.Pid_Product_Data)
-        (product_id, software_version) = struct.unpack(fmt, data[:4])
-        product_description = data[4:-1].split(b"\0")
+        """
+        Packet 0 (Pid_Product_Rqst) is a special product request packet that is sent
+        to the device. Packet 1 (Pid_Product_Data) is returned to the host and
+        contains data to identify the device, which is provided in the data type
+        Product_Data_Type.
 
-        return (product_id, software_version / 100.0, product_description)
+        """
+        log.info("Request Product Data")
+        self.link.sendPacket(self.link.Pid_Product_Rqst, None)
+        log.info("Expect Product_Data packet")
+        packet = self.link.expectPacket(self.link.Pid_Product_Data)
+        # The format of the Product_Data_Type is:
+        # - unsigned short: product_id
+        # - signed short: software_version
+        # - char[]: product_description; zero or more additional null-terminated strings
+        size = len(packet['data']) - struct.calcsize('<Hh')
+        fmt = f'<Hh{size}s'
+        product_id, software_version, product_description = struct.unpack(fmt, packet['data'])
+
+        product_description = [x.decode('ascii') for x in product_description.split(b'\x00')]
+        product_description.pop()  # remove the last empty byte
+
+        return {'id': product_id,
+                'version': software_version / 100,
+                'description': product_description}
 
 
 class A001:
@@ -2304,11 +2321,6 @@ class Garmin:
     of some sort.
     """
 
-    def __init__(self, physicalLayer):
-        self.unit_id = physicalLayer.unit_id
-        self.link = L000(physicalLayer)  # at least initially
-        product_data = A000(self.link).getProductData()
-        (self.prod_id, self.soft_ver, self.prod_descs) = product_data
 
         log.info("Getting supported protocols")
 
@@ -2378,6 +2390,15 @@ class Garmin:
             self.flightBook = self.protos["flightbook"][0](
                 self.link, self.cmdProto, self.protos["flightbook"][1])
 
+    def __init__(self, physicalLayer):
+        self.phys = physicalLayer
+        self.unit_id = self.phys.unit_id
+        self.link_protocol = L000(self.phys)
+        self.product_data_protocol = A000(self.link_protocol)
+        self.product_data = self.product_data_protocol.getProductData()
+        self.product_id = self.product_data['id']
+        self.software_version = self.product_data['version']
+        self.product_description = self.product_data['description']
         # Sorry, no link for A700
 
         # self.pvtLink = A800(self.link, self.cmdProto, D800)
@@ -2579,16 +2600,16 @@ def main():
     gps = Garmin(phys)
 
     print("GPS Product ID: %d Descriptions: %s Software version: %2.2f\n" %
-          (gps.prod_id, gps.prod_descs, gps.soft_ver))
+          (gps.product_id, gps.product_description, gps.software_version))
 
     # Show gps information
 
     if 1:
         print(f'''
-        GPS Product ID: {gps.prod_id}
-        GPS version   : {gps.soft_ver}
-        GPS           : {gps.prod_descs[0]}
-        MapSource info: {gps.prod_descs[1:]}
+        GPS Product ID: {gps.product_id}
+        GPS version   : {gps.software_version}
+        GPS           : {gps.product_description[0]}
+        MapSource info: {gps.product_description[1:]}
 
         Product protocols:
         ------------------

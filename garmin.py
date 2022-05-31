@@ -111,7 +111,6 @@ class ProtocolException(GarminException):
         return "Protocol Error"
 
 
-
 class P000:
     """Physical layer for communicating with Garmin."""
 
@@ -169,6 +168,8 @@ class L000:
 
 class L001(L000):
     """Link protocol 1."""
+
+
 
     Pid_Command_Data = 10
     Pid_Xfer_Cmplt = 12
@@ -249,7 +250,6 @@ class A000:
         size = len(packet['data']) - struct.calcsize('<Hh')
         fmt = f'<Hh{size}s'
         product_id, software_version, product_description = struct.unpack(fmt, packet['data'])
-
         product_description = [x.decode('ascii') for x in product_description.split(b'\x00')]
         product_description.pop()  # remove the last empty byte
 
@@ -269,9 +269,7 @@ class A001:
         self.link = linkLayer
 
     def getProtocols(self):
-
         log.info("Read protocols using Protocol Capability Protocol")
-
         packet = self.link.expectPacket(self.link.Pid_Protocol_Array)
         # The packet data contains an array of Protocol_Data_Type structures,
         # each of which contains tag-encoded protocol information. The
@@ -399,26 +397,20 @@ class TransferProtocol:
     def __init__(self, link, cmdproto, datatypes=None):
         self.link = link
         self.cmdproto = cmdproto
-
         if isinstance(datatypes, list):
             self.datatypes = datatypes
         else:
             self.datatypes = (datatypes,)
 
     def putData(self, callback, cmd, sendData):
-
         numrecords = len(sendData)
         x = 0
-
         log.log(
             VERBOSE, "%s: Sending %d records" % (self.__doc__, numrecords))
-
         self.link.sendPacket(self.link.Pid_Records, numrecords)
-
         for packet_id, data in sendData:
             log.debug('packet_id: %s, data: %s' % (repr(packet_id), repr(data)))
             self.link.sendPacket(packet_id, data.pack())
-
             if callback:
                 try:
                     x += 1
@@ -446,22 +438,19 @@ class SingleTransferProtocol(TransferProtocol):
             VERBOSE, "%s: Expecting %d records" % (self.__doc__, numrecords))
         packet = self.link.expectPacket(self.link.Pid_Records)
         numrecords = int.from_bytes(packet['data'], byteorder='little')
-
         result = []
-
         for i in range(numrecords):
             packet = self.link.expectPacket(pid)
             p = self.datatypes[0]()
             p.unpack(packet['data'])
             result.append(p)
-
             if callback:
                 try:
                     callback(p, i+1, numrecords, pid)
                 except:
                     raise
-
         self.link.expectPacket(self.link.Pid_Xfer_Cmplt)
+
         return result
 
 
@@ -473,23 +462,17 @@ class MultiTransferProtocol(TransferProtocol):
 
         packet = self.link.expectPacket(self.link.Pid_Records)
         numrecords = int.from_bytes(packet['data'], byteorder='little')
-
         log.log(
             VERBOSE, "%s: Expecting %d records" % (self.__doc__, numrecords))
-
         data_pids = list(data_pids)
         result = []
         last = []
-
         for i in range(numrecords):
             packet = self.link.readPacket()
-
             if packet['id'] == hdr_pid:
-
                 if last:
                     result.append(last)
                     last = []
-
                 index = 0
             else:
                 try:
@@ -500,7 +483,6 @@ class MultiTransferProtocol(TransferProtocol):
             p = self.datatypes[index]()
             p.unpack(packet['data'])
             last.append(p)
-
             if callback:
                 try:
                     callback(p, i + 1, numrecords, packet['id'])
@@ -508,7 +490,6 @@ class MultiTransferProtocol(TransferProtocol):
                     raise
 
         self.link.expectPacket(self.link.Pid_Xfer_Cmplt)
-
         if last:
             result.append(last)
 
@@ -565,30 +546,24 @@ class A200(MultiTransferProtocol):
 
         for route in data:
             routenr += 1
-
             # Copy the header fields
             header = {}
             for head in list(route[0].keys()):
                 header[head] = route[0][head]
-
             # Give a routenr
             if 'nmbr' not in header:
                 header['nmbr'] = routenr
-
             # Check route names
             # if no name, give it a name
             if 'ident' not in header or 'cmnt' not in header:
-
                 if 'ident' in header:
                     header['cmnt'] = header['ident']
                 elif 'cmnt' in header:
                     header['ident'] = header['cmnt']
                 else:
                     header['ident'] = header['cmnt'] = "ROUTE " + str(routenr)
-
             headerInstance = self.datatypes[0](header)
             sendData.append((self.link.Pid_Rte_Hdr, headerInstance))
-
             for waypoint in route[1:]:
                 waypointInstance = self.datatypes[1](waypoint)
                 sendData.append((self.link.Pid_Rte_Wpt_Data, waypointInstance))
@@ -613,18 +588,14 @@ class A201(MultiTransferProtocol):
 
         for route in data:
             routenr += 1
-
             # Copy the header fields
             header = {}
             for head in list(route[0].keys()):
                 header[head] = route[0][head]
-
             # Give a routenr
             if 'nmbr' not in header:
                 header['nmbr'] = routenr
-
             headerInstance = self.datatypes[0]()
-
             # Check route names
             # if no name, give it a name
             if 'ident' not in header or 'cmnt' not in header:
@@ -634,9 +605,7 @@ class A201(MultiTransferProtocol):
                     headerInstance.cmnt = header['cmnt']
                 else:
                     headerInstance.ident = f"Route {routenr}"
-
             sendData.append((self.link.Pid_Rte_Hdr, headerInstance))
-
             for waypoint in route[1:]:
                 waypointInstance = self.datatypes[1]()
                 waypointInstance.ident = waypoint['ident']
@@ -682,30 +651,24 @@ class A301(MultiTransferProtocol):
         header = {}
 
         for tracknr, track in enumerate(data, start=1):
-
             # Copy the header fields
             header = {}
             for head in list(track[0].keys()):
                 header[head] = track[0][head]
-
             headerInstance = self.datatypes[0]()
             # Check track names
             # if no name, give it a name
             headerInstance.trk_ident = track[0].get('ident', f'TRACK{tracknr}')
             sendData.append((self.link.Pid_Trk_Hdr, headerInstance))
-
             firstSegment = True
-
             for waypoint in track[1:]:
                 trackPointInstance = self.datatypes[1]()
                 trackPointInstance.slat = waypoint['slat']
                 trackPointInstance.slon = waypoint['slon']
-
                 # First point in a track is always a new track segment
                 if firstSegment:
                     trackPointInstance.new_trk = True
                     firstSegment = False
-
                 sendData.append((self.link.Pid_Trk_Data, trackPointInstance))
 
         return MultiTransferProtocol.putData(
@@ -753,7 +716,6 @@ class A600(TransferProtocol):
         packet = self.link.expectPacket(self.link.Pid_Date_Time_Data)
         p = self.datatypes[0]()
         p.unpack(packet['data'])
-
         if callback:
             try:
                 callback(p, 1, 1, self.link.Pid_Command_Data)
@@ -801,9 +763,7 @@ class A800(TransferProtocol):
 
         p = self.datatypes[0]()
         p.unpack(packet['data'])
-
         if callback:
-
             try:
                 callback(p, 1, 1, packet['id'])
             except:
@@ -885,7 +845,6 @@ class A907(TransferProtocol):
 # atrributes that are serialized.
 
 class Data_Type:
-
     parts = ()
     fmt = ""
 
@@ -932,14 +891,11 @@ class Data_Type:
 def degrees(semi):
     return semi * 180.0 / (1 << 31)
 
-
 def semi(deg):
     return int(deg * ((1 << 31) / 180))
 
-
 def radian(semi):
     return semi * math.pi / (1 << 31)
-
 
 # Distance between two waypoints (in metres)
 # Haversine Formula (from R.W. Sinnott, "Virtues of the Haversine",
@@ -962,7 +918,6 @@ def distance(wp1, wp2):
 
 
 class Wpt_Type(Data_Type):
-
     parts = ("ident", "slat", "slon", "unused", "cmnt")
     fmt = "< 6s l l L 40s"
 
@@ -991,6 +946,7 @@ class Wpt_Type(Data_Type):
             'latitude': self.slat,
             'longitude': self.slon,
         }
+
         return self.data
 
 
@@ -999,7 +955,6 @@ class D100(Wpt_Type):
 
 
 class D101(Wpt_Type):
-
     parts = Wpt_Type.parts + ("dst", "smbl")
     fmt = "< 6s l l L 40s f b"
     dst = 0.0                  # proximity distance (m)
@@ -1038,7 +993,6 @@ class D101(Wpt_Type):
 
 
 class D102(Wpt_Type):
-
     parts = Wpt_Type.parts + ("dst", "smbl")
     fmt = "< 6s l l L 40s f h"
     dst = 0.0                  # proximity distance (m)
@@ -1077,7 +1031,6 @@ class D102(Wpt_Type):
 
 
 class D103(Wpt_Type):
-
     parts = Wpt_Type.parts + ("smbl", "dspl")
     fmt = "<6s l l L 40s b b"
     smbl = 0                   # D103 symbol id
@@ -1116,7 +1069,6 @@ class D103(Wpt_Type):
 
 
 class D104(Wpt_Type):
-
     parts = Wpt_Type.parts + ("dst", "smbl", "dspl")
     fmt = "<6s l l L 40s f h b"
     dst = 0.0                  # proximity distance (m)
@@ -1158,7 +1110,6 @@ class D104(Wpt_Type):
 
 
 class D105(Wpt_Type):
-
     parts = ("slat", "slon", "smbl", "ident")
     fmt = "<l l h s"
     smbl = 0
@@ -1191,7 +1142,6 @@ class D105(Wpt_Type):
 
 
 class D106(Wpt_Type):
-
     parts = ("wpt_class", "subclass", "slat", "slon", "smbl",
              "ident", "lnk_ident")
     fmt = "<b 13s l l h s s"
@@ -1235,7 +1185,6 @@ class D106(Wpt_Type):
 
 
 class D107(Wpt_Type):
-
     parts = Wpt_Type.parts + ("smbl", "dspl", "dst", "color")
     fmt = "<6s l l L 40s b b f b"
     smbl = 0                   # D103 symbol id
@@ -1280,7 +1229,6 @@ class D107(Wpt_Type):
 
 
 class D108(Wpt_Type):
-
     parts = ("wpt_class", "color", "dspl", "attr", "smbl",
              "subclass", "slat", "slon", "alt", "dpth", "dist",
              "state", "cc", "ident", "cmnt", "facility", "city",
@@ -1329,7 +1277,6 @@ class D108(Wpt_Type):
 
 
 class D109(Wpt_Type):
-
     parts = ("dtyp", "wpt_class", "dspl_color", "attr", "smbl",
              "subclass", "slat", "slon", "alt", "dpth", "dist",
              "state", "cc", "ete", "ident", "cmnt", "facility", "city",
@@ -1379,7 +1326,6 @@ class D109(Wpt_Type):
 
 
 class D110(Wpt_Type):
-
     parts = ("dtyp", "wpt_class", "dspl_color", "attr", "smbl",
              "subclass", "slat", "slon", "alt", "dpth", "dist",
              "state", "cc", "ete", "temp", "time", "wpt_cat",
@@ -1388,13 +1334,11 @@ class D110(Wpt_Type):
 
 
 class D120(Data_Type):
-
     parts = ("name",)
     fmt = "<17s"
 
 
 class D150(Wpt_Type):
-
     parts = ("ident", "cc", "clss", "lat", "lon", "alt",
              "city", "state", "name", "cmnt")
     fmt = "<6s 2s b l l i 24s 2s 30s 40s"
@@ -1407,7 +1351,6 @@ class D150(Wpt_Type):
 
 
 class D151(Wpt_Type):
-
     parts = Wpt_Type.parts + ("dst", "name", "city", "state",
                               "alt", "cc", "unused2", "wpt_class")
     fmt = "< 6s l l L 40s f 30s 24s 2s i 2s c b"
@@ -1422,7 +1365,6 @@ class D151(Wpt_Type):
 
 
 class D152(Wpt_Type):
-
     parts = Wpt_Type.parts + ("dst", "name", "city", "state",
                               "alt", "cc", "unused2", "wpt_class")
     fmt = "< 6s l l L 40s f 30s 24s 2s i 2s c b"
@@ -1437,7 +1379,6 @@ class D152(Wpt_Type):
 
 
 class D154(Wpt_Type):
-
     parts = Wpt_Type.parts + ("dst", "name", "city", "state", "alt",
                               "cc", "unused2", "wpt_class", "smbl")
     fmt = "< 6s l l L 40s f 30s 24s 2s i 2s c b i"
@@ -1453,7 +1394,6 @@ class D154(Wpt_Type):
 
 
 class D155(Wpt_Type):
-
     parts = Wpt_Type.parts + ("dst", "name", "city", "state", "alt",
                               "cc", "unused2", "wpt_class", "smbl", "dspl")
     fmt = "< 6s l l L 40s f 30s 24s 2s i 2s c b i b"
@@ -1472,26 +1412,22 @@ class D155(Wpt_Type):
 # Route headers  ---------------------------------------------
 
 class Rte_Hdr_Type(Data_Type):
-
     def __repr__(self):
         return "<Rte_Hdr_Type (at %s)>" % id(self)
 
 
 class D200(Rte_Hdr_Type):
-
     parts = ("route_num",)
     fmt = "<b"
 
 
 class D201(Rte_Hdr_Type):
-
     parts = ("route_num", "cmnt")
     fmt = "<b 20s"
     cmnt = ""
 
 
 class D202(Rte_Hdr_Type):
-
     parts = ("ident",)
     fmt = "<s"
 
@@ -1499,7 +1435,6 @@ class D202(Rte_Hdr_Type):
 # Route links  -----------------------------------------------
 
 class Rte_Link_Type(Data_Type):
-
     def __repr__(self):
         return "<Rte_Link_Type (at %s)" % id(self)
 
@@ -1512,7 +1447,6 @@ class D210(Rte_Link_Type):
 # Track points  ----------------------------------------------
 
 class TrkPoint_Type(Data_Type):
-
     slat = 0
     slon = 0
     time = 0  # secs since midnight 31/12/89?
@@ -1524,14 +1458,12 @@ class TrkPoint_Type(Data_Type):
 
 
 class D300(TrkPoint_Type):
-
     parts = ("slat", "slon", "time", "newtrk")
     fmt = "<l l L B"
     newtrk = 0
 
 
 class D301(TrkPoint_Type):
-
     parts = ("slat", "slon", "time", "alt", "depth", "new_trk")
     fmt = "<l l L f f b"
     alt = 0.0
@@ -1540,13 +1472,11 @@ class D301(TrkPoint_Type):
 
 
 class D302(TrkPoint_Type):
-
     parts = ("slat", "slon", "time", "alt", "depth", "temp", "new_trk")
     fmt = "<l l L f f f b"
 
 
 class D304(TrkPoint_Type):
-
     parts = (
         "slat", "slon", "time", "alt", "distance", "heart_rate", "cadence",
         "sensor")
@@ -1561,7 +1491,6 @@ class D304(TrkPoint_Type):
 # Track headers ----------------------------------------------
 
 class Trk_Hdr_Type(Data_Type):
-
     trk_ident = ""
 
     def __repr__(self):
@@ -1570,7 +1499,6 @@ class Trk_Hdr_Type(Data_Type):
 
 
 class D310(Trk_Hdr_Type):
-
     parts = ("dspl", "color", "trk_ident")
     fmt = "<b b s"
     dspl = 0
@@ -1578,13 +1506,11 @@ class D310(Trk_Hdr_Type):
 
 
 class D311(Trk_Hdr_Type):
-
     parts = ("index",)
     fmt = "<H"
 
 
 class D312(Trk_Hdr_Type):
-
     parts = ("dspl", "color", "trk_ident")
     fmt = "<b b s"
 
@@ -1592,24 +1518,20 @@ class D312(Trk_Hdr_Type):
 # Proximity waypoints  ---------------------------------------
 
 class Prx_Wpt_Type(Data_Type):
-
     dst = 0.0
 
 
 class D400(Prx_Wpt_Type, D100):
-
     parts = D100.parts + ("dst",)
     fmt = D100.fmt + " f"
 
 
 class D403(Prx_Wpt_Type, D103):
-
     parts = D103.parts + ("dst",)
     fmt = D103.fmt + " f"
 
 
 class D450(Prx_Wpt_Type, D150):
-
     parts = ("idx",) + D150.parts + ("dst",)
     fmt = "<i " + D150.fmt[1:] + " f"
     idx = 0
@@ -1622,28 +1544,24 @@ class Almanac_Type(Data_Type):
 
 
 class D500(Almanac_Type):
-
     parts = ("weeknum", "toa", "af0", "af1", "e",
              "sqrta", "m0", "w", "omg0", "odot", "i")
     fmt = "<i f f f f f f f f f f"
 
 
 class D501(Almanac_Type):
-
     parts = ("weeknum", "toa", "af0", "af1", "e",
              "sqrta", "m0", "w", "omg0", "odot", "i", "hlth")
     fmt = "<i f f f f f f f f f f b"
 
 
 class D550(Almanac_Type):
-
     parts = ("svid", "weeknum", "toa", "af0", "af1", "e",
              "sqrta", "m0", "w", "omg0", "odot", "i")
     fmt = "<c i f f f f f f f f f f"
 
 
 class D551(Almanac_Type):
-
     parts = ("svid", "weeknum", "toa", "af0", "af1", "e",
              "sqrta", "m0", "w", "omg0", "odot", "i", "hlth")
     fmt = "<c i f f f f f f f f f f b"
@@ -1652,7 +1570,6 @@ class D551(Almanac_Type):
 # Date & Time  ---------------------------------------------------
 
 class Date_Time_Type(Data_Type):
-
     # Not sure what the last four bytes are. Not in docs.
     # hmm... eTrex just sends 8 bytes, no trailing 4 bytes
     parts = ("month", "day", "year", "hour", "min", "sec")  # , "unknown")
@@ -1682,7 +1599,6 @@ class D601(Date_Time_Type):
 
 
 class D650(Data_Type):
-
     parts = ("takeoff_time", "landing_time", "takeoff_slat", "takeoff_slon",
              "landing_slat", "landing_slon", "night_time", "num_landings",
              "max_speed", "max_alt", "distance", "cross_country_flag",
@@ -1694,7 +1610,6 @@ class D650(Data_Type):
 # Position   ---------------------------------------------------
 
 class D700(Data_Type):
-
     parts = ("rlat", "rlon")
     fmt = "<d d"
     rlat = 0.0  # radians
@@ -1706,7 +1621,6 @@ class D700(Data_Type):
 # Live position info
 
 class D800(Data_Type):
-
     parts = ("alt", "epe", "eph", "epv", "fix", "tow", "rlat", "rlon",
              "east", "north", "up", "msl_height", "leap_secs", "wn_days")
     fmt = "<f f f f h d d d f f f f h l"
@@ -1717,7 +1631,6 @@ class D800(Data_Type):
 
 
 class D906(Data_Type):
-
     parts = ("start_time", "total_time", "total_distance", "begin_slat",
              "begin_slon", "end_slat", "end_slon", "calories",
              "track_index", "unused")
@@ -1757,7 +1670,6 @@ class D1011(Data_Type):
 
     Used by Edge 305.
     """
-
     parts = ("index", "unused", "start_time", "total_time", "total_dist",
              "max_speed", "begin_lat", "begin_lon", "end_lat", "end_lon",
              "calories", "avg_heart_rate", "max_heart_rate",
@@ -1781,7 +1693,6 @@ class D1015(D1011):
 
 class D1009(Data_Type):
     """A run data point."""
-
     parts = ("track_index", "first_lap_index", "last_lap_index",
              "sport_type", "program_type",
              "multisport", "unused1", "unused2",
@@ -1875,7 +1786,6 @@ ModelIDs = (
     (76,  "GPSMAP 230 Chinese"),
     (49,  "GPSMAP 235 Sounder"),
 )
-
 
 # Make sure you've got a really wide window to view this one!
 # This describes the protocol capabilities of products that do not
@@ -2028,7 +1938,6 @@ class SerialLink(P000):
             size = packet[2]
             data = packet[3:-3]
             checksum = packet[-3]
-
             if size != len(data):
                 raise ProtocolException("Invalid packet: wrong size of packet data")
             # 2's complement of the sum of all bytes from byte 1 to byte n-3
@@ -2113,10 +2022,8 @@ class SerialLink(P000):
         return packet
 
     def sendPacket(self, packet_id, data, readAck=True):
-
         buffer = self.pack(packet_id, data)
         self.write(buffer)
-
         if readAck:
             self.readAcknowledge(packet_id)
 
@@ -2485,9 +2392,7 @@ def MyCallbackgetWaypoints(waypoint, recordnumber, totalWaypointsToGet, packet_i
     # We get a tuple back (waypoint, recordnumber, totalWaypointsToGet)
     # packet_id is the command to send/get from the gps, look at the docs (Garmin GPS Interface Specification)
     # pag 9, 10 or 4.2 L001 and L002 link Protocol
-
     print("---  waypoint ", " %s / %s " % (recordnumber, totalWaypointsToGet), "---")
-
     print("str output --> ", waypoint)  # or repr(waypoint)
     print()
 
@@ -2512,9 +2417,7 @@ def MyCallbackputWaypoints(waypoint, recordnumber, totalWaypointsToSend, packet_
 
 
 def MyCallbackgetRoutes(point, recordnumber, totalpointsToGet, packet_id):
-
     # print point.__class__
-
     if isinstance(point, (Rte_Hdr_Type)):
         print("Route: ", point)
 
@@ -2533,7 +2436,6 @@ def MyCallbackgetRoutes(point, recordnumber, totalpointsToGet, packet_id):
 
 
 def MyCallbackputRoutes(point, recordnumber, totalPointsToSend, packet_id):
-
     if isinstance(point, Rte_Hdr_Type):
         print()
         print("Adding route:", point)
@@ -2542,7 +2444,6 @@ def MyCallbackputRoutes(point, recordnumber, totalPointsToSend, packet_id):
 
 
 def MyCallbackgetTracks(point, recordnumber, totalPointsToGet, packet_id):
-
     if isinstance(point, Trk_Hdr_Type):
         print("Track: ", point)
     else:
@@ -2566,7 +2467,6 @@ def MyCallbackgetTracks(point, recordnumber, totalPointsToGet, packet_id):
 
 
 def MyCallbackputTracks(point, recordnumber, totalPointsToSend, packet_id):
-
     if isinstance(point, Trk_Hdr_Type):
         print("Track: ", point)
     else:
@@ -2574,9 +2474,7 @@ def MyCallbackputTracks(point, recordnumber, totalPointsToSend, packet_id):
 
 
 def MyCallbackgetAlmanac(satellite, recordnumber, totalPointsToGet, packet_id):
-
     print()
-
     for x in satellite.dataDict:
         print("%7s --> %s" % (x, satellite.getDict()[x]))
 

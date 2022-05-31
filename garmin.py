@@ -404,13 +404,13 @@ class TransferProtocol:
 
     def putData(self, callback, cmd, sendData):
         numrecords = len(sendData)
-        x = 0
         log.info("%s: Sending %d records" % (self.__doc__, numrecords))
         self.link.sendPacket(self.link.Pid_Records, numrecords)
         for packet_id, data in sendData:
             log.debug('packet_id: %s, data: %s' % (repr(packet_id), repr(data)))
             self.link.sendPacket(packet_id, data.pack())
             if callback:
+                x = 0
                 try:
                     x += 1
                     callback(data, x, numrecords, packet_id)

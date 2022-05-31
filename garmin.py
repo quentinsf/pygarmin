@@ -260,124 +260,98 @@ class A000:
 
 class A001:
     """Protocol capabilities protocol."""
+    Tag_Phys_Prot_Id = 'P'  # Physical protocol ID
+    Tag_Link_Prot_Id = 'L'  # Link protocol ID
+    Tag_Appl_Prot_Id = 'A'  # Application protocol ID
+    Tag_Data_Type_Id = 'D'  # Data Type ID
 
     def __init__(self, linkLayer):
         self.link = linkLayer
 
     def getProtocols(self):
-        log.log(VERBOSE, "Try reading protocols using PCP")
 
-        data = self.link.expectPacket(self.link.Pid_Protocol_Array)
-        num = int(len(data)/3)
-        fmt = "<" + num * "ch"
-        tup = newstruct.unpack(fmt, data)
-        self.protocols = []
+        log.info("Read protocols using Protocol Capability Protocol")
 
-        for i in range(0, 2*num, 2):
-            self.protocols.append(tup[i].decode('ascii') + "%03d" % tup[i+1])
+        packet = self.link.expectPacket(self.link.Pid_Protocol_Array)
+        # The packet data contains an array of Protocol_Data_Type structures,
+        # each of which contains tag-encoded protocol information. The
+        # Protocol_Data_Type is comprised of a one-byte tag field and a two-byte
+        # data field. The tag identifies which kind of ID is contained in the
+        # data field, and the data field contains the actual ID.
+        # The format of the Protocol_Data_Type is:
+        # - unsigned char: tag
+        # - unsigned short: data
+        fmt = '<BH'
+        size = struct.calcsize(fmt)
+        count = len(packet['data']) // size
+        fmt = '<' + count * 'BH'
+        # Unpack data to a list of tag+number pairs
+        records = struct.unpack(fmt, packet['data'])
+        # The order of array elements is used to associate data types with
+        # protocols. For example, a protocol that requires two data types <D0>
+        # and <D1> is indicated by a tag-encoded protocol ID followed by two
+        # tag-encoded data type IDs, where the first data type ID identifies
+        # <D0> and the second data type ID identifies <D1>.
+        protocols = []
+        log.info(f"Parse supported protocols and datatypes...")
+        for i in range(0, len(records), 2):
+            tag = chr(records[i])
+            number = records[i+1]
+            # Format the record to a string consisting of the tag and 3-digit number
+            protocol_datatype = f"{tag}{number:03}"
+            # Create a list of lists with supported protocols and associated datatypes
+            if tag == self.Tag_Phys_Prot_Id:
+                # We ignore the physical protocol, because it is initialized
+                # already
+                log.info(f"Ignore physical protocol '{protocol_datatype}'.")
+            elif tag == self.Tag_Link_Prot_Id:
+                # Append new list with protocol.
+                log.info(f"Add link protocol '{protocol_datatype}'.")
+                protocols.append([protocol_datatype])
+            elif tag == self.Tag_Appl_Prot_Id:
+                # Append new list with protocol.
+                log.info(f"Add application protocol '{protocol_datatype}'.")
+                protocols.append([protocol_datatype])
+            elif tag == self.Tag_Data_Type_Id:
+                # Append datatype to list of previous protocol
+                log.info(f"Add datatype '{protocol_datatype}'.")
+                protocols[-1].append(protocol_datatype)
+            else:
+                log.info(f"Ignore unknown protocol or datatype '{protocol_datatype}'.")
+        log.info(f"Supported protocols and data types: {protocols}")
 
-        log.info("Protocols reported by A001: %s", self.protocols)
+        return protocols
 
-        return self.protocols
-
-    def getProtocolsNoPCP(self, prod_id, soft_ver):
+    def getProtocolsNoPCP(self, product_id, software_version):
         try:
-            search_protocols = ModelProtocols[prod_id]
-
-            for search_protocol in search_protocols:
-                vrange = search_protocol[0]
-
-                if vrange is None or (soft_ver >= vrange[0] and soft_ver < vrange[1]):
-                    break
-
+            model = ModelProtocols[product_id]
+            log.info(f"Got product ID number {product_id}")
         except:
-            raise "No protocols known for this software version. Strange!"
+            raise ValueError(f"Unknown product ID number {product_id}")
 
-        # Ok, now we have de protocol
-        self.protocols = [x for x in search_protocol[1:] if x]
+        try:
+            for capabilities in model:
+                version = capabilities[0]
+                if version is None:
+                    break
+                elif (software_version >= version[0] and software_version < version[1]):
+                    break
+        except:
+            raise ValueError(f"Unknown software version number {software_version}")
 
-        self.protocols.append("A700")
-        self.protocols.append("D700")
-        self.protocols.append("A800")
-        self.protocols.append("D800")
+        protocols = [protocol for protocol in capabilities[1:] if protocol]
+        protocols.append(("A600", "D600"))
+        protocols.append(("A700", "D700"))
+        log.info(f"Supported protocols and data types: {protocols}")
 
-        return self.protocols
+        return protocols
 
-    def FormatA001(self):
-        # This is here to get the list of strings returned by A001 into objects
-        protos = {}
-        protos_unknown = []
-        known = None
 
-        for x in self.protocols:
 
-            if x == "P000":
-                protos["phys"] = [eval(x)]
-            elif x == "L001":
-                protos["link"] = [eval(x)]
-            elif x in ["A010", "A011"]:
-                protos["command"] = [eval(x)]
-            elif x == "A100":
-                known = True
-                ap_prot = "waypoint"  # Application Protocol
-                protos[ap_prot] = [eval(x)]
-            elif x in ["A200", "A201"]:
-                known = True
-                ap_prot = "route"
-                protos[ap_prot] = [eval(x)]
-            elif x in ["A300", "A301", "A302"]:
-                known = True
-                ap_prot = "track"
-                protos[ap_prot] = [eval(x)]
-            elif x == "A400":
-                known = True
-                ap_prot = "proximity"
-                protos[ap_prot] = [eval(x)]
-            elif x == "A500":
-                known = True
-                ap_prot = "almanac"
-                protos[ap_prot] = [eval(x)]
-            elif x == "A600":
-                known = True
-                ap_prot = "data_time"
-                protos[ap_prot] = [eval(x)]
-            elif x == "A650":
-                known = True
-                ap_prot = "flightbook"
-                protos[ap_prot] = [eval(x)]
-            elif x == "A700":
-                known = True
-                ap_prot = "position"
-                protos[ap_prot] = [eval(x)]
-            elif x == "A800":
-                known = True
-                ap_prot = "pvt"
-                protos[ap_prot] = [eval(x)]
-            elif x == "A906":
-                known = True
-                ap_prot = "lap"
-                protos[ap_prot] = [eval(x)]
-            elif x == "A1000":
-                known = True
-                ap_prot = "run"
-                protos[ap_prot] = [eval(x)]
-            elif x[0] == "A":
-                # No info about this Application Protocol
-                known = False
-                protos_unknown.append(x)
 
-                log.info("Protocol %s not supported yet!" % x)
 
-            elif (x[0] == "D"):
-                if known:
-                    protos[ap_prot].append(eval(x))
-                else:
-                    protos_unknown.append(x)
 
-        log.info("Processing protocols")
-        log.info(protos)
 
-        return protos, protos_unknown
 
 
 # Commands  ---------------------------------------------------
@@ -1926,61 +1900,61 @@ MaxVer = 999.99
 ModelProtocols = {
     # Use a wide window for best viewing!
     #
-    # ID   minver maxver    Link    Cmnd    Wpt,            Rte,                    Trk,            Prx,            Alm
-    7:   ((None,            "L001", "A010", "A100", "D100", "A200", "D200", "D100", None,           None,           "A500", "D500"),),
-    13:  ((None,            "L001", "A010", "A100", "D100", "A200", "D200", "D100", "A300", "D300", "A400", "D400", "A500", "D500"),),
-    14:  ((None,            "L001", "A010", "A100", "D100", "A200", "D200", "D100", None,           "A400", "D400", "A500", "D500"),),
-    15:  ((None,            "L001", "A010", "A100", "D151", "A200", "D200", "D151", None,           "A400", "D151", "A500", "D500"),),
-    18:  ((None,            "L001", "A010", "A100", "D100", "A200", "D200", "D100", "A300", "D300", "A400", "D400", "A500", "D500"),),
-    20:  ((None,            "L002", "A011", "A100", "D150", "A200", "D201", "D150", None,           "A400", "D450", "A500", "D550"),),
-    22:  ((None,            "L001", "A010", "A100", "D152", "A200", "D200", "D152", "A300", "D300", "A400", "D152", "A500", "D500"),),
-    23:  ((None,            "L001", "A010", "A100", "D100", "A200", "D200", "D100", "A300", "D300", "A400", "D400", "A500", "D500"),),
-    24:  ((None,            "L001", "A010", "A100", "D100", "A200", "D200", "D100", "A300", "D300", "A400", "D400", "A500", "D500"),),
-    25:  ((None,            "L001", "A010", "A100", "D100", "A200", "D200", "D100", "A300", "D300", "A400", "D400", "A500", "D500"),),
-    29:  (((0.00, 4.00),    "L001", "A010", "A100", "D101", "A200", "D201", "D101", "A300", "D300", "A400", "D101", "A500", "D500"),
-          ((4.00, MaxVer),  "L001", "A010", "A100", "D102", "A200", "D201", "D102", "A300", "D300", "A400", "D102", "A500", "D500"),),
-    31:  ((None,            "L001", "A010", "A100", "D100", "A200", "D201", "D100", "A300", "D300", None,           "A500", "D500"),),
-    33:  ((None,            "L002", "A011", "A100", "D150", "A200", "D201", "D150", None,           "A400", "D450", "A500", "D550"),),
-    34:  ((None,            "L002", "A011", "A100", "D150", "A200", "D201", "D150", None,           "A400", "D450", "A500", "D550"),),
-    35:  ((None,            "L001", "A010", "A100", "D100", "A200", "D200", "D100", "A300", "D300", "A400", "D400", "A500", "D500"),),
-    36:  (((0.00, 3.00),    "L001", "A010", "A100", "D152", "A200", "D200", "D152", "A300", "D300", "A400", "D152", "A500", "D500"),
-          ((3.00, MaxVer),  "L001", "A010", "A100", "D152", "A200", "D200", "D152", "A300", "D300", None,           "A500", "D500"),),
-    39:  ((None,            "L001", "A010", "A100", "D151", "A200", "D201", "D151", "A300", "D300", None,           "A500", "D500"),),
-    41:  ((None,            "L001", "A010", "A100", "D100", "A200", "D201", "D100", "A300", "D300", None,           "A500", "D500"),),
-    42:  ((None,            "L001", "A010", "A100", "D100", "A200", "D200", "D100", "A300", "D300", "A400", "D400", "A500", "D500"),),
-    44:  ((None,            "L001", "A010", "A100", "D101", "A200", "D201", "D101", "A300", "D300", "A400", "D101", "A500", "D500"),),
-    45:  ((None,            "L001", "A010", "A100", "D152", "A200", "D201", "D152", "A300", "D300", None,           "A500", "D500"),),
-    47:  ((None,            "L001", "A010", "A100", "D100", "A200", "D201", "D100", "A300", "D300", None,           "A500", "D500"),),
-    48:  ((None,            "L001", "A010", "A100", "D154", "A200", "D201", "D154", "A300", "D300", None,           "A500", "D501"),),
-    49:  ((None,            "L001", "A010", "A100", "D102", "A200", "D201", "D102", "A300", "D300", "A400", "D102", "A500", "D501"),),
-    50:  ((None,            "L001", "A010", "A100", "D152", "A200", "D201", "D152", "A300", "D300", None,           "A500", "D501"),),
-    52:  ((None,            "L002", "A011", "A100", "D150", "A200", "D201", "D150", None,           "A400", "D450", "A500", "D550"),),
-    53:  ((None,            "L001", "A010", "A100", "D152", "A200", "D201", "D152", "A300", "D300", None,           "A500", "D501"),),
-    55:  ((None,            "L001", "A010", "A100", "D100", "A200", "D201", "D100", "A300", "D300", None,           "A500", "D500"),),
-    56:  ((None,            "L001", "A010", "A100", "D100", "A200", "D201", "D100", "A300", "D300", None,           "A500", "D500"),),
-    59:  ((None,            "L001", "A010", "A100", "D100", "A200", "D201", "D100", "A300", "D300", None,           "A500", "D500"),),
-    61:  ((None,            "L001", "A010", "A100", "D100", "A200", "D201", "D100", "A300", "D300", None,           "A500", "D500"),),
-    62:  ((None,            "L001", "A010", "A100", "D100", "A200", "D201", "D100", "A300", "D300", None,           "A500", "D500"),),
-    64:  ((None,            "L002", "A011", "A100", "D150", "A200", "D201", "D150", None,           "A400", "D450", "A500", "D551"),),
-    71:  ((None,            "L001", "A010", "A100", "D155", "A200", "D201", "D155", "A300", "D300", None,           "A500", "D501"),),
-    72:  ((None,            "L001", "A010", "A100", "D104", "A200", "D201", "D104", "A300", "D300", None,           "A500", "D501"),),
-    73:  ((None,            "L001", "A010", "A100", "D103", "A200", "D201", "D103", "A300", "D300", None,           "A500", "D501"),),
-    74:  ((None,            "L001", "A010", "A100", "D100", "A200", "D201", "D100", "A300", "D300", None,           "A500", "D500"),),
-    76:  ((None,            "L001", "A010", "A100", "D102", "A200", "D201", "D102", "A300", "D300", "A400", "D102", "A500", "D501"),),
-    77:  (((0.00, 3.01),    "L001", "A010", "A100", "D100", "A200", "D201", "D100", "A300", "D300", "A400", "D400", "A500", "D501"),
-          ((3.01, 3.50),    "L001", "A010", "A100", "D103", "A200", "D201", "D103", "A300", "D300", "A400", "D403", "A500", "D501"),
-          ((3.50, 3.61),    "L001", "A010", "A100", "D103", "A200", "D201", "D103", "A300", "D300", None,           "A500", "D501"),
-          ((3.61, MaxVer),  "L001", "A010", "A100", "D103", "A200", "D201", "D103", "A300", "D300", "A400", "D403", "A500", "D501"),),
-    87:  ((None,            "L001", "A010", "A100", "D103", "A200", "D201", "D103", "A300", "D300", "A400", "D403", "A500", "D501"),),
-    88:  ((None,            "L001", "A010", "A100", "D102", "A200", "D201", "D102", "A300", "D300", "A400", "D102", "A500", "D501"),),
-    95:  ((None,            "L001", "A010", "A100", "D103", "A200", "D201", "D103", "A300", "D300", "A400", "D403", "A500", "D501"),),
-    96:  ((None,            "L001", "A010", "A100", "D103", "A200", "D201", "D103", "A300", "D300", "A400", "D403", "A500", "D501"),),
-    97:  ((None,            "L001", "A010", "A100", "D103", "A200", "D201", "D103", "A300", "D300", None,           "A500", "D501"),),
-    98:  ((None,            "L002", "A011", "A100", "D150", "A200", "D201", "D150", None,           "A400", "D450", "A500", "D551"),),
-    100: ((None,            "L001", "A010", "A100", "D103", "A200", "D201", "D103", "A300", "D300", "A400", "D403", "A500", "D501"),),
-    105: ((None,            "L001", "A010", "A100", "D103", "A200", "D201", "D103", "A300", "D300", "A400", "D403", "A500", "D501"),),
-    106: ((None,            "L001", "A010", "A100", "D103", "A200", "D201", "D103", "A300", "D300", "A400", "D403", "A500", "D501"),),
-    112: ((None,            "L001", "A010", "A100", "D152", "A200", "D201", "D152", "A300", "D300", None,           "A500", "D501"),)
+    # ID   minver maxver    Link      Command   Waypoint          Route                     Track             Proximity         Almanac
+    7:   ((None,            ("L001"), ("A010"), ("A100", "D100"), ("A200", "D200", "D100"), None,             None,             ("A500", "D500")),),
+    13:  ((None,            ("L001"), ("A010"), ("A100", "D100"), ("A200", "D200", "D100"), ("A300", "D300"), ("A400", "D400"), ("A500", "D500")),),
+    14:  ((None,            ("L001"), ("A010"), ("A100", "D100"), ("A200", "D200", "D100"), None,             ("A400", "D400"), ("A500", "D500")),),
+    15:  ((None,            ("L001"), ("A010"), ("A100", "D151"), ("A200", "D200", "D151"), None,             ("A400", "D151"), ("A500", "D500")),),
+    18:  ((None,            ("L001"), ("A010"), ("A100", "D100"), ("A200", "D200", "D100"), ("A300", "D300"), ("A400", "D400"), ("A500", "D500")),),
+    20:  ((None,            ("L002"), ("A011"), ("A100", "D150"), ("A200", "D201", "D150"), None,             ("A400", "D450"), ("A500", "D550")),),
+    22:  ((None,            ("L001"), ("A010"), ("A100", "D152"), ("A200", "D200", "D152"), ("A300", "D300"), ("A400", "D152"), ("A500", "D500")),),
+    23:  ((None,            ("L001"), ("A010"), ("A100", "D100"), ("A200", "D200", "D100"), ("A300", "D300"), ("A400", "D400"), ("A500", "D500")),),
+    24:  ((None,            ("L001"), ("A010"), ("A100", "D100"), ("A200", "D200", "D100"), ("A300", "D300"), ("A400", "D400"), ("A500", "D500")),),
+    25:  ((None,            ("L001"), ("A010"), ("A100", "D100"), ("A200", "D200", "D100"), ("A300", "D300"), ("A400", "D400"), ("A500", "D500")),),
+    29:  (((0.00, 4.00),    ("L001"), ("A010"), ("A100", "D101"), ("A200", "D201", "D101"), ("A300", "D300"), ("A400", "D101"), ("A500", "D500")),
+          ((4.00, MaxVer),  ("L001"), ("A010"), ("A100", "D102"), ("A200", "D201", "D102"), ("A300", "D300"), ("A400", "D102"), ("A500", "D500")),),
+    31:  ((None,            ("L001"), ("A010"), ("A100", "D100"), ("A200", "D201", "D100"), ("A300", "D300"), None,             ("A500", "D500")),),
+    33:  ((None,            ("L002"), ("A011"), ("A100", "D150"), ("A200", "D201", "D150"), None,             ("A400", "D450"), ("A500", "D550")),),
+    34:  ((None,            ("L002"), ("A011"), ("A100", "D150"), ("A200", "D201", "D150"), None,             ("A400", "D450"), ("A500", "D550")),),
+    35:  ((None,            ("L001"), ("A010"), ("A100", "D100"), ("A200", "D200", "D100"), ("A300", "D300"), ("A400", "D400"), ("A500", "D500")),),
+    36:  (((0.00, 3.00),    ("L001"), ("A010"), ("A100", "D152"), ("A200", "D200", "D152"), ("A300", "D300"), ("A400", "D152"), ("A500", "D500")),
+          ((3.00, MaxVer),  ("L001"), ("A010"), ("A100", "D152"), ("A200", "D200", "D152"), ("A300", "D300"), None,             ("A500", "D500")),),
+    39:  ((None,            ("L001"), ("A010"), ("A100", "D151"), ("A200", "D201", "D151"), ("A300", "D300"), None,             ("A500", "D500")),),
+    41:  ((None,            ("L001"), ("A010"), ("A100", "D100"), ("A200", "D201", "D100"), ("A300", "D300"), None,             ("A500", "D500")),),
+    42:  ((None,            ("L001"), ("A010"), ("A100", "D100"), ("A200", "D200", "D100"), ("A300", "D300"), ("A400", "D400"), ("A500", "D500")),),
+    44:  ((None,            ("L001"), ("A010"), ("A100", "D101"), ("A200", "D201", "D101"), ("A300", "D300"), ("A400", "D101"), ("A500", "D500")),),
+    45:  ((None,            ("L001"), ("A010"), ("A100", "D152"), ("A200", "D201", "D152"), ("A300", "D300"), None,             ("A500", "D500")),),
+    47:  ((None,            ("L001"), ("A010"), ("A100", "D100"), ("A200", "D201", "D100"), ("A300", "D300"), None,             ("A500", "D500")),),
+    48:  ((None,            ("L001"), ("A010"), ("A100", "D154"), ("A200", "D201", "D154"), ("A300", "D300"), None,             ("A500", "D501")),),
+    49:  ((None,            ("L001"), ("A010"), ("A100", "D102"), ("A200", "D201", "D102"), ("A300", "D300"), ("A400", "D102"), ("A500", "D501")),),
+    50:  ((None,            ("L001"), ("A010"), ("A100", "D152"), ("A200", "D201", "D152"), ("A300", "D300"), None,             ("A500", "D501")),),
+    52:  ((None,            ("L002"), ("A011"), ("A100", "D150"), ("A200", "D201", "D150"), None,             ("A400", "D450"), ("A500", "D550")),),
+    53:  ((None,            ("L001"), ("A010"), ("A100", "D152"), ("A200", "D201", "D152"), ("A300", "D300"), None,             ("A500", "D501")),),
+    55:  ((None,            ("L001"), ("A010"), ("A100", "D100"), ("A200", "D201", "D100"), ("A300", "D300"), None,             ("A500", "D500")),),
+    56:  ((None,            ("L001"), ("A010"), ("A100", "D100"), ("A200", "D201", "D100"), ("A300", "D300"), None,             ("A500", "D500")),),
+    59:  ((None,            ("L001"), ("A010"), ("A100", "D100"), ("A200", "D201", "D100"), ("A300", "D300"), None,             ("A500", "D500")),),
+    61:  ((None,            ("L001"), ("A010"), ("A100", "D100"), ("A200", "D201", "D100"), ("A300", "D300"), None,             ("A500", "D500")),),
+    62:  ((None,            ("L001"), ("A010"), ("A100", "D100"), ("A200", "D201", "D100"), ("A300", "D300"), None,             ("A500", "D500")),),
+    64:  ((None,            ("L002"), ("A011"), ("A100", "D150"), ("A200", "D201", "D150"), None,             ("A400", "D450"), ("A500", "D551")),),
+    71:  ((None,            ("L001"), ("A010"), ("A100", "D155"), ("A200", "D201", "D155"), ("A300", "D300"), None,             ("A500", "D501")),),
+    72:  ((None,            ("L001"), ("A010"), ("A100", "D104"), ("A200", "D201", "D104"), ("A300", "D300"), None,             ("A500", "D501")),),
+    73:  ((None,            ("L001"), ("A010"), ("A100", "D103"), ("A200", "D201", "D103"), ("A300", "D300"), None,             ("A500", "D501")),),
+    74:  ((None,            ("L001"), ("A010"), ("A100", "D100"), ("A200", "D201", "D100"), ("A300", "D300"), None,             ("A500", "D500")),),
+    76:  ((None,            ("L001"), ("A010"), ("A100", "D102"), ("A200", "D201", "D102"), ("A300", "D300"), ("A400", "D102"), ("A500", "D501")),),
+    77:  (((0.00, 3.01),    ("L001"), ("A010"), ("A100", "D100"), ("A200", "D201", "D100"), ("A300", "D300"), ("A400", "D400"), ("A500", "D501")),
+          ((3.01, 3.50),    ("L001"), ("A010"), ("A100", "D103"), ("A200", "D201", "D103"), ("A300", "D300"), ("A400", "D403"), ("A500", "D501")),
+          ((3.50, 3.61),    ("L001"), ("A010"), ("A100", "D103"), ("A200", "D201", "D103"), ("A300", "D300"), None,             ("A500", "D501")),
+          ((3.61, MaxVer),  ("L001"), ("A010"), ("A100", "D103"), ("A200", "D201", "D103"), ("A300", "D300"), ("A400", "D403"), ("A500", "D501")),),
+    87:  ((None,            ("L001"), ("A010"), ("A100", "D103"), ("A200", "D201", "D103"), ("A300", "D300"), ("A400", "D403"), ("A500", "D501")),),
+    88:  ((None,            ("L001"), ("A010"), ("A100", "D102"), ("A200", "D201", "D102"), ("A300", "D300"), ("A400", "D102"), ("A500", "D501")),),
+    95:  ((None,            ("L001"), ("A010"), ("A100", "D103"), ("A200", "D201", "D103"), ("A300", "D300"), ("A400", "D403"), ("A500", "D501")),),
+    96:  ((None,            ("L001"), ("A010"), ("A100", "D103"), ("A200", "D201", "D103"), ("A300", "D300"), ("A400", "D403"), ("A500", "D501")),),
+    97:  ((None,            ("L001"), ("A010"), ("A100", "D103"), ("A200", "D201", "D103"), ("A300", "D300"), None,             ("A500", "D501")),),
+    98:  ((None,            ("L002"), ("A011"), ("A100", "D150"), ("A200", "D201", "D150"), None,             ("A400", "D450"), ("A500", "D551")),),
+    100: ((None,            ("L001"), ("A010"), ("A100", "D103"), ("A200", "D201", "D103"), ("A300", "D300"), ("A400", "D403"), ("A500", "D501")),),
+    105: ((None,            ("L001"), ("A010"), ("A100", "D103"), ("A200", "D201", "D103"), ("A300", "D300"), ("A400", "D403"), ("A500", "D501")),),
+    106: ((None,            ("L001"), ("A010"), ("A100", "D103"), ("A200", "D201", "D103"), ("A300", "D300"), ("A400", "D403"), ("A500", "D501")),),
+    112: ((None,            ("L001"), ("A010"), ("A100", "D152"), ("A200", "D201", "D152"), ("A300", "D300"), None,             ("A500", "D501")),)
 }
 
 # ====================================================================
@@ -2314,34 +2288,15 @@ class USBLink:
         self.handle.releaseInterface()
 
 
-class Garmin:
-    """A representation of the GPS device.
-
-    It is connected via some physical connection, typically a SerialLink
-    of some sort.
-    """
 
 
-        log.info("Getting supported protocols")
 
-        # Wait for the unit to announce its capabilities using A001.  If
-        # that doesn't happen, try reading the protocols supported by the
-        # unit from the Big Table.
-        try:
-            protocol = A001(self.link)
-            self.protocols = protocol.getProtocols()
-            self.protos, self.protocols_unknown = protocol.FormatA001()
+
 
         except LinkException as e:
 
             log.log(VERBOSE, "PCP not supported")
 
-            try:
-                self.protocols = protocol.getProtocolsNoPCP(
-                    self.prod_id, self.soft_ver)
-                self.protos, self.protocols_unknown = protocol.FormatA001()
-            except KeyError:
-                raise Exception("Couldn't determine product capabilities")
 
         self.link = self.protos["link"][0](physicalLayer)
         self.cmdProto = self.protos["command"][0]
@@ -2349,127 +2304,180 @@ class Garmin:
         # Now we set up 'links' through which we can get data of the
         # appropriate types
 
-        # ex. self.command = TransferProtocol(A010, L001)
-        # This is for sending simple commands
-        # like aborting the transfer, turn gps out, ..
 
         self.command = TransferProtocol(self.link, self.cmdProto)
 
-        # ex. self.wptLink = A100(L001, A010, D109)
-        if "waypoint" in self.protos:
-            self.wptLink = self.protos["waypoint"][0](
-                self.link, self.cmdProto, self.protos["waypoint"][1])
 
-        # ex. self.rteLink = A201(L001, A010, (D202, D109, D210)
-        if "route" in self.protos:
-            self.rteLink = self.protos["route"][0](
-                self.link, self.cmdProto, self.protos["route"][1:])
 
-        # ex. self.trkLink = A301(L001, A010, (D310, D301))
-        if "track" in self.protos:
-            self.trkLink = self.protos["track"][0](
-                self.link, self.cmdProto, self.protos["track"][1:])
 
-        # ex. self.prxLink = A400(L001, A010, D109)
-        if "proximity" in self.protos:
-            self.prxLink = self.protos["proximity"][0](
-                self.link, self.cmdProto, self.protos["proximity"][1])
+            return unit_id
 
-        # self.timeLink = A500(L001, A010, D501)
-        if "almanac" in self.protos:
-            self.almLink = self.protos["almanac"][0](
-                self.link, self.cmdProto, self.protos["almanac"][1])
 
-        # self.timeLink = A600(L001, A010, D600)
-        if "data_time" in self.protos:
-            self.timeLink = self.protos["data_time"][0](
-                self.link, self.cmdProto, self.protos["data_time"][1])
+class Garmin:
+    """A representation of the GPS device.
 
-        # self.flightBook = A650(L001, A010, D650)
-        if "flightbook" in self.protos:
-            self.flightBook = self.protos["flightbook"][0](
-                self.link, self.cmdProto, self.protos["flightbook"][1])
+    It is connected via some physical connection, typically a SerialLink
+    of some sort.
+    """
+    protocol_keys = {
+        'L000': 'link_protocol',
+        'L001': 'link_protocol',
+        'L002': 'link_protocol',
+        'A000': 'product_data_protocol',
+        'A001': 'protocol_capability_protocol',
+        'A010': 'device_command_protocol',
+        'A011': 'device_command_protocol',
+        'A100': 'waypoint_transfer_protocol',
+        'A101': 'waypoint_category_transfer_protocol',
+        'A200': 'route_transfer_protocol',
+        'A201': 'route_transfer_protocol',
+        'A300': 'track_log_transfer_protocol',
+        'A301': 'track_log_transfer_protocol',
+        'A302': 'track_log_transfer_protocol',
+        'A400': 'proximity_waypoint_transfer_protocol',
+        'A500': 'almanac_transfer_protocol',
+        'A600': 'date_and_time_initialization_protocol',
+        'A650': 'flightbook_transfer_protocol',
+        'A700': 'position_initialization_protocol',
+        'A800': 'pvt_protocol',
+        'A906': 'lap_transfer_protocol',
+        'A1000': 'run_transfer_protocol',
+        'A1002': 'workout_transfer_protocol',
+        'A1004': 'fitness_user_profile_transfer_protocol',
+        'A1005': 'workout_limits_transfer_protocol',
+        'A1006': 'course_transfer_protocol',
+        'A1009': 'course_limits_transfer_protocol',
+        'A1051': 'external_time_data_sync_protocol',
+    }
+
 
     def __init__(self, physicalLayer):
         self.phys = physicalLayer
         self.unit_id = self.phys.unit_id
-        self.link_protocol = L000(self.phys)
-        self.product_data_protocol = A000(self.link_protocol)
+        self.link = L000(self.phys)
+        self.product_data_protocol = A000(self.link)
         self.product_data = self.product_data_protocol.getProductData()
         self.product_id = self.product_data['id']
         self.software_version = self.product_data['version']
         self.product_description = self.product_data['description']
+        self.protocol_capability = A001(self.link)
+        self.supported_protocols = self.get_protocols(self.protocol_capability, self.product_id, self.software_version)
+        self.registered_protocols = self.register_protocols(self.supported_protocols)
+        self.link = self.create_protocol('link_protocol', self.phys)
+        self.device_command = self.create_protocol('device_command_protocol', self.link)
+        self.waypoint_transfer = self.create_protocol('waypoint_transfer_protocol', self.link, self.device_command)
+        self.route_transfer = self.create_protocol('route_transfer_protocol', self.link, self.device_command)
+        self.track_log_transfer = self.create_protocol('track_log_transfer_protocol', self.link, self.device_command)
+        self.proximity_waypoint_transfer = self.create_protocol('proximity_waypoint_transfer_protocol', self.link, self.device_command)
+        self.almanac_transfer = self.create_protocol('almanac_transfer_protocol', self.link, self.device_command)
+        self.date_and_time_initialization = self.create_protocol('date_and_time_initialization_protocol', self.link, self.device_command)
+        self.flightbook_transfer = self.create_protocol('flightbook_transfer_protocol', self.link, self.device_command)
         # Sorry, no link for A700
+        self.pvt = self.create_protocol('pvt_protocol', self.link, self.device_command)
+        self.lap_transfer = self.create_protocol('lap_transfer_protocol', self.link, self.device_command)
+        self.run_transfer = self.create_protocol('run_transfer_protocol', self.link, self.device_command)
 
-        # self.pvtLink = A800(self.link, self.cmdProto, D800)
-        if "pvt" in self.protos:
-            self.pvtLink = self.protos["pvt"][0](
-                self.link, self.cmdProto, self.protos["pvt"][1])
+    def get_protocols(self, link, product_id, software_version):
+        # Wait for the unit to announce its capabilities using A001.  If
+        # that doesn't happen, try reading the protocols supported by the
+        # unit from the Big Table.
+        try:
+            log.info("Get supported protocols")
+            protocols = link.getProtocols()
+        except LinkException:
+            log.info("Protocol Capability Protocol not supported by the device")
+            try:
+                protocols = link.getProtocolsNoPCP(product_id, software_version)
+            except KeyError:
+                raise Exception("Couldn't determine product capabilities")
+        return protocols
 
-        # self lapLink = A906(self.link, self.cmdProto, D906)
-        if "lap" in self.protos:
-            self.lapLink = self.protos["lap"][0](
-                self.link, self.cmdProto, self.protos["lap"][1])
+    def class_by_name(self, name):
+        return globals()[name]
 
-        runProtos = self.protos.get("run", [])
-        self.runTypes = runProtos[1:]
-        if runProtos:
-            self.runLink = runProtos[0](
-                self.link, self.cmdProto, self.runTypes)
+    def register_protocols(self, supported_protocols):
+        """Register the supported protocols."""
+        protocols = {}
+        for protocol_datatypes in supported_protocols:
+            protocol = protocol_datatypes[0]
+            datatypes = protocol_datatypes[1:]
+            if protocol in self.protocol_keys:
+                key = self.protocol_keys[protocol]
+                protocol_class = self.class_by_name(protocol)
+                protocols[key] = [protocol_class]
+                log.info(f"Register protocol {protocol}.")
+                if datatypes:
+                    datatype_classes = [self.class_by_name(datatype) for datatype in datatypes]
+                    protocols[key].extend(datatype_classes)
+                    log.info(f"Register datatypes {*datatypes, }.")
+            else:
+                log.info(f"Ignore undocumented protocol {protocol}.")
+        log.info(f"Registered protocols and data types: {protocols}")
+        return protocols
+
+    def create_protocol(self, key, *args):
+        protocol_datatypes = self.registered_protocols.get(key)
+        if protocol_datatypes:
+            protocol = protocol_datatypes[0]
+            datatypes = protocol_datatypes[1:]
+            if datatypes:
+                return protocol(*args, datatypes=datatypes)
+            else:
+                return protocol(*args)
         else:
-            self.runLink = None
+            log.info(f"Protocol {key} is not supported.")
 
     def getWaypoints(self, callback=None):
-        return self.wptLink.getData(callback)
+        return self.waypoint_transfer.getData(callback)
 
     def putWaypoints(self, data, callback=None):
-        return self.wptLink.putData(data, callback)
+        return self.waypoint_transfer.putData(data, callback)
 
     def getRoutes(self, callback=None):
-        return self.rteLink.getData(callback)
+        return self.route_transfer.getData(callback)
 
     def putRoutes(self, data, callback=None):
-        return self.rteLink.putData(data, callback)
+        return self.route_transfer.putData(data, callback)
 
     def getTracks(self, callback=None):
-        return self.trkLink.getData(callback)
+        return self.track_log_transfer.getData(callback)
 
     def putTracks(self, data, callback=None):
-        return self.trkLink.putData(data, callback)
+        return self.track_log_transfer.putData(data, callback)
 
     def getLaps(self, callback=None):
-        assert self.lapLink is not None, (
+        assert self.lap_transfer is not None, (
             "No lap protocol specified for this GPS.")
-        return self.lapLink.getData(callback)
+        return self.lap_transfer.getData(callback)
 
     def getRuns(self, callback=None):
-        assert self.runLink is not None, (
+        assert self.run_transfer is not None, (
             "No run protocol supported for this GPS.")
-        return self.runLink.getData(callback)
+        return self.run_transfer.getData(callback)
 
     def getProxPoints(self, callback=None):
-        return self.prxLink.getData(callback)
+        return self.proximity_waypoint_transfer.getData(callback)
 
     def putProxPoints(self, data, callback=None):
-        return self.prxLink.putData(data, callback)
+        return self.proximity_waypoint_transfer.putData(data, callback)
 
     def getAlmanac(self, callback=None):
-        return self.almLink.getData(callback)
+        return self.almanac_transfer.getData(callback)
 
     def getTime(self, callback=None):
-        return self.timeLink.getData(callback)
+        return self.date_and_time_initialization.getData(callback)
 
     def getFlightBook(self, callback=None):
-        return self.flightBook.getData(callback)
+        return self.flightbook_transfer.getData(callback)
 
     def pvtOn(self):
-        return self.pvtLink.dataOn()
+        return self.pvt.dataOn()
 
     def pvtOff(self):
-        return self.pvtLink.dataOff()
+        return self.pvt.dataOff()
 
     def getPvt(self, callback=None):
-        return self.pvtLink.getData(callback)
+        return self.pvt.getData(callback)
 
     def abortTransfer(self):
         return self.command.abortTransfer()

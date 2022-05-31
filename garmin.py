@@ -405,8 +405,7 @@ class TransferProtocol:
     def putData(self, callback, cmd, sendData):
         numrecords = len(sendData)
         x = 0
-        log.log(
-            VERBOSE, "%s: Sending %d records" % (self.__doc__, numrecords))
+        log.info("%s: Sending %d records" % (self.__doc__, numrecords))
         self.link.sendPacket(self.link.Pid_Records, numrecords)
         for packet_id, data in sendData:
             log.debug('packet_id: %s, data: %s' % (repr(packet_id), repr(data)))
@@ -434,10 +433,9 @@ class SingleTransferProtocol(TransferProtocol):
     def getData(self, callback, cmd, pid):
         self.link.sendPacket(self.link.Pid_Command_Data, cmd)
 
-        log.log(
-            VERBOSE, "%s: Expecting %d records" % (self.__doc__, numrecords))
         packet = self.link.expectPacket(self.link.Pid_Records)
         numrecords = int.from_bytes(packet['data'], byteorder='little')
+        log.info("%s: Expecting %d records" % (self.__doc__, numrecords))
         result = []
         for i in range(numrecords):
             packet = self.link.expectPacket(pid)
@@ -462,8 +460,7 @@ class MultiTransferProtocol(TransferProtocol):
 
         packet = self.link.expectPacket(self.link.Pid_Records)
         numrecords = int.from_bytes(packet['data'], byteorder='little')
-        log.log(
-            VERBOSE, "%s: Expecting %d records" % (self.__doc__, numrecords))
+        log.info("%s: Expecting %d records" % (self.__doc__, numrecords))
         data_pids = list(data_pids)
         result = []
         last = []

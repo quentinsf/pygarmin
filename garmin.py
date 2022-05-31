@@ -2071,6 +2071,9 @@ class SerialLink(P000):
             + self.escape(bytes([checksum])) \
             + bytes([self.DLE]) \
             + bytes([self.ETX])
+
+        return packet
+
     def read(self):
         DLE = bytes([self.DLE])
         ETX = bytes([self.ETX])
@@ -2112,9 +2115,6 @@ class SerialLink(P000):
         buffer = self.read()
         packet = self.unpack(buffer)
         if sendAck:
-
-        return packet
-
             self.sendAcknowledge(packet['id'])
 
         return packet

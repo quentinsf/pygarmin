@@ -884,7 +884,7 @@ class A907(TransferProtocol):
 # is transmitted on the wire, and a 'parts' member, listing the
 # atrributes that are serialized.
 
-class DataPoint:
+class Data_Type:
 
     parts = ()
     fmt = ""
@@ -961,7 +961,7 @@ def distance(wp1, wp2):
     return R*c
 
 
-class Waypoint(DataPoint):
+class Wpt_Type(Data_Type):
 
     parts = ("ident", "slat", "slon", "unused", "cmnt")
     fmt = "< 6s l l L 40s"
@@ -974,7 +974,7 @@ class Waypoint(DataPoint):
         self.unused = 0
 
     def __repr__(self):
-        return "<Waypoint %s (%3.5f, %3.5f) (at %i)>" % (self.ident,
+        return "<Wpt_Type %s (%3.5f, %3.5f) (at %i)>" % (self.ident,
                                                          degrees(self.slat),
                                                          degrees(self.slon),
                                                          id(self))
@@ -994,13 +994,13 @@ class Waypoint(DataPoint):
         return self.data
 
 
-class D100(Waypoint):
+class D100(Wpt_Type):
     pass
 
 
-class D101(Waypoint):
+class D101(Wpt_Type):
 
-    parts = Waypoint.parts + ("dst", "smbl")
+    parts = Wpt_Type.parts + ("dst", "smbl")
     fmt = "< 6s l l L 40s f b"
     dst = 0.0                  # proximity distance (m)
     smbl = 0                   # symbol_type id (0-255)
@@ -1016,7 +1016,7 @@ class D101(Waypoint):
         self.data = {}
 
     def __repr__(self):
-        return "<Waypoint %s (%3.5f, %3.5f) (at %i)>" % (self.ident,
+        return "<Wpt_Type %s (%3.5f, %3.5f) (at %i)>" % (self.ident,
                                                          degrees(self.slat),
                                                          degrees(self.slon),
                                                          id(self))
@@ -1037,9 +1037,9 @@ class D101(Waypoint):
         return self.data
 
 
-class D102(Waypoint):
+class D102(Wpt_Type):
 
-    parts = Waypoint.parts + ("dst", "smbl")
+    parts = Wpt_Type.parts + ("dst", "smbl")
     fmt = "< 6s l l L 40s f h"
     dst = 0.0                  # proximity distance (m)
     smbl = 0                   # symbol_type id
@@ -1055,7 +1055,7 @@ class D102(Waypoint):
         self.data = {}
 
     def __repr__(self):
-        return "<Waypoint %s (%3.5f, %3.5f) (at %i)>" % (self.ident,
+        return "<Wpt_Type %s (%3.5f, %3.5f) (at %i)>" % (self.ident,
                                                          degrees(self.slat),
                                                          degrees(self.slon),
                                                          id(self))
@@ -1076,9 +1076,9 @@ class D102(Waypoint):
         return self.data
 
 
-class D103(Waypoint):
+class D103(Wpt_Type):
 
-    parts = Waypoint.parts + ("smbl", "dspl")
+    parts = Wpt_Type.parts + ("smbl", "dspl")
     fmt = "<6s l l L 40s b b"
     smbl = 0                   # D103 symbol id
     dspl = 0                   # D103 display option
@@ -1094,7 +1094,7 @@ class D103(Waypoint):
         self.data = {}
 
     def __repr__(self):
-        return "<Waypoint %s (%3.5f, %3.5f) (at %i)>" % (self.ident,
+        return "<Wpt_Type %s (%3.5f, %3.5f) (at %i)>" % (self.ident,
                                                          degrees(self.slat),
                                                          degrees(self.slon),
                                                          id(self))
@@ -1115,9 +1115,9 @@ class D103(Waypoint):
         return self.data
 
 
-class D104(Waypoint):
+class D104(Wpt_Type):
 
-    parts = Waypoint.parts + ("dst", "smbl", "dspl")
+    parts = Wpt_Type.parts + ("dst", "smbl", "dspl")
     fmt = "<6s l l L 40s f h b"
     dst = 0.0                  # proximity distance (m)
     smbl = 0                   # symbol_type id
@@ -1135,7 +1135,7 @@ class D104(Waypoint):
         self.dspl = dspl           # D104 display option
 
     def __repr__(self):
-        return "<Waypoint %s (%3.5f, %3.5f) (at %i)>" % (self.ident,
+        return "<Wpt_Type %s (%3.5f, %3.5f) (at %i)>" % (self.ident,
                                                          degrees(self.slat),
                                                          degrees(self.slon),
                                                          id(self))
@@ -1157,7 +1157,7 @@ class D104(Waypoint):
         return self.data
 
 
-class D105(Waypoint):
+class D105(Wpt_Type):
 
     parts = ("slat", "slon", "smbl", "ident")
     fmt = "<l l h s"
@@ -1171,7 +1171,7 @@ class D105(Waypoint):
         self.smbl = smbl
 
     def __repr__(self):
-        return "<Waypoint %s (%3.5f, %3.5f) (at %i)>" % (self.ident,
+        return "<Wpt_Type %s (%3.5f, %3.5f) (at %i)>" % (self.ident,
                                                          degrees(self.slat),
                                                          degrees(self.slon),
                                                          id(self))
@@ -1190,7 +1190,7 @@ class D105(Waypoint):
         return self.data
 
 
-class D106(Waypoint):
+class D106(Wpt_Type):
 
     parts = ("wpt_class", "subclass", "slat", "slon", "smbl",
              "ident", "lnk_ident")
@@ -1212,7 +1212,7 @@ class D106(Waypoint):
         self.smbl = smbl
 
     def __repr__(self):
-        return "<Waypoint %s (%3.5f, %3.5f) (at %i)>" % (self.ident,
+        return "<Wpt_Type %s (%3.5f, %3.5f) (at %i)>" % (self.ident,
                                                          degrees(self.slat),
                                                          degrees(self.slon),
                                                          id(self))
@@ -1234,9 +1234,9 @@ class D106(Waypoint):
         return self.data
 
 
-class D107(Waypoint):
+class D107(Wpt_Type):
 
-    parts = Waypoint.parts + ("smbl", "dspl", "dst", "color")
+    parts = Wpt_Type.parts + ("smbl", "dspl", "dst", "color")
     fmt = "<6s l l L 40s b b f b"
     smbl = 0                   # D103 symbol id
     dspl = 0                   # D103 display option
@@ -1256,7 +1256,7 @@ class D107(Waypoint):
         self.color = color
 
     def __repr__(self):
-        return "<Waypoint %s (%3.5f, %3.5f) (at %i)>" % (self.ident,
+        return "<Wpt_Type %s (%3.5f, %3.5f) (at %i)>" % (self.ident,
                                                          degrees(self.slat),
                                                          degrees(self.slon),
                                                          id(self))
@@ -1279,7 +1279,7 @@ class D107(Waypoint):
         return self.data
 
 
-class D108(Waypoint):
+class D108(Wpt_Type):
 
     parts = ("wpt_class", "color", "dspl", "attr", "smbl",
              "subclass", "slat", "slon", "alt", "dpth", "dist",
@@ -1315,7 +1315,7 @@ class D108(Waypoint):
         self.cmnt = cmnt
 
     def __repr__(self):
-        return "<Waypoint %s (%3.5f, %3.5f) (at %i)>" % (self.ident,
+        return "<Wpt_Type %s (%3.5f, %3.5f) (at %i)>" % (self.ident,
                                                          degrees(self.slat),
                                                          degrees(self.slon),
                                                          id(self))
@@ -1328,7 +1328,7 @@ class D108(Waypoint):
             self.wpt_class, self.smbl)
 
 
-class D109(Waypoint):
+class D109(Wpt_Type):
 
     parts = ("dtyp", "wpt_class", "dspl_color", "attr", "smbl",
              "subclass", "slat", "slon", "alt", "dpth", "dist",
@@ -1365,7 +1365,7 @@ class D109(Waypoint):
         self.cmnt = cmnt
 
     def __repr__(self):
-        return "<Waypoint %s (%3.5f, %3.5f) (at %i)>" % (self.ident,
+        return "<Wpt_Type %s (%3.5f, %3.5f) (at %i)>" % (self.ident,
                                                          degrees(self.slat),
                                                          degrees(self.slon),
                                                          id(self))
@@ -1378,7 +1378,7 @@ class D109(Waypoint):
             self.wpt_class, self.smbl)
 
 
-class D110(Waypoint):
+class D110(Wpt_Type):
 
     parts = ("dtyp", "wpt_class", "dspl_color", "attr", "smbl",
              "subclass", "slat", "slon", "alt", "dpth", "dist",
@@ -1387,13 +1387,13 @@ class D110(Waypoint):
     fmt = "<b b b b h 18s l l f f f 2s 2s l f l i s s s s s s"
 
 
-class D120(DataPoint):
+class D120(Data_Type):
 
     parts = ("name",)
     fmt = "<17s"
 
 
-class D150(Waypoint):
+class D150(Wpt_Type):
 
     parts = ("ident", "cc", "clss", "lat", "lon", "alt",
              "city", "state", "name", "cmnt")
@@ -1406,9 +1406,9 @@ class D150(Waypoint):
     name = ""
 
 
-class D151(Waypoint):
+class D151(Wpt_Type):
 
-    parts = Waypoint.parts + ("dst", "name", "city", "state",
+    parts = Wpt_Type.parts + ("dst", "name", "city", "state",
                               "alt", "cc", "unused2", "wpt_class")
     fmt = "< 6s l l L 40s f 30s 24s 2s i 2s c b"
     dst = 0.0
@@ -1421,9 +1421,9 @@ class D151(Waypoint):
     wpt_cass = 0
 
 
-class D152(Waypoint):
+class D152(Wpt_Type):
 
-    parts = Waypoint.parts + ("dst", "name", "city", "state",
+    parts = Wpt_Type.parts + ("dst", "name", "city", "state",
                               "alt", "cc", "unused2", "wpt_class")
     fmt = "< 6s l l L 40s f 30s 24s 2s i 2s c b"
     dst = 0.0
@@ -1436,9 +1436,9 @@ class D152(Waypoint):
     wpt_cass = 0
 
 
-class D154(Waypoint):
+class D154(Wpt_Type):
 
-    parts = Waypoint.parts + ("dst", "name", "city", "state", "alt",
+    parts = Wpt_Type.parts + ("dst", "name", "city", "state", "alt",
                               "cc", "unused2", "wpt_class", "smbl")
     fmt = "< 6s l l L 40s f 30s 24s 2s i 2s c b i"
     dst = 0.0
@@ -1452,9 +1452,9 @@ class D154(Waypoint):
     smbl = 0
 
 
-class D155(Waypoint):
+class D155(Wpt_Type):
 
-    parts = Waypoint.parts + ("dst", "name", "city", "state", "alt",
+    parts = Wpt_Type.parts + ("dst", "name", "city", "state", "alt",
                               "cc", "unused2", "wpt_class", "smbl", "dspl")
     fmt = "< 6s l l L 40s f 30s 24s 2s i 2s c b i b"
     dst = 0.0
@@ -1471,54 +1471,47 @@ class D155(Waypoint):
 
 # Route headers  ---------------------------------------------
 
-class RouteHdr(DataPoint):
+class Rte_Hdr_Type(Data_Type):
 
     def __repr__(self):
-        return "<RouteHdr (at %s)>" % id(self)
+        return "<Rte_Hdr_Type (at %s)>" % id(self)
 
 
-class D200(RouteHdr):
+class D200(Rte_Hdr_Type):
 
     parts = ("route_num",)
     fmt = "<b"
 
 
-class D201(RouteHdr):
+class D201(Rte_Hdr_Type):
 
     parts = ("route_num", "cmnt")
     fmt = "<b 20s"
     cmnt = ""
 
 
-class D202(RouteHdr):
+class D202(Rte_Hdr_Type):
 
     parts = ("ident",)
     fmt = "<s"
 
-# I don't think this should be here. D210 is a RouteLink, and
-# is defined below.
-#
-# class D210(DataPoint):
-#     parts = ("class", "subclass", "ident")
-#     fmt = "<i 18s s"
-
 
 # Route links  -----------------------------------------------
 
-class RouteLink(DataPoint):
+class Rte_Link_Type(Data_Type):
 
     def __repr__(self):
-        return "<RouteLink (at %s)" % id(self)
+        return "<Rte_Link_Type (at %s)" % id(self)
 
 
-class D210(RouteLink):
-    parts = ("clazz", "subclass", "ident")
+class D210(Rte_Link_Type):
+    parts = ("class", "subclass", "ident")
     fmt = "<h 18s s"
 
 
 # Track points  ----------------------------------------------
 
-class TrackPoint(DataPoint):
+class TrkPoint_Type(Data_Type):
 
     slat = 0
     slon = 0
@@ -1530,14 +1523,14 @@ class TrackPoint(DataPoint):
             time.asctime(time.gmtime(TimeEpoch+self.time)), id(self))
 
 
-class D300(TrackPoint):
+class D300(TrkPoint_Type):
 
     parts = ("slat", "slon", "time", "newtrk")
     fmt = "<l l L B"
     newtrk = 0
 
 
-class D301(TrackPoint):
+class D301(TrkPoint_Type):
 
     parts = ("slat", "slon", "time", "alt", "depth", "new_trk")
     fmt = "<l l L f f b"
@@ -1546,13 +1539,13 @@ class D301(TrackPoint):
     new_trk = 0
 
 
-class D302(TrackPoint):
+class D302(TrkPoint_Type):
 
     parts = ("slat", "slon", "time", "alt", "depth", "temp", "new_trk")
     fmt = "<l l L f f f b"
 
 
-class D304(TrackPoint):
+class D304(TrkPoint_Type):
 
     parts = (
         "slat", "slon", "time", "alt", "distance", "heart_rate", "cadence",
@@ -1567,16 +1560,16 @@ class D304(TrackPoint):
 
 # Track headers ----------------------------------------------
 
-class TrackHdr(DataPoint):
+class Trk_Hdr_Type(Data_Type):
 
     trk_ident = ""
 
     def __repr__(self):
-        return "<TrackHdr %s (at %i)>" % (self.trk_ident,
+        return "<Trk_Hdr_Type %s (at %i)>" % (self.trk_ident,
                                           id(self))
 
 
-class D310(TrackHdr):
+class D310(Trk_Hdr_Type):
 
     parts = ("dspl", "color", "trk_ident")
     fmt = "<b b s"
@@ -1584,13 +1577,13 @@ class D310(TrackHdr):
     color = 0
 
 
-class D311(TrackHdr):
+class D311(Trk_Hdr_Type):
 
     parts = ("index",)
     fmt = "<H"
 
 
-class D312(TrackHdr):
+class D312(Trk_Hdr_Type):
 
     parts = ("dspl", "color", "trk_ident")
     fmt = "<b b s"
@@ -1598,24 +1591,24 @@ class D312(TrackHdr):
 
 # Proximity waypoints  ---------------------------------------
 
-class ProxPoint(DataPoint):
+class Prx_Wpt_Type(Data_Type):
 
     dst = 0.0
 
 
-class D400(ProxPoint, D100):
+class D400(Prx_Wpt_Type, D100):
 
     parts = D100.parts + ("dst",)
     fmt = D100.fmt + " f"
 
 
-class D403(ProxPoint, D103):
+class D403(Prx_Wpt_Type, D103):
 
     parts = D103.parts + ("dst",)
     fmt = D103.fmt + " f"
 
 
-class D450(ProxPoint, D150):
+class D450(Prx_Wpt_Type, D150):
 
     parts = ("idx",) + D150.parts + ("dst",)
     fmt = "<i " + D150.fmt[1:] + " f"
@@ -1624,32 +1617,32 @@ class D450(ProxPoint, D150):
 
 # Almanacs ---------------------------------------------------
 
-class Almanac(DataPoint):
+class Almanac_Type(Data_Type):
     pass
 
 
-class D500(Almanac):
+class D500(Almanac_Type):
 
     parts = ("weeknum", "toa", "af0", "af1", "e",
              "sqrta", "m0", "w", "omg0", "odot", "i")
     fmt = "<i f f f f f f f f f f"
 
 
-class D501(Almanac):
+class D501(Almanac_Type):
 
     parts = ("weeknum", "toa", "af0", "af1", "e",
              "sqrta", "m0", "w", "omg0", "odot", "i", "hlth")
     fmt = "<i f f f f f f f f f f b"
 
 
-class D550(Almanac):
+class D550(Almanac_Type):
 
     parts = ("svid", "weeknum", "toa", "af0", "af1", "e",
              "sqrta", "m0", "w", "omg0", "odot", "i")
     fmt = "<c i f f f f f f f f f f"
 
 
-class D551(Almanac):
+class D551(Almanac_Type):
 
     parts = ("svid", "weeknum", "toa", "af0", "af1", "e",
              "sqrta", "m0", "w", "omg0", "odot", "i", "hlth")
@@ -1658,7 +1651,7 @@ class D551(Almanac):
 
 # Date & Time  ---------------------------------------------------
 
-class TimePoint(DataPoint):
+class Date_Time_Type(Data_Type):
 
     # Not sure what the last four bytes are. Not in docs.
     # hmm... eTrex just sends 8 bytes, no trailing 4 bytes
@@ -1677,18 +1670,18 @@ class TimePoint(DataPoint):
             self.hour, self.min, self.sec)
 
 
-class D600(TimePoint):
+class D600(Date_Time_Type):
     pass
 
 
-class D601(TimePoint):
+class D601(Date_Time_Type):
     """D601 time point.
 
     Used by GPSmap 60cs, no documentation as of 2004-09-26.
     """
 
 
-class D650(DataPoint):
+class D650(Data_Type):
 
     parts = ("takeoff_time", "landing_time", "takeoff_slat", "takeoff_slon",
              "landing_slat", "landing_slon", "night_time", "num_landings",
@@ -1700,7 +1693,7 @@ class D650(DataPoint):
 
 # Position   ---------------------------------------------------
 
-class D700(DataPoint):
+class D700(Data_Type):
 
     parts = ("rlat", "rlon")
     fmt = "<d d"
@@ -1712,7 +1705,7 @@ class D700(DataPoint):
 
 # Live position info
 
-class D800(DataPoint):
+class D800(Data_Type):
 
     parts = ("alt", "epe", "eph", "epv", "fix", "tow", "rlat", "rlon",
              "east", "north", "up", "msl_height", "leap_secs", "wn_days")
@@ -1723,7 +1716,7 @@ class D800(DataPoint):
             % (self.tow, self.rlat, self.rlon, self.east, self.north)
 
 
-class D906(DataPoint):
+class D906(Data_Type):
 
     parts = ("start_time", "total_time", "total_distance", "begin_slat",
              "begin_slon", "end_slat", "end_slon", "calories",
@@ -1731,35 +1724,35 @@ class D906(DataPoint):
     fmt = "<l l f l l l l i b b"
 
 
-class D907(DataPoint):
+class D907(Data_Type):
     """D907 data point.
 
     Used by GPSmap 60cs, no documentation as of 2004-09-26.
     """
 
 
-class D908(DataPoint):
+class D908(Data_Type):
     """D908 data point.
 
     Used by GPSmap 60cs, no documentation as of 2004-09-26.
     """
 
 
-class D909(DataPoint):
+class D909(Data_Type):
     """D909 data point.
 
     Used by GPSmap 60cs, no documentation as of 2004-09-26.
     """
 
 
-class D910(DataPoint):
+class D910(Data_Type):
     """D910 data point.
 
     Used by GPSmap 60cs, no documentation as of 2004-09-26.
     """
 
 
-class D1011(DataPoint):
+class D1011(Data_Type):
     """A lap point.
 
     Used by Edge 305.
@@ -1786,7 +1779,7 @@ class D1015(D1011):
     """
 
 
-class D1009(DataPoint):
+class D1009(Data_Type):
     """A run data point."""
 
     parts = ("track_index", "first_lap_index", "last_lap_index",
@@ -2522,12 +2515,12 @@ def MyCallbackgetRoutes(point, recordnumber, totalpointsToGet, packet_id):
 
     # print point.__class__
 
-    if isinstance(point, (RouteHdr)):
+    if isinstance(point, (Rte_Hdr_Type)):
         print("Route: ", point)
 
     # I really don't want the D210_Rte_Link_Type
 
-    elif not isinstance(point, RouteLink):
+    elif not isinstance(point, Rte_Link_Type):
 
         if recordnumber != totalpointsToGet:
             print("   ", point)
@@ -2541,16 +2534,16 @@ def MyCallbackgetRoutes(point, recordnumber, totalpointsToGet, packet_id):
 
 def MyCallbackputRoutes(point, recordnumber, totalPointsToSend, packet_id):
 
-    if isinstance(point, RouteHdr):
+    if isinstance(point, Rte_Hdr_Type):
         print()
         print("Adding route:", point)
-    elif not isinstance(point, RouteLink):
+    elif not isinstance(point, Rte_Link_Type):
         print("   waypoint added", point.ident)
 
 
 def MyCallbackgetTracks(point, recordnumber, totalPointsToGet, packet_id):
 
-    if isinstance(point, TrackHdr):
+    if isinstance(point, Trk_Hdr_Type):
         print("Track: ", point)
     else:
 
@@ -2574,7 +2567,7 @@ def MyCallbackgetTracks(point, recordnumber, totalPointsToGet, packet_id):
 
 def MyCallbackputTracks(point, recordnumber, totalPointsToSend, packet_id):
 
-    if isinstance(point, TrackHdr):
+    if isinstance(point, Trk_Hdr_Type):
         print("Track: ", point)
     else:
         print("   ", point)

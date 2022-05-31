@@ -2017,7 +2017,7 @@ class SerialLink(P000):
         checksum = (256 - sum) % 256
         return checksum
 
-    def decode(self, buffer):
+    def unpack(self, buffer):
         header = self.DLE
         trailer = [self.DLE, self.ETX]
         # Only the size, data, and checksum fields have to be unescaped, but
@@ -2044,6 +2044,21 @@ class SerialLink(P000):
 
             return {'id': id, 'data': data}
 
+    def pack(self, packet_id, data):
+        log.info("Pack packet")
+        size = len(data)
+        log.debug(f"size: {size}")
+        checksum = self.checksum(bytes([packet_id])
+                                 + bytes([size])
+                                 + data)
+        log.debug(f"checksum: {checksum}")
+        packet = bytes([self.DLE]) \
+            + bytes([packet_id]) \
+            + self.escape(bytes([size])) \
+            + self.escape(data) \
+            + self.escape(bytes([checksum])) \
+            + bytes([self.DLE]) \
+            + bytes([self.ETX])
     def read(self):
         DLE = bytes([self.DLE])
         ETX = bytes([self.ETX])
@@ -2083,26 +2098,11 @@ class SerialLink(P000):
 
     def readPacket(self, sendAck=True):
         buffer = self.read()
-        packet = self.decode(buffer)
+        packet = self.unpack(buffer)
         if sendAck:
 
         return packet
 
-    def encode(self, packet_id, data):
-        log.info("Encode packet")
-        size = len(data)
-        log.debug(f"size: {size}")
-        checksum = self.checksum(bytes([packet_id])
-                                 + bytes([size])
-                                 + data)
-        log.debug(f"checksum: {checksum}")
-        packet = bytes([self.DLE]) \
-            + bytes([packet_id]) \
-            + self.escape(bytes([size])) \
-            + self.escape(data) \
-            + self.escape(bytes([checksum])) \
-            + bytes([self.DLE]) \
-            + bytes([self.ETX])
             self.sendAcknowledge(packet['id'])
 
         return packet
@@ -2121,7 +2121,7 @@ class SerialLink(P000):
             data_type = type(data).__name__
             raise ProtocolException(f"Invalid data type: should be 'bytes' or 'int', but is {data_type}")
 
-        buffer = self.encode(packet_id, data)
+        buffer = self.pack(packet_id, data)
         self.write(buffer)
 
         if readAck:

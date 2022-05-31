@@ -2046,6 +2046,18 @@ class SerialLink(P000):
 
     def pack(self, packet_id, data):
         log.info("Pack packet")
+        if isinstance(data, bytes):
+            pass
+        elif isinstance(data, int):
+            # The packet data contains a 16-bit unsigned integer that indicates
+            # a particular command.
+            data = data.to_bytes(2, byteorder='little')
+        elif data is None:
+             # The packet data is not used and may have a zero size
+            data = bytes()
+        else:
+            data_type = type(data).__name__
+            raise ProtocolException(f"Invalid data type: should be 'bytes' or 'int', but is {data_type}")
         size = len(data)
         log.debug(f"size: {size}")
         checksum = self.checksum(bytes([packet_id])
@@ -2108,18 +2120,6 @@ class SerialLink(P000):
         return packet
 
     def sendPacket(self, packet_id, data, readAck=True):
-        if isinstance(data, bytes):
-            pass
-        elif isinstance(data, int):
-            # The packet data contains a 16-bit unsigned integer that indicates
-            # a particular command.
-            data = data.to_bytes(2, byteorder='little')
-        elif data is None:
-             # The packet data is not used and may have a zero size
-            data = bytes()
-        else:
-            data_type = type(data).__name__
-            raise ProtocolException(f"Invalid data type: should be 'bytes' or 'int', but is {data_type}")
 
         buffer = self.pack(packet_id, data)
         self.write(buffer)

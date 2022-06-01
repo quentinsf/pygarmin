@@ -433,13 +433,10 @@ class TransferProtocol:
 
     """
 
-    def __init__(self, link, cmdproto, datatypes=None):
+    def __init__(self, link, cmdproto, datatypes):
         self.link = link
         self.cmdproto = cmdproto
-        if isinstance(datatypes, list):
-            self.datatypes = datatypes
-        else:
-            self.datatypes = (datatypes,)
+        self.datatypes = datatypes
 
     def putData(self, callback, cmd, sendData):
         numrecords = len(sendData)

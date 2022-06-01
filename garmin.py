@@ -339,12 +339,31 @@ class A001:
         return protocols
 
 
+class CommandProtocol:
+    """Device Command Protocol.
 
+    The Device Command protocols are used to send commands to the device. An
+    unimplemented command will not cause an error, but is ignored.
 
+    Device Command Protocol Packet Sequence
+    | N | Direction          | Packet ID        | Packet Data Type |
+    |---+--------------------+------------------+------------------|
+    | 0 | Device1 to Device2 | Pid_Command_Data | Command_Id_Type  |
 
+    """
+    Cmnd_Abort_Transfer = None
+    Cmnd_Turn_Off_Pwr = None
 
+    def __init__(self, link):
+        self.link = link
 
+    def abortTransfer(self):
+        self.link.sendPacket(self.link.Pid_Command_Data,
+                             self.Cmnd_Abort_Transfer)
 
+    def turnPowerOff(self):
+        self.link.sendPacket(self.link.Pid_Command_Data,
+                             self.Cmnd_Turn_Off_Pwr)
 
 
 class A010(CommandProtocol):
@@ -439,13 +458,7 @@ class TransferProtocol:
 
         self.link.sendPacket(self.link.Pid_Xfer_Cmplt, cmd)
 
-    def abortTransfer(self):
-        self.link.sendPacket(
-            self.link.Pid_Command_Data, self.cmdproto.Cmnd_Abort_Transfer)
 
-    def turnPowerOff(self):
-        self.link.sendPacket(
-            self.link.Pid_Command_Data, self.cmdproto.Cmnd_Turn_Off_Pwr)
 class SingleTransferProtocol(TransferProtocol):
     """Transfer protocols to send or receive one set of data.
 
@@ -2655,10 +2668,10 @@ class Garmin:
         return self.pvt.getData(callback)
 
     def abortTransfer(self):
-        return self.command.abortTransfer()
+        self.device_command.abortTransfer()
 
     def turnPowerOff(self):
-        return self.command.turnPowerOff()
+        self.device_command.turnPowerOff()
 
 
 # Callback examples functions

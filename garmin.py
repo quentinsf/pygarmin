@@ -327,15 +327,12 @@ class A001:
         except:
             raise ValueError(f"Unknown product ID number {product_id}")
 
-        try:
-            for capabilities in model:
-                version = capabilities[0]
-                if version is None:
-                    break
-                elif (software_version >= version[0] and software_version < version[1]):
-                    break
-        except:
-            raise ValueError(f"Unknown software version number {software_version}")
+        for capabilities in model:
+            version = capabilities[0]
+            if version is None:
+                break
+            elif (software_version >= version[0] and software_version < version[1]):
+                break
 
         protocols = [protocol for protocol in capabilities[1:] if protocol]
         protocols.append(("A600", "D600"))

@@ -91,10 +91,8 @@ class ProtocolException(GarminException):
 class P000:
     """Physical layer for communicating with Garmin."""
 
-    def read(self):
         pass
 
-    def write(self, data):
         pass
 
 

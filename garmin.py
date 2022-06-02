@@ -2132,6 +2132,7 @@ class SerialLink(P000):
         self.port = port
         self.timeout = 1
         self.baudrate = 9600
+        self.max_retries = 5
         self.ser = serial.Serial(port,
                                  timeout=self.timeout,
                                  baudrate=self.baudrate)
@@ -2192,10 +2193,10 @@ class SerialLink(P000):
         data = packet[3:-3]
         checksum = packet[-3]
         if size != len(data):
-            raise ProtocolException("Invalid packet: wrong size of packet data")
+            raise LinkException("Invalid packet: wrong size of packet data")
         # 2's complement of the sum of all bytes from byte 1 to byte n-3
         if checksum != self.checksum(packet[1:-3]):
-            raise ProtocolException("Invalid packet: checksum failed")
+            raise LinkException("Invalid packet: checksum failed")
 
         return {'id': id, 'data': data}
 
@@ -2264,7 +2265,7 @@ class SerialLink(P000):
                 if buffer.startswith(DLE):
                     packet += bytes([buffer.pop(0)])
                 else:
-                    raise LinkException("Invalid packet: doesn't start with DLE")
+                    raise LinkException("Invalid packet: doesn't start with DLE character")
             elif buffer.startswith(DLE):
                 # Escape DLE
                 if buffer == DLE + DLE:
@@ -2275,7 +2276,7 @@ class SerialLink(P000):
                     packet += buffer
                     break
                 else:
-                    raise LinkException("Invalid packet: doesn't end with DLE + ETX")
+                    raise LinkException("Invalid packet: doesn't end with DLE and ETX character")
             else:
                 packet += bytes([buffer.pop(0)])
 
@@ -2284,44 +2285,84 @@ class SerialLink(P000):
     def write(self, buffer):
         self.ser.write(buffer)
 
-    def readPacket(self, sendAck=True):
-        buffer = self.read()
-        log.debug(f"> {bytes.hex(buffer)}")
-        packet = self.unpack(buffer)
-        if sendAck:
-            self.sendAcknowledge(packet['id'])
+    def readPacket(self, acknowledge=True):
+        retries = 0
+        while retries <= self.max_retries:
+            try:
+                buffer = self.read()
+                log.debug(f"> {bytes.hex(buffer)}")
+                packet = self.unpack(buffer)
+                if acknowledge:
+                    self.sendACK(packet['id'])
+                break
+            except LinkException as e:
+                log.info(e)
+                self.sendNAK()
+                retries += 1
+
+        if retries > self.max_retries:
+            raise LinkException("Maximum retries exceeded.")
 
         return packet
 
-    def sendPacket(self, packet_id, data, readAck=True):
+    def sendPacket(self, packet_id, data, acknowledge=True):
         """Send a packet."""
         buffer = self.pack(packet_id, data)
         log.debug(f"< {bytes.hex(buffer)}")
-        self.write(buffer)
-        if readAck:
-            self.readAcknowledge(packet_id)
+        retries = 0
+        while retries <= self.max_retries:
+            try:
+                self.write(buffer)
+                if acknowledge:
+                    self.readACK(packet_id)
+                break
+            except LinkException as e:
+                log.info(e)
+                retries += 1
 
-    def readAcknowledge(self, packet_id):
-        "Read an ack msg in response to a particular sent msg"
-        log.info("Read ACK")
-        packet = self.readPacket(sendAck=False)
+        if retries > self.max_retries:
+            raise LinkException("Maximum retries exceeded.")
+
+
+    def readACK(self, packet_id):
+        """Read a ACK/NAK packet.
+
+        If an ACK packet is received the packet was received correctly and
+        communication may continue. If a NAK packet is received, the data packet was not
+        received correctly and should be sent again.
+
+        """
+        log.info("Read ACK/NAK")
+        packet = self.readPacket(acknowledge=False)
         expected_pid = packet_id
         received_pid = int.from_bytes(packet['data'], byteorder='little')
 
-        if packet['id'] == self.Pid_Nak_Byte:
-            log.info("Received NAK packet")
-            raise LinkException("Transmission error in the previous received packet")
-        elif packet['id'] == self.Pid_Ack_Byte:
+        if packet['id'] == self.Pid_Ack_Byte:
             log.info("Received ACK packet")
             if expected_pid != received_pid:
                 raise ProtocolException(f"Device expected {expected_pid}, got {received_pid}")
+        elif packet['id'] == self.Pid_Nak_Byte:
+            log.info("Received NAK packet")
+            raise LinkException("Packet was not received correctly.")
         else:
-            raise GarminException("Neither ACK nor NAK packet received")
+            raise GarminException("Received neither ACK nor NAK packet")
 
-    def sendAcknowledge(self, packet_id):
-        log.info("Send ACK")
+    def sendACK(self, packet_id):
+        """Send an ACK packet."""
+        log.info("Send ACK packet")
         data = packet_id.to_bytes(1, byteorder='little')
-        self.sendPacket(self.Pid_Ack_Byte, data, readAck=False)
+        self.sendPacket(self.Pid_Ack_Byte, data, acknowledge=False)
+
+    def sendNAK(self):
+        """Send a NAK packet.
+
+        NAKs are used only to indicate errors in the communications link, not
+        errors in any higher-layer protocol.
+
+        """
+        log.info("Send NAK packet")
+        data = bytes()  # we cannot determine the packet id because it was corrupted
+        self.sendPacket(self.Pid_Nak_Byte, data, acknowledge=False)
 
     def __del__(self):
         """Should close down any opened resources."""

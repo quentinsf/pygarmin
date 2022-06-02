@@ -29,9 +29,11 @@
 
 """
 
+from array import array
 import os
 import sys
 import time
+from functools import cached_property
 import struct
 import newstruct
 import math
@@ -2344,158 +2346,252 @@ class SerialLink(P000):
             self.ser.close()
 
 
-class USBLink:
+class USBLink(P000):
     """Implementation of the Garmin USB protocol.
 
     It will talk to the first Garmin GPS device it finds.
-    """
 
-    Pid_Data_Available = 2
+    """
+    idVendor = 2334  # 0x091e
+    configuration_value = 1
+    max_buffer_size = 4096
+
+    # Packet Types
+    USB_Protocol_Layer = 0  # 0x00
+    Application_Layer = 20  # 0x14
+
+    # Endpoints
+    Bulk_OUT = 2        # 0x02
+    Interrupt_IN = 129  # 0x81
+    # Bulk_IN = 131       # 0x83
+
+    # USB Protocol Layer Packet Ids
+    # Pid_Data_Available = 2
     Pid_Start_Session = 5
     Pid_Session_Started = 6
-    # These arent in the specification, but this is what Edge 305
-    # uses.
-    Pid_Start_Session2 = 16
-    Pid_Session_Started2 = 17
 
     def __init__(self):
         # Import usb here, so that you don't have to have that module
         # installed, if you're not using a usb link.
         import usb
-        self.garmin_dev = None
-        for bus in usb.busses():
-            for dev in bus.devices:
-                if dev.idVendor == 2334:
-                    self.garmin_dev = dev
-                    break
-            if self.garmin_dev:
-                break
+        self.usb = usb
+        self.timeout = 1
+        self.unit_id = self.start_session()
+
+    def set_timeout(self, seconds):
+        self.timeout = seconds
+
+    def get_timeout(self):
+        return self.timeout
+
+    @cached_property
+    def dev(self):
+        """Return the Garmin device.
+
+        This property will cause some USB traffic the first time it is accessed
+        and cache the resulting value for future use.
+
+        """
+        dev = self.usb.core.find(idVendor=self.idVendor)
+        if dev is None:
+            raise ValueError('Garmin device not found')
+
+        return dev
+
+    @cached_property
+    def cfg(self):
+        """Configure the Garmin device and return the current configuration.
+
+        This property will cause some USB traffic the first time it is accessed
+        and cache the resulting value for future use.
+
+        """
+        # Check the currently active configuration. If the configuration we want
+        # is already active, then we don't have to select any configuration.
+        # This prevents the configuration selection problem described in the
+        # libusb documentation
+        # (http://libusb.sourceforge.net/api-1.0/libusb_caveats.html#configsel).
+        cfg = self.dev.get_active_configuration()
+        if cfg.bConfigurationValue != self.configuration_value:
+            self.dev.set_configuration(self.configuration_value)
+            cfg = self.dev.get_active_configuration()
+
+        return cfg
+
+    @cached_property
+    def intf(self):
+        """Return the current interface configuration.
+
+        This property will cause some USB traffic the first time it is accessed
+        and cache the resulting value for future use.
+
+        """
+        intf = self.cfg[(0, 0)]
+        return intf
+
+    @cached_property
+    def ep_in(self):
+        """Return the Interrupt IN instance.
+
+        This property will cause some USB traffic the first time it is accessed
+        and cache the resulting value for future use.
+
+        """
+        ep = self.usb.util.find_descriptor(self.intf,
+                                           bEndpointAddress=self.Interrupt_IN)
+        return ep
+
+    @cached_property
+    def ep_out(self):
+        """Return the Bulk OUT instance.
+
+        This property will cause some USB traffic the first time it is accessed
+        and cache the resulting value for future use.
+
+        """
+
+        ep = self.usb.util.find_descriptor(self.intf,
+                                           bEndpointAddress=self.Bulk_OUT)
+        return ep
+
+    def unpack(self, buffer):
+        """Unpack a raw USB packet.
+
+        Return a tuple: (packet_id, data)"""
+        packet_type = buffer[0]  # unused
+        reserved_1 = buffer[1:4]  # unused
+        id = buffer[4:6]
+        reserved_2 = buffer[6:8]  # unused
+        size = buffer[8:12]
+        data = buffer[12:]
+
+        id = int.from_bytes(id, byteorder='little')
+        size = int.from_bytes(size, byteorder='little')
+
+        if size != len(data):
+            raise ProtocolException("Invalid packet: wrong size of packet data")
+
+        return {'id': id, 'data': data}
+
+    def pack(self, layer, packet_id, data=None):
+        """Pack an USB packet.
+
+        USB Packet Format:
+        | Byte Number | Byte Description | Notes                                          |
+        |-------------+------------------+------------------------------------------------|
+        |           0 | Packet Type      | USB Protocol Layer = 0, Application Layer = 20 |
+        |         1-3 | Reserved         | must be set to 0                               |
+        |         4-5 | Packet ID        |                                                |
+        |         6-7 | Reserved         | must be set to 0                               |
+        |        8-11 | Data size        |                                                |
+        |         12+ | Data             |                                                |
+        """
+        log.info("Pack packet")
+        if isinstance(data, bytes):
+            pass
+        elif isinstance(data, int):
+            # The packet data contains a 16-bit unsigned integer that indicates
+            # a particular command.
+            data = data.to_bytes(2, byteorder='little')
+        elif data is None:
+             # The packet data is not used and may have a zero size
+            data = bytes()
         else:
-            raise LinkException("No Garmin device found!")
-        self.handle = self.garmin_dev.open()
-        self.handle.claimInterface(0)
+            data_type = type(data).__name__
+            raise ProtocolException(f"Invalid data type: should be 'bytes' or 'int', but is {data_type}")
 
-        try:
-            self.startSession()
-        except usb.USBError as error:
-            if error.message == "No error":
-                # I'm not sure why we get a "No error" error something,
-                # but I suspect the device wasn't in a good state.
-                # Simply restarting the session once seems to solve it.
-                self.startSession()
-            else:
-                raise
+        size = len(data)
+        log.debug(f"Data size: {size}")
 
-    def startSession(self):
-        """Start the USB session."""
-        start_packet = self.constructPacket(0, self.Pid_Start_Session)
-        self.sendUSBPacket(start_packet)
-        # Some devices use another start packet.
-        start_packet2 = self.constructPacket(0, self.Pid_Session_Started2)
-        self.sendUSBPacket(start_packet2)
-        self.unit_id = self.readSessionStartedPacket()
+        packet = bytes([layer]) \
+            + bytes([0]) * 3 \
+            + packet_id.to_bytes(2, byteorder='little') \
+            + bytes([0]) * 2 \
+            + size.to_bytes(4, byteorder='little') \
+            + data
 
-    def readSessionStartedPacket(self):
-        """Read from the USB bus until session started packet is received."""
-        session_started = False
-        unit_id_data = None
-        while not session_started:
-            packet = self.readUSBPacket(16)
-            if len(packet) != 16:
-                continue
-            # We have something that could be the right packet.
-            packet_id, unit_id_data = self.unpack(packet)
-            if packet_id in [self.Pid_Session_Started,
-                             self.Pid_Session_Started2]:
-                session_started = True
+        return packet
 
-        [self.unit_id] = newstruct.unpack("<L", unit_id_data)
+    def read(self):
+        """Read buffer."""
+        endpoint = self.Interrupt_IN
+        size = self.max_buffer_size
+        # The libusb timeout is specified in milliseconds
+        timeout = self.timeout * 1000 if self.timeout else None
+        buffer = self.dev.read(endpoint, size, timeout=timeout)
+        # pyusb returns an array object, but we want a bytes object
+        return buffer.tobytes()
 
-    def constructPacket(self, layer, packet_id, data=None):
-        """Construct an USB package to be sent."""
-        if data:
-            if isinstance(data, int):
-                data = newstruct.pack("<h", data)
+    def write(self, buffer):
+        """Write buffer."""
+        endpoint = self.Bulk_OUT
+        # The libusb timeout is specified in milliseconds
+        timeout = self.timeout * 1000 if self.timeout else None
+        self.dev.write(endpoint, buffer, timeout=timeout)
 
-            data_part = list(newstruct.pack("<l", len(data)))
-            data_part += list(data)
-        else:
-            data_part = [chr(0)]*4
-
-        package = [chr(layer)]
-        package += [chr(0)]*3
-        package += list(newstruct.pack("<h", packet_id))
-        package += [chr(0)]*2
-        package += data_part
-        return package
+    def readPacket(self):
+        """Read a packet."""
+        buffer = self.read()
+        packet = self.unpack(buffer)
+        return packet
 
     def sendPacket(self, packet_id, data):
         """Send a packet."""
-        packet = self.constructPacket(20, packet_id, data)
-        self.sendUSBPacket(packet)
+        buffer = self.pack(self.Application_Layer, packet_id, data)
+        self.write(buffer)
 
-    def sendUSBPacket(self, packet):
-        """Send a packet over the USB bus."""
-        usb_log.debug("Sending %s bytes..." % len(packet))
-        usb_packet_log.debug("< usb: %s" % (hexdump(packet)))
-        sent = self.handle.bulkWrite(0x02, packet)
-        usb_log.debug("Sent %s bytes" % sent)
+    def send_start_session_packet(self):
+        """Send a Start Session packet.
 
-    def unpack(self, packet):
-        """Unpack a raw USB package, which is a list of bytes.
+        The Start Session packet must be sent by the host to begin transferring
+        packets over USB. It must also be sent anytime the host deliberately
+        stops transferring packets continuously over USB and wishes to begin
+        again. No data is associated with this packet.
 
-        Return a tuple: (packet_id, data)"""
-        header = packet[:12]
-        data = packet[12:]
-        packet_type, unused1, unused2, packet_id, reserved, data_size = (
-            newstruct.unpack("<b h b h h l", header))
-        return packet_id, data
+        Start Session Packet
+        | N | Direction      | Packet ID         | Packet Data Type |
+        |---+----------------+-------------------+------------------|
+        | 0 | Host to Device | Pid_Start_Session | n/a              |
 
-    def readPacket(self, size=1024):
-        """Read a packet."""
-        packet = self.readUSBPacket(size)
-        packet_id, data = self.unpack(packet)
-        return packet_id, data
+        """
+        log.info("Send Start Session packet")
+        buffer = self.pack(self.USB_Protocol_Layer, self.Pid_Start_Session)
+        self.write(buffer)
 
-    def readUSBPacket(self, size):
-        """Read a packet over USB bus."""
-        usb_log.debug("Reading %s bytes..." % size)
-        packet = self.handle.interruptRead(0x81, size)
-        packet = ''.join(newstruct.pack("<B", byte) for byte in packet)
-        usb_packet_log.debug("> usb: %s" % (hexdump(packet)))
-        usb_log.debug("Read %s bytes" % len(packet))
+    def read_session_started_packet(self):
+        """Read Start Session packet.
+
+        The Session Started packet indicates that transfers can take place to
+        and from the device. The host should ignore any packets it receives
+        before receiving this packet. The data returned with this packet is the
+        device’s unit ID.
+
+        Session Started Packet
+        | N | Direction      | Packet ID           | Packet Data Type |
+        |---+----------------+---------------------+------------------|
+        | 0 | Device to Host | Pid_Session_Started | uint32           |
+
+        """
+        log.info("Read Session Started packet")
+        while True:
+            packet = self.readPacket()
+            if packet['id'] == self.Pid_Session_Started:
+                log.info("Received Session Started packet")
+                break
+
         return packet
 
-    def settimeout(self, timeout):
-        pass
+    def start_session(self):
+        """Start USB session and return the unit ID.
 
-    def close(self):
-        self.handle.releaseInterface()
+        """
+        log.info("Start USB session")
+        self.send_start_session_packet()
+        packet = self.read_session_started_packet()
+        unit_id = int.from_bytes(packet['data'], byteorder='little')
+        log.info(f"Unit ID: {unit_id}")
 
-
-
-
-
-
-
-        except LinkException as e:
-
-            log.log(VERBOSE, "PCP not supported")
-
-
-        self.link = self.protos["link"][0](physicalLayer)
-        self.cmdProto = self.protos["command"][0]
-
-        # Now we set up 'links' through which we can get data of the
-        # appropriate types
-
-
-        self.command = TransferProtocol(self.link, self.cmdProto)
-
-
-
-
-            return unit_id
+        return unit_id
 
 
 class Garmin:

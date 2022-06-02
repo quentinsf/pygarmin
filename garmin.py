@@ -1033,8 +1033,7 @@ class A904:
     No documentation as of 2004-02-24.
     """
 
-
-class A906(MultiTransferProtocol):
+class A906(SingleTransferProtocol):
     """Lap Transfer Protocol.
 
     A906 Lap Transfer Protocol Packet Sequence

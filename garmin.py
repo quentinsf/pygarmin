@@ -129,7 +129,7 @@ class L000:
                 # properties of the device and are not formatted for display to the
                 # end user. According to the specification the host should ignore
                 # it.
-                log.debug(f"Got packet type {self.Pid_Ext_Product_Data}, ignoring...")
+                log.info(f"Got packet type {self.Pid_Ext_Product_Data}, ignoring...")
             else:
                 break
 

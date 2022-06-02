@@ -2130,6 +2130,7 @@ class SerialLink(P000):
         # Import serial here, so that you don't have to have that module
         # installed, if you're not using a serial link.
         import serial
+        self.port = port
         self.timeout = 1
         self.baudrate = 9600
         self.ser = serial.Serial(port,

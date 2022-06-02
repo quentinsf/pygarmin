@@ -67,11 +67,6 @@ VERBOSE = 5
 # secs from Unix epoch (start of 1970) to Sun Dec 31 00:00:00 1989
 TimeEpoch = 631065600
 
-def hexdump(data):
-    if isinstance(data, int):
-        data = newstruct.pack('<H', data)
-    return ''.join(["%02x" % x for x in data])
-
 
 class GarminException(Exception):
 
@@ -127,7 +122,7 @@ class L000:
         """Read a packet."""
         while True:
             packet = self.phys.readPacket()
-            log.debug("> packet %3d: %s" % (packet['id'], hexdump(packet['data'])))
+            log.debug("> packet %3d: %s" % (packet['id'], bytes.hex(packet['data'])))
             if packet['id'] == self.Pid_Ext_Product_Data:
                 # The Ext_Product_Data_Type contains zero or more null-terminated
                 # strings that are used during manufacturing to identify other
@@ -2301,6 +2296,7 @@ class SerialLink(P000):
 
     def readPacket(self, sendAck=True):
         buffer = self.read()
+        log.debug(f"> {bytes.hex(buffer)}")
         packet = self.unpack(buffer)
         if sendAck:
             self.sendAcknowledge(packet['id'])
@@ -2310,6 +2306,7 @@ class SerialLink(P000):
     def sendPacket(self, packet_id, data, readAck=True):
         """Send a packet."""
         buffer = self.pack(packet_id, data)
+        log.debug(f"< {bytes.hex(buffer)}")
         self.write(buffer)
         if readAck:
             self.readAcknowledge(packet_id)
@@ -2532,12 +2529,14 @@ class USBLink(P000):
     def readPacket(self):
         """Read a packet."""
         buffer = self.read()
+        log.debug(f"> {bytes.hex(buffer)}")
         packet = self.unpack(buffer)
         return packet
 
     def sendPacket(self, packet_id, data):
         """Send a packet."""
         buffer = self.pack(self.Application_Layer, packet_id, data)
+        log.debug(f"< {bytes.hex(buffer)}")
         self.write(buffer)
 
     def send_start_session_packet(self):

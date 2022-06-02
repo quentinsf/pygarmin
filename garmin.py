@@ -91,8 +91,10 @@ class ProtocolException(GarminException):
 class P000:
     """Physical layer for communicating with Garmin."""
 
+    def set_baudrate(self, value):
         pass
 
+    def get_baudrate(self):
         pass
 
 

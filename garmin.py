@@ -2184,30 +2184,20 @@ class SerialLink(P000):
         data bytes, followed by a three-byte trailer (Checksum, DLE, and ETX).
 
         """
-        header = self.DLE
-        trailer = [self.DLE, self.ETX]
         # Only the size, data, and checksum fields have to be unescaped, but
         # unescaping the whole packet doesn't hurt
         packet = self.unescape(buffer)
-        packet_start = packet[0]
-        packet_end = list(packet[-2:])
+        id = packet[1]
+        size = packet[2]
+        data = packet[3:-3]
+        checksum = packet[-3]
+        if size != len(data):
+            raise ProtocolException("Invalid packet: wrong size of packet data")
+        # 2's complement of the sum of all bytes from byte 1 to byte n-3
+        if checksum != self.checksum(packet[1:-3]):
+            raise ProtocolException("Invalid packet: checksum failed")
 
-        if packet_start != header:
-            log.debug("Invalid packet: doesn't start with DLE character")
-        elif packet_end != trailer:
-            log.debug("Invalid packet: doesn't end with DLE and ETX character")
-        else:
-            id = packet[1]
-            size = packet[2]
-            data = packet[3:-3]
-            checksum = packet[-3]
-            if size != len(data):
-                raise ProtocolException("Invalid packet: wrong size of packet data")
-            # 2's complement of the sum of all bytes from byte 1 to byte n-3
-            if checksum != self.checksum(packet[1:-3]):
-                raise ProtocolException("Invalid packet: checksum failed")
-
-            return {'id': id, 'data': data}
+        return {'id': id, 'data': data}
 
     def pack(self, packet_id, data):
         """

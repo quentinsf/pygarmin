@@ -31,11 +31,11 @@
 
 from array import array
 import os
+import re
 import sys
 import time
 from functools import cached_property
 import struct
-import newstruct
 import math
 import logging
 
@@ -66,6 +66,59 @@ VERBOSE = 5
 
 # secs from Unix epoch (start of 1970) to Sun Dec 31 00:00:00 1989
 TimeEpoch = 631065600
+
+def pack(fmt, *args):
+    """Wrapper around struct.pack().
+
+    It supports the 'z' format character, which specifies a null-terminated
+    string.
+
+    """
+    new_fmt = ''
+    arg_number = 0
+    # Iterate over all format characters and its preceding repeat count
+    for match in re.finditer(r'(?P<count>\d*)(?P<char>\D)(?P<whitespace>\s*)', fmt):
+        char = match.group('char')
+        if char == 'z':
+            # Replace the 'z' format character with the 's' preceded by the byte
+            # length
+            asciiz = args[arg_number]
+            asciiz_len = len(asciiz) + 1  # added null byte
+            new_fmt += f'{asciiz_len}s' + match.group('whitespace')
+            arg_number += 1
+        elif char == 's':
+            # For the 's' format character, the count is interpreted as the
+            # length of the bytes
+            new_fmt += match.group(0)
+            arg_number += 1
+        elif char in 'cbB?hHiIlLqQnNefdpP':
+            # For the other format characters, the count is interpreted as a
+            # repeat count
+            count = match.group('count')
+            # If a count is not given, it defaults to 1.
+            repeat = int(count) if count else 1
+            new_fmt += match.group(0)
+            arg_number += repeat
+        else:
+            new_fmt += match.group(0)
+    return struct.pack(new_fmt, *args)
+
+def unpack(fmt, buffer):
+    """Wrapper around struct.unpack().
+
+    It supports the 'z' format character, which specifies a null-terminated
+    string.
+
+    """
+    while 'z' in fmt:
+        pos = fmt.find('z')
+        asciiz_pos = struct.calcsize(fmt[:pos])
+        asciiz_len = buffer[asciiz_pos:].find(b'\x00')
+        if asciiz_len == -1:
+            raise ValueError("Null-terminated string not found")
+        # replace 'z' with length + 's' + null byte
+        fmt = fmt.replace('z', f'{asciiz_len}sx', 1)
+    return struct.unpack(fmt, buffer)
 
 
 class GarminException(Exception):
@@ -231,7 +284,7 @@ class A000:
         # - char[]: product_description; zero or more additional null-terminated strings
         size = len(packet['data']) - struct.calcsize('<Hh')
         fmt = f'<Hh{size}s'
-        product_id, software_version, product_description = struct.unpack(fmt, packet['data'])
+        product_id, software_version, product_description = unpack(fmt, packet['data'])
         product_description = [x.decode('ascii') for x in product_description.split(b'\x00')]
         product_description.pop()  # remove the last empty byte
 
@@ -278,7 +331,7 @@ class A001:
         count = len(packet['data']) // size
         fmt = '<' + count * 'BH'
         # Unpack data to a list of tag+number pairs
-        records = struct.unpack(fmt, packet['data'])
+        records = unpack(fmt, packet['data'])
         # The order of array elements is used to associate data types with
         # protocols. For example, a protocol that requires two data types <D0>
         # and <D1> is indicated by a tag-encoded protocol ID followed by two
@@ -1123,13 +1176,13 @@ class Data_Type:
             arg = arg + (v,)
             log.debug('got value %s' % repr(v))
         log.debug('arg: %s' % repr(arg))
-        return newstruct.pack(*arg)
+        return pack(*arg)
 
     def unpack(self, bytes):
         # print newstruct.calcsize(self.fmt), self.fmt
         # print len(bytes), repr(bytes)
         try:
-            bits = newstruct.unpack(self.fmt, bytes)
+            bits = unpack(self.fmt, bytes)
             for i in range(len(self.parts)):
                 self.__dict__[self.parts[i]] = bits[i]
         except Exception as e:
@@ -1369,7 +1422,7 @@ class D104(Wpt_Type):
 
 class D105(Wpt_Type):
     parts = ("slat", "slon", "smbl", "ident")
-    fmt = "<l l h s"
+    fmt = "<l l h z"
     smbl = 0
 
     def __init__(self, ident="", slat=0, slon=0, smbl=0):
@@ -1402,7 +1455,7 @@ class D105(Wpt_Type):
 class D106(Wpt_Type):
     parts = ("wpt_class", "subclass", "slat", "slon", "smbl",
              "ident", "lnk_ident")
-    fmt = "<b 13s l l h s s"
+    fmt = "<b 13s l l h z z"
     wpt_class = 0
     subclass = ""
     smbl = 0
@@ -1491,7 +1544,7 @@ class D108(Wpt_Type):
              "subclass", "slat", "slon", "alt", "dpth", "dist",
              "state", "cc", "ident", "cmnt", "facility", "city",
              "addr", "cross_road")
-    fmt = "<b b b b h 18s l l f f f 2s 2s s s s s s s"
+    fmt = "<b b b b h 18s l l f f f 2s 2s z z z z z z"
     wpt_class = 0
     color = 0
     dspl = 0
@@ -1539,7 +1592,7 @@ class D109(Wpt_Type):
              "subclass", "slat", "slon", "alt", "dpth", "dist",
              "state", "cc", "ete", "ident", "cmnt", "facility", "city",
              "addr", "cross_road")
-    fmt = "<b b b b h 18s l l f f f 2s 2s l s s s s s s"
+    fmt = "<b b b b h 18s l l f f f 2s 2s l z z z z z z"
     dtyp = 0x01
     wpt_class = 0
     dspl_color = 0
@@ -1588,7 +1641,7 @@ class D110(Wpt_Type):
              "subclass", "slat", "slon", "alt", "dpth", "dist",
              "state", "cc", "ete", "temp", "time", "wpt_cat",
              "ident", "cmnt", "facility", "city", "addr", "cross_road")
-    fmt = "<b b b b h 18s l l f f f 2s 2s l f l i s s s s s s"
+    fmt = "<b b b b h 18s l l f f f 2s 2s l f l i z z z z z z"
 
 
 class D120(Data_Type):
@@ -1685,7 +1738,7 @@ class D201(Rte_Hdr_Type):
 
 class D202(Rte_Hdr_Type):
     parts = ("ident",)
-    fmt = "<s"
+    fmt = "<z"
 
 
 class Rte_Link_Type(Data_Type):
@@ -1695,7 +1748,7 @@ class Rte_Link_Type(Data_Type):
 
 class D210(Rte_Link_Type):
     parts = ("class", "subclass", "ident")
-    fmt = "<h 18s s"
+    fmt = "<h 18s z"
 
 class TrkPoint_Type(Data_Type):
     slat = 0
@@ -1751,7 +1804,7 @@ class Trk_Hdr_Type(Data_Type):
 
 class D310(Trk_Hdr_Type):
     parts = ("dspl", "color", "trk_ident")
-    fmt = "<b b s"
+    fmt = "<b b z"
     dspl = 0
     color = 0
 
@@ -1763,7 +1816,7 @@ class D311(Trk_Hdr_Type):
 
 class D312(Trk_Hdr_Type):
     parts = ("dspl", "color", "trk_ident")
-    fmt = "<b b s"
+    fmt = "<b b z"
 
 
 # Proximity waypoints  ---------------------------------------
@@ -1855,7 +1908,7 @@ class D650(Data_Type):
              "max_speed", "max_alt", "distance", "cross_country_flag",
              "departure_name", "departure_ident", "arrival_name",
              "arrival_ident", "ac_id")
-    fmt = "<L L l l l l L L f f f B s s s s s"
+    fmt = "<L L l l l l L L f f f B z z z z z"
 
 
 # Position   ---------------------------------------------------

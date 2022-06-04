@@ -1159,38 +1159,14 @@ class Data_Type:
     parts = ()
     fmt = ""
 
-    # Generic serialization stuff. If this looks complex, try it in
-    # any other language!
     def pack(self):
-        arg = (self.fmt,)
-        log.debug('self.parts: %s' % repr(self.parts))
-        for i in self.parts:
-            log.debug('checking part %s' % repr(i))
-            try:
-                # I imagine this is faster, but it only works
-                # if attribute 'i' has been assigned to. Otherwise
-                # it's only in the class, not in the instance.
-                v = self.__dict__[i]
-            except KeyError:
-                v = eval('self.'+i)
-            arg = arg + (v,)
-            log.debug('got value %s' % repr(v))
-        log.debug('arg: %s' % repr(arg))
-        return pack(*arg)
+        dict = {key: self.__dict__[key] for key in self.parts}
+        values = list(dict.values())
+        return pack(self.fmt, *values)
 
-    def unpack(self, bytes):
-        # print newstruct.calcsize(self.fmt), self.fmt
-        # print len(bytes), repr(bytes)
-        try:
-            bits = unpack(self.fmt, bytes)
-            for i in range(len(self.parts)):
-                self.__dict__[self.parts[i]] = bits[i]
-        except Exception as e:
-            print(e)
-            print("Format: <" + self.fmt + ">")
-            print("Parts:  <" + ", ".join(self.parts) + ">")
-            print("Input:  <" + "><".join(bytes) + ">")
-            raise
+    def unpack(self, buffer):
+        values = unpack(self.fmt, buffer)
+        self.__dict__.update(zip(self.parts, values))
 
 
 # Waypoints  ---------------------------------------------------

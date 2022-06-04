@@ -278,15 +278,12 @@ class A000:
         self.link.sendPacket(self.link.Pid_Product_Rqst, None)
         log.info("Expect Product_Data packet")
         packet = self.link.expectPacket(self.link.Pid_Product_Data)
-        # The format of the Product_Data_Type is:
-        # - unsigned short: product_id
-        # - signed short: software_version
-        # - char[]: product_description; zero or more additional null-terminated strings
         size = len(packet['data']) - struct.calcsize('<Hh')
         fmt = f'<Hh{size}s'
         product_id, software_version, product_description = unpack(fmt, packet['data'])
-        product_description = [x.decode('ascii') for x in product_description.split(b'\x00')]
-        product_description.pop()  # remove the last empty byte
+        # The product description contains one or more null-terminated strings.
+        # Only the first string is used, and all subsequent strings are ignored.
+        product_description = product_description[:product_description.find(b'\x00')]
 
         return {'id': product_id,
                 'version': software_version / 100,

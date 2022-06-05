@@ -104,6 +104,8 @@ def unpack(fmt, buffer):
     It supports the 'z' format character, which specifies a null-terminated
     string.
 
+    Possible random bytes following a null-terminated string will be ignored.
+
     """
     while 'z' in fmt:
         pos = fmt.find('z')
@@ -113,6 +115,8 @@ def unpack(fmt, buffer):
             raise ValueError("Null-terminated string not found")
         # replace 'z' with length + 's' + null byte
         fmt = fmt.replace('z', f'{asciiz_len}sx', 1)
+    # Remove trailing bytes from buffer to prevent a struct error
+    buffer = buffer[:struct.calcsize(fmt)]
     return struct.unpack(fmt, buffer)
 
 

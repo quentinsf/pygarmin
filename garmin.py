@@ -40,14 +40,9 @@ import math
 import logging
 
 
-# Logging setup. If you want to see debug messages, add a logging
-# handler for this logger.
+# Set default logging handler to avoid "No handler found" warnings.
 log = logging.getLogger('pygarmin')
-usb_log = logging.getLogger('pygarmin.usb')
-usb_packet_log = logging.getLogger('pygarmin.usb.packet')
-# Verbose debug.
-VERBOSE = 5
-
+log.addHandler(logging.NullHandler())
 
 # Introduction =====================================================
 

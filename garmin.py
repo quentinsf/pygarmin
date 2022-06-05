@@ -169,13 +169,11 @@ class L000:
     def sendPacket(self, packet_id, data):
         """Send a packet."""
         self.phys.sendPacket(packet_id, data)
-        log.debug("< packet %s: %s" % (packet_id, data))
 
     def readPacket(self):
         """Read a packet."""
         while True:
             packet = self.phys.readPacket()
-            log.debug("> packet %3d: %s" % (packet['id'], bytes.hex(packet['data'])))
             if packet['id'] == self.Pid_Ext_Product_Data:
                 # The Ext_Product_Data_Type contains zero or more null-terminated
                 # strings that are used during manufacturing to identify other
@@ -192,7 +190,7 @@ class L000:
         "Expect and read a particular packet type. Return data."
         packet = self.readPacket()
         if packet['id'] != packet_id:
-            raise ProtocolException(f"Expected {packet_id}, got {packet['id']}")
+            raise ProtocolException(f"Expected {packet_id:3}, got {packet['id']:3}")
 
         return packet
 
@@ -487,10 +485,10 @@ class TransferProtocol:
 
     def putData(self, callback, cmd, sendData):
         numrecords = len(sendData)
-        log.info("%s: Sending %d records" % (self.__doc__, numrecords))
+        log.info(f"{type(self).__name__}: Sending {numrecords} records")
         self.link.sendPacket(self.link.Pid_Records, numrecords)
         for packet_id, data in sendData:
-            log.debug('packet_id: %s, data: %s' % (repr(packet_id), repr(data)))
+            log.debug(f"> packet {packet_id:3}: {bytes.hex(data)}")
             self.link.sendPacket(packet_id, data.pack())
             if callback:
                 x = 0
@@ -525,7 +523,7 @@ class SingleTransferProtocol(TransferProtocol):
         self.link.sendPacket(self.link.Pid_Command_Data, cmd)
         packet = self.link.expectPacket(self.link.Pid_Records)
         numrecords = int.from_bytes(packet['data'], byteorder='little')
-        log.info("%s: Expecting %d records" % (self.__doc__, numrecords))
+        log.info(f"{type(self).__name__}: Expecting {numrecords} records")
         result = []
         for i in range(numrecords):
             packet = self.link.expectPacket(pid)
@@ -571,7 +569,7 @@ class MultiTransferProtocol(TransferProtocol):
         self.link.sendPacket(self.link.Pid_Command_Data, cmd)
         packet = self.link.expectPacket(self.link.Pid_Records)
         numrecords = int.from_bytes(packet['data'], byteorder='little')
-        log.info("%s: Expecting %d records" % (self.__doc__, numrecords))
+        log.info(f"{type(self).__name__}: Expecting {numrecords} records")
         data_pids = list(data_pids)
         result = []
         last = []
@@ -634,7 +632,7 @@ class A100(SingleTransferProtocol):
     def putData(self, data, callback):
         sendData = []
 
-        log.debug('self.datatypes: %s' % repr(self.datatypes))
+        log.debug(f"self.datatypes: {repr(self.datatypes)}")
         for waypoint in data:
             waypointInstance = self.datatypes[0](**waypoint)
             sendData.append((self.link.Pid_Wpt_Data, waypointInstance))
@@ -1213,15 +1211,13 @@ class Wpt_Type(Data_Type):
         self.unused = 0
 
     def __repr__(self):
-        return "<Wpt_Type %s (%3.5f, %3.5f) (at %i)>" % (self.ident,
-                                                         degrees(self.slat),
-                                                         degrees(self.slon),
-                                                         id(self))
+        return f"""<Wpt_Type {self.ident}
+        ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}})
+        (at {id(self)})>"""
 
     def __str__(self):
-        return "%s (%3.5f, %3.5f)" % (self.ident,
-                                      degrees(self.slat),
-                                      degrees(self.slon))
+        return f"""{self.ident}
+        ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}})"""
 
     def getDict(self):
         self.data = {
@@ -1255,15 +1251,12 @@ class D101(Wpt_Type):
         self.data = {}
 
     def __repr__(self):
-        return "<Wpt_Type %s (%3.5f, %3.5f) (at %i)>" % (self.ident,
-                                                         degrees(self.slat),
-                                                         degrees(self.slon),
-                                                         id(self))
+        return f"""<Wpt_Type {self.ident}
+        ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}})
+        (at {id(self)})>"""
 
     def __str__(self):
-        return "%s (%3.5f, %3.5f)" % (self.ident,
-                                      degrees(self.slat),
-                                      degrees(self.slon))
+        return f"{self.ident} ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}})"
 
     def getDict(self):
         self.data = {'name': self.ident,
@@ -1293,15 +1286,12 @@ class D102(Wpt_Type):
         self.data = {}
 
     def __repr__(self):
-        return "<Wpt_Type %s (%3.5f, %3.5f) (at %i)>" % (self.ident,
-                                                         degrees(self.slat),
-                                                         degrees(self.slon),
-                                                         id(self))
+        return f"""<Wpt_Type {self.ident}
+        ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}})
+        (at {id(self)})>"""
 
     def __str__(self):
-        return "%s (%3.5f, %3.5f)" % (self.ident,
-                                      degrees(self.slat),
-                                      degrees(self.slon))
+        return f"{self.ident} ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}})"
 
     def getDict(self):
         self.data = {'name': self.ident,
@@ -1331,15 +1321,12 @@ class D103(Wpt_Type):
         self.data = {}
 
     def __repr__(self):
-        return "<Wpt_Type %s (%3.5f, %3.5f) (at %i)>" % (self.ident,
-                                                         degrees(self.slat),
-                                                         degrees(self.slon),
-                                                         id(self))
+        return f"""<Wpt_Type {self.ident}
+        ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}})
+        (at {id(self)})>"""
 
     def __str__(self):
-        return "%s (%3.5f, %3.5f)" % (self.ident,
-                                      degrees(self.slat),
-                                      degrees(self.slon))
+        return f"{self.ident} ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}})"
 
     def getDict(self):
         self.data = {'name': self.ident,
@@ -1371,15 +1358,12 @@ class D104(Wpt_Type):
         self.dspl = dspl           # D104 display option
 
     def __repr__(self):
-        return "<Wpt_Type %s (%3.5f, %3.5f) (at %i)>" % (self.ident,
-                                                         degrees(self.slat),
-                                                         degrees(self.slon),
-                                                         id(self))
+        return f"""<Wpt_Type {self.ident}
+        ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}})
+        (at {id(self)})>"""
 
     def __str__(self):
-        return "%s (%3.5f, %3.5f)" % (self.ident,
-                                      degrees(self.slat),
-                                      degrees(self.slon))
+        return f"{self.ident} ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}})"
 
     def getDict(self):
         self.data = {'name': self.ident,
@@ -1406,15 +1390,12 @@ class D105(Wpt_Type):
         self.smbl = smbl
 
     def __repr__(self):
-        return "<Wpt_Type %s (%3.5f, %3.5f) (at %i)>" % (self.ident,
-                                                         degrees(self.slat),
-                                                         degrees(self.slon),
-                                                         id(self))
+        return f"""<Wpt_Type {self.ident}
+        ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}})
+        (at {id(self)})>"""
 
     def __str__(self):
-        return "%s (%3.5f, %3.5f)" % (self.ident,
-                                      degrees(self.slat),
-                                      degrees(self.slon))
+        return f"{self.ident} ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}})"
 
     def getDict(self):
         self.data = {'name': self.ident,
@@ -1446,15 +1427,12 @@ class D106(Wpt_Type):
         self.smbl = smbl
 
     def __repr__(self):
-        return "<Wpt_Type %s (%3.5f, %3.5f) (at %i)>" % (self.ident,
-                                                         degrees(self.slat),
-                                                         degrees(self.slon),
-                                                         id(self))
+        return f"""<Wpt_Type {self.ident}
+        ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}})
+        (at {id(self)})>"""
 
     def __str__(self):
-        return "%s (%3.5f, %3.5f)" % (self.ident,
-                                      degrees(self.slat),
-                                      degrees(self.slon))
+        return f"{self.ident} ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}})"
 
     def getDict(self):
         self.data = {'name': self.ident,
@@ -1489,15 +1467,12 @@ class D107(Wpt_Type):
         self.color = color
 
     def __repr__(self):
-        return "<Wpt_Type %s (%3.5f, %3.5f) (at %i)>" % (self.ident,
-                                                         degrees(self.slat),
-                                                         degrees(self.slon),
-                                                         id(self))
+        return f"""<Wpt_Type {self.ident}
+        ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}})
+        (at {id(self)})>"""
 
     def __str__(self):
-        return "%s (%3.5f, %3.5f)" % (self.ident,
-                                      degrees(self.slat),
-                                      degrees(self.slon))
+        return f"{self.ident} ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}})"
 
     def getDict(self):
         self.data = {'name': self.ident,
@@ -1547,17 +1522,16 @@ class D108(Wpt_Type):
         self.cmnt = cmnt
 
     def __repr__(self):
-        return "<Wpt_Type %s (%3.5f, %3.5f) (at %i)>" % (self.ident,
-                                                         degrees(self.slat),
-                                                         degrees(self.slon),
-                                                         id(self))
+        return f"""<Wpt_Type {self.ident}
+        ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}})
+        (at {id(self)})>"""
 
     def __str__(self):
-        return "%s (%3.5f, %3.5f, %3f) '%s' class %d symbl %d" % (
-            self.ident,
-            degrees(self.slat), degrees(self.slon),
-            self.alt, self.cmnt.strip(),
-            self.wpt_class, self.smbl)
+        return f"""{self.ident}
+        ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}}, {self.alt:{3}})
+        '{self.cmnt.strip()}'
+        class {self.wpt_class}
+        symbl {self.smbl}"""
 
 
 class D109(Wpt_Type):
@@ -1596,17 +1570,16 @@ class D109(Wpt_Type):
         self.cmnt = cmnt
 
     def __repr__(self):
-        return "<Wpt_Type %s (%3.5f, %3.5f) (at %i)>" % (self.ident,
-                                                         degrees(self.slat),
-                                                         degrees(self.slon),
-                                                         id(self))
+        return f"""<Wpt_Type {self.ident}
+        ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}})
+        (at {id(self)})>"""
 
     def __str__(self):
-        return "%s (%3.5f, %3.5f, %3f) '%s' class %d symbl %d" % (
-            self.ident,
-            degrees(self.slat), degrees(self.slon),
-            self.alt, self.cmnt.strip(),
-            self.wpt_class, self.smbl)
+        return f"""{self.ident}
+        ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}}, {self.alt:{3}})
+        '{self.cmnt.strip()}'
+        class {self.wpt_class}
+        symbl {self.smbl}"""
 
 
 class D110(Wpt_Type):
@@ -1695,7 +1668,7 @@ class D155(Wpt_Type):
 
 class Rte_Hdr_Type(Data_Type):
     def __repr__(self):
-        return "<Rte_Hdr_Type (at %s)>" % id(self)
+        return f"<Rte_Hdr_Type (at {id(self)})>"
 
 
 class D200(Rte_Hdr_Type):
@@ -1716,7 +1689,7 @@ class D202(Rte_Hdr_Type):
 
 class Rte_Link_Type(Data_Type):
     def __repr__(self):
-        return "<Rte_Link_Type (at %s)" % id(self)
+        return f"<Rte_Link_Type (at {id(self)})"
 
 
 class D210(Rte_Link_Type):
@@ -1729,9 +1702,10 @@ class TrkPoint_Type(Data_Type):
     time = 0  # secs since midnight 31/12/89?
 
     def __repr__(self):
-        return "<Trackpoint (%3.5f, %3.5f) %s (at %i)>" % (
-            degrees(self.slat), degrees(self.slon),
-            time.asctime(time.gmtime(TimeEpoch+self.time)), id(self))
+        return f"""<Trackpoint
+        ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}})
+        {time.asctime(time.gmtime(TimeEpoch+self.time))}
+        (at {id(self)})>"""
 
 
 class D300(TrkPoint_Type):
@@ -1771,8 +1745,7 @@ class Trk_Hdr_Type(Data_Type):
     trk_ident = ""
 
     def __repr__(self):
-        return "<Trk_Hdr_Type %s (at %i)>" % (self.trk_ident,
-                                          id(self))
+        return f"<Trk_Hdr_Type {self.trk_ident} (at {id(self)})>"
 
 
 class D310(Trk_Hdr_Type):
@@ -1859,9 +1832,8 @@ class Date_Time_Type(Data_Type):
     sec = 0           # sec (0-59)
 
     def __str__(self):
-        return "%d-%.2d-%.2d %.2d:%.2d:%.2d UTC" % (
-            self.year, self.month, self.day,
-            self.hour, self.min, self.sec)
+        return f"""{self.year}-{self.month:02}-{self.day:02}
+        {self.hour:02}:{self.min:02}:{self.sec:02} UTC"""
 
 
 class D600(Date_Time_Type):
@@ -1903,8 +1875,11 @@ class D800(Data_Type):
     fmt = "<f f f f h d d d f f f f h l"
 
     def __str__(self):
-        return "tow: %g rlat: %g rlon: %g east: %g north %g" \
-            % (self.tow, self.rlat, self.rlon, self.east, self.north)
+        return f"""tow: {self.tow}
+        rlat: {self.rlat}
+        rlon: {self.rlon}
+        east: {self.east}
+        north {self.north}"""
 
 
 class D906(Data_Type):
@@ -1954,10 +1929,10 @@ class D1011(Data_Type):
     fmt = "<H H L L f f l l l l H B B B B B"
 
     def __repr__(self):
-        return "<Lap %i (%3.5f, %3.5f) %s (duration %i seconds)>" % (
-            self.index, degrees(self.begin_lat), degrees(self.begin_lon),
-            time.asctime(time.gmtime(TimeEpoch+self.start_time)),
-            int(self.total_time/100))
+        return f"""<Lap {self.index}
+        ({degrees(self.begin_lat)}, {degrees(self.begin_lon)})
+        {time.asctime(time.gmtime(TimeEpoch+self.start_time))}
+        (duration {int(self.total_time/100)} seconds)>"""
 
 
 class D1015(D1011):
@@ -1977,8 +1952,8 @@ class D1009(Data_Type):
     fmt = "<H H H B B B B H L f"
 
     def __repr__(self):
-        return "<Run %i, lap %i to %i>" % (
-            self.track_index, self.first_lap_index, self.last_lap_index)
+        return f"""<Run {self.track_index},
+        lap {self.first_lap_index} to {self.last_lap_index}>"""
 
 
 # Garmin models ==============================================
@@ -2612,6 +2587,7 @@ class USBLink(P000):
         """
         log.info("Send Start Session packet")
         buffer = self.pack(self.USB_Protocol_Layer, self.Pid_Start_Session)
+        log.debug(f"< packet {self.Pid_Start_Session}: {bytes.hex(b'')}")
         self.write(buffer)
 
     def read_session_started_packet(self):
@@ -2829,8 +2805,8 @@ def MyCallbackgetWaypoints(waypoint, recordnumber, totalWaypointsToGet, packet_i
     # We get a tuple back (waypoint, recordnumber, totalWaypointsToGet)
     # packet_id is the command to send/get from the gps, look at the docs (Garmin GPS Interface Specification)
     # pag 9, 10 or 4.2 L001 and L002 link Protocol
-    print("---  waypoint ", " %s / %s " % (recordnumber, totalWaypointsToGet), "---")
-    print("str output --> ", waypoint)  # or repr(waypoint)
+    print(f"---  waypoint {recordnumber} / {totalWaypointsToGet} ---")
+    print(f"str output --> {waypoint}")
     print()
 
     if recordnumber != totalWaypointsToGet:
@@ -2850,7 +2826,9 @@ def MyCallbackgetWaypoints(waypoint, recordnumber, totalWaypointsToGet, packet_i
 def MyCallbackputWaypoints(waypoint, recordnumber, totalWaypointsToSend, packet_id):
     # we get a tuple waypoint, recordnumber, totalWaypointsToSend, packet_id
 
-    print("waypoint %s added to gps (total waypoint(s): %s/%s) waypoint command: %s" % (waypoint.ident, recordnumber, totalWaypointsToSend, packet_id))
+    print(f"""waypoint {waypoint.ident} added to gps
+    (total waypoint(s): {recordnumber}/{totalWaypointsToSend})
+    waypoint command: {packet_id:3}""")
 
 
 def MyCallbackgetRoutes(point, recordnumber, totalpointsToGet, packet_id):
@@ -2913,7 +2891,7 @@ def MyCallbackputTracks(point, recordnumber, totalPointsToSend, packet_id):
 def MyCallbackgetAlmanac(satellite, recordnumber, totalPointsToGet, packet_id):
     print()
     for x in satellite.dataDict:
-        print("%7s --> %s" % (x, satellite.getDict()[x]))
+        print(f"{x:07} --> {satellite.getDict()[x]}")
 
 
 # =================================================================
@@ -2935,21 +2913,19 @@ def main():
 
     gps = Garmin(phys)
 
-    print("GPS Product ID: %d Descriptions: %s Software version: %2.2f\n" %
-          (gps.product_id, gps.product_description, gps.software_version))
+    print(f"GPS Product ID: {gps.product_id} Descriptions: {gps.product_description} Software version: {gps.software_version}\n")
 
     # Show gps information
 
     if 1:
-        print(f'''
-        GPS Product ID: {gps.product_id}
-        GPS version   : {gps.software_version}
-        GPS           : {gps.product_description[0]}
-        MapSource info: {gps.product_description[1:]}
+        print(f"""
+        Product ID: {gps.product_id}
+        Software version: {gps.software_version}
+        Product description: {gps.product_description}
 
         Product protocols:
         ------------------
-        ''')
+        """)
 
         # Some code from pygarmin, small but smart
 

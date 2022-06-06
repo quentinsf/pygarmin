@@ -150,6 +150,517 @@ class P000:
         pass
 
 
+class SerialLink(P000):
+    """Protocol to communicate over a serial link.
+
+    """
+    # Control characters
+    DLE = 16  # Data Link Escape
+    ETX = 3  # End of Text
+    Pid_Ack_Byte = 6  # Acknowledge
+    Pid_Nak_Byte = 21  # Negative Acknowledge
+
+    def __init__(self, port):
+        # Import serial here, so that you don't have to have that module
+        # installed, if you're not using a serial link.
+        import serial
+        self.serial = serial
+        self.port = port
+        self.timeout = 1
+        self.baudrate = 9600
+        self.max_retries = 5
+        self.ser = serial.Serial(port,
+                                 timeout=self.timeout,
+                                 baudrate=self.baudrate)
+        self.unit_id = None
+
+    def set_timeout(self, seconds):
+        self.ser.timeout = self.timeout = seconds
+
+    def get_timeout(self):
+        return self.ser.timeout
+
+    def set_baudrate(self, value):
+        self.ser.baudrate = value
+
+    def get_baudrate(self):
+        return self.ser.baudrate
+
+    def escape(self, data):
+        """Escape any DLE characters, aka "DLE stuffing".
+
+        If any byte in the Size, Data, or Checksum fields is equal to
+        DLE, then a second DLE is inserted immediately following the byte. This
+        extra DLE is not included in the size or checksum calculation. This
+        procedure allows the DLE character to be used to delimit the boundaries
+        of a packet."""
+        return data.replace(bytes([self.DLE]), bytes([self.DLE, self.DLE]))
+
+    def unescape(self, data):
+        """Unescape any DLE characters, aka "DLE unstuffing"."""
+        return data.replace(bytes([self.DLE, self.DLE]), bytes([self.DLE]))
+
+    def checksum(self, data):
+        """
+        The checksum value contains the two's complement of the modulo 256 sum
+        of all bytes in the data. Taking a two's complement of a number converts
+        it to binary, flips 1 bits to 0 bits and 0 bits to 1 bits, and adds one
+        to it.
+
+        """
+        sum = 0
+        for i in data:
+            sum = sum + i
+        sum %= 256
+        checksum = (256 - sum) % 256
+        return checksum
+
+    def unpack(self, buffer):
+        """All data is transferred in byte-oriented packets. A packet contains a
+        three-byte header (DLE, ID, and Size), followed by a variable number of
+        data bytes, followed by a three-byte trailer (Checksum, DLE, and ETX).
+
+        """
+        # Only the size, data, and checksum fields have to be unescaped, but
+        # unescaping the whole packet doesn't hurt
+        packet = self.unescape(buffer)
+        id = packet[1]
+        size = packet[2]
+        data = packet[3:-3]
+        checksum = packet[-3]
+        if size != len(data):
+            raise LinkException("Invalid packet: wrong size of packet data")
+        # 2's complement of the sum of all bytes from byte 1 to byte n-3
+        if checksum != self.checksum(packet[1:-3]):
+            raise LinkException("Invalid packet: checksum failed")
+
+        return {'id': id, 'data': data}
+
+    def pack(self, packet_id, data):
+        """
+        All data is transferred in byte-oriented packets. A packet contains a
+        three-byte header (DLE, ID, and Size), followed by a variable number of
+        data bytes, followed by a three-byte trailer (Checksum, DLE, and ETX).
+
+        Serial Packet Format
+        | Byte Number | Byte Description    | Notes                                                          |
+        |-------------+---------------------+----------------------------------------------------------------|
+        | 0           | Data Link Escape    | ASCII DLE character (16 decimal)                               |
+        | 1           | Packet ID           | identifies the type of packet                                  |
+        | 2           | Size of Packet Data | number of bytes of packet data (bytes 3 to n-4)                |
+        | 3 to n-4    | Packet Data         | 0 to 255 bytes                                                 |
+        | n-3         | Checksum            | 2's complement of the sum of all bytes from byte 1 to byte n-4 |
+        | n-2         | Data Link Escape    | ASCII DLE character (16 decimal)                               |
+        | n-1         | End of Text         | ASCII ETX character (3 decimal)                                |
+
+        """
+        log.info("Pack packet")
+        if isinstance(data, bytes):
+            pass
+        elif isinstance(data, int):
+            # The packet data contains a 16-bit unsigned integer that indicates
+            # a particular command.
+            data = data.to_bytes(2, byteorder='little')
+        elif data is None:
+             # The packet data is not used and may have a zero size
+            data = bytes()
+        else:
+            data_type = type(data).__name__
+            raise ProtocolException(f"Invalid data type: should be 'bytes' or 'int', but is {data_type}")
+        size = len(data)
+        log.debug(f"size: {size}")
+        checksum = self.checksum(bytes([packet_id])
+                                 + bytes([size])
+                                 + data)
+        log.debug(f"checksum: {checksum}")
+        packet = bytes([self.DLE]) \
+            + bytes([packet_id]) \
+            + self.escape(bytes([size])) \
+            + self.escape(data) \
+            + self.escape(bytes([checksum])) \
+            + bytes([self.DLE]) \
+            + bytes([self.ETX])
+
+        return packet
+
+    def read(self):
+        """Read one packet from the buffer."""
+        DLE = bytes([self.DLE])
+        ETX = bytes([self.ETX])
+        buffer = bytearray()
+        packet = bytearray()
+
+        while True:
+            # Buffer two bytes, because all DLEs occur in pairs except at packet
+            # boundaries
+            buffer += self.ser.read(2-len(buffer))
+            if len(buffer) != 2:
+                raise LinkException("Invalid packet: unexpected end")
+            elif len(packet) == 0:
+                # Packet header
+                if buffer.startswith(DLE):
+                    packet += bytes([buffer.pop(0)])
+                else:
+                    raise LinkException("Invalid packet: doesn't start with DLE character")
+            elif buffer.startswith(DLE):
+                # Escape DLE
+                if buffer == DLE + DLE:
+                    packet += buffer
+                    buffer.clear()
+                # Packet trailer
+                elif buffer == DLE + ETX:
+                    packet += buffer
+                    break
+                else:
+                    raise LinkException("Invalid packet: doesn't end with DLE and ETX character")
+            else:
+                packet += bytes([buffer.pop(0)])
+
+        return bytes(packet)
+
+    def write(self, buffer):
+        self.ser.write(buffer)
+
+    def readPacket(self, acknowledge=True):
+        retries = 0
+        while retries <= self.max_retries:
+            try:
+                buffer = self.read()
+                log.debug(f"> {bytes.hex(buffer)}")
+                packet = self.unpack(buffer)
+                if acknowledge:
+                    self.sendACK(packet['id'])
+                break
+            except LinkException as e:
+                log.info(e)
+                self.sendNAK()
+                retries += 1
+
+        if retries > self.max_retries:
+            raise LinkException("Maximum retries exceeded.")
+
+        return packet
+
+    def sendPacket(self, packet_id, data, acknowledge=True):
+        """Send a packet."""
+        buffer = self.pack(packet_id, data)
+        log.debug(f"< {bytes.hex(buffer)}")
+        retries = 0
+        while retries <= self.max_retries:
+            try:
+                self.write(buffer)
+                if acknowledge:
+                    self.readACK(packet_id)
+                break
+            except LinkException as e:
+                log.info(e)
+                retries += 1
+
+        if retries > self.max_retries:
+            raise LinkException("Maximum retries exceeded.")
+
+
+    def readACK(self, packet_id):
+        """Read a ACK/NAK packet.
+
+        If an ACK packet is received the packet was received correctly and
+        communication may continue. If a NAK packet is received, the data packet was not
+        received correctly and should be sent again.
+
+        """
+        log.info("Read ACK/NAK")
+        packet = self.readPacket(acknowledge=False)
+        expected_pid = packet_id
+        received_pid = int.from_bytes(packet['data'], byteorder='little')
+
+        if packet['id'] == self.Pid_Ack_Byte:
+            log.info("Received ACK packet")
+            if expected_pid != received_pid:
+                raise ProtocolException(f"Device expected {expected_pid}, got {received_pid}")
+        elif packet['id'] == self.Pid_Nak_Byte:
+            log.info("Received NAK packet")
+            raise LinkException("Packet was not received correctly.")
+        else:
+            raise GarminException("Received neither ACK nor NAK packet")
+
+    def sendACK(self, packet_id):
+        """Send an ACK packet."""
+        log.info("Send ACK packet")
+        data = packet_id.to_bytes(1, byteorder='little')
+        self.sendPacket(self.Pid_Ack_Byte, data, acknowledge=False)
+
+    def sendNAK(self):
+        """Send a NAK packet.
+
+        NAKs are used only to indicate errors in the communications link, not
+        errors in any higher-layer protocol.
+
+        """
+        log.info("Send NAK packet")
+        data = bytes()  # we cannot determine the packet id because it was corrupted
+        self.sendPacket(self.Pid_Nak_Byte, data, acknowledge=False)
+
+    def __del__(self):
+        """Should close down any opened resources."""
+        self.close()
+
+    def close(self):
+        """Close the serial port."""
+        if "ser" in self.__dict__:
+            self.ser.close()
+
+
+class USBLink(P000):
+    """Implementation of the Garmin USB protocol.
+
+    It will talk to the first Garmin GPS device it finds.
+
+    """
+    idVendor = 2334  # 0x091e
+    configuration_value = 1
+    max_buffer_size = 4096
+
+    # Packet Types
+    USB_Protocol_Layer = 0  # 0x00
+    Application_Layer = 20  # 0x14
+
+    # Endpoints
+    Bulk_OUT = 2        # 0x02
+    Interrupt_IN = 129  # 0x81
+    Bulk_IN = 131       # 0x83  # unused
+
+    # USB Protocol Layer Packet Ids
+    Pid_Data_Available = 2  # unused
+    Pid_Start_Session = 5
+    Pid_Session_Started = 6
+
+    def __init__(self):
+        # Import usb here, so that you don't have to have that module
+        # installed, if you're not using a usb link.
+        import usb
+        self.usb = usb
+        self.timeout = 1
+        self.unit_id = self.start_session()
+
+    def set_timeout(self, seconds):
+        self.timeout = seconds
+
+    def get_timeout(self):
+        return self.timeout
+
+    @cached_property
+    def dev(self):
+        """Return the Garmin device.
+
+        This property will cause some USB traffic the first time it is accessed
+        and cache the resulting value for future use.
+
+        """
+        dev = self.usb.core.find(idVendor=self.idVendor)
+        if dev is None:
+            raise LinkError("Garmin device not found")
+
+        return dev
+
+    @cached_property
+    def cfg(self):
+        """Configure the Garmin device and return the current configuration.
+
+        This property will cause some USB traffic the first time it is accessed
+        and cache the resulting value for future use.
+
+        """
+        # Check the currently active configuration. If the configuration we want
+        # is already active, then we don't have to select any configuration.
+        # This prevents the configuration selection problem described in the
+        # libusb documentation
+        # (http://libusb.sourceforge.net/api-1.0/libusb_caveats.html#configsel).
+        cfg = self.dev.get_active_configuration()
+        if cfg.bConfigurationValue != self.configuration_value:
+            self.dev.set_configuration(self.configuration_value)
+            cfg = self.dev.get_active_configuration()
+
+        return cfg
+
+    @cached_property
+    def intf(self):
+        """Return the current interface configuration.
+
+        This property will cause some USB traffic the first time it is accessed
+        and cache the resulting value for future use.
+
+        """
+        intf = self.cfg[(0, 0)]
+        return intf
+
+    @cached_property
+    def ep_in(self):
+        """Return the Interrupt IN instance.
+
+        This property will cause some USB traffic the first time it is accessed
+        and cache the resulting value for future use.
+
+        """
+        ep = self.usb.util.find_descriptor(self.intf,
+                                           bEndpointAddress=self.Interrupt_IN)
+        return ep
+
+    @cached_property
+    def ep_out(self):
+        """Return the Bulk OUT instance.
+
+        This property will cause some USB traffic the first time it is accessed
+        and cache the resulting value for future use.
+
+        """
+
+        ep = self.usb.util.find_descriptor(self.intf,
+                                           bEndpointAddress=self.Bulk_OUT)
+        return ep
+
+    def unpack(self, buffer):
+        """Unpack a raw USB packet.
+
+        Return a tuple: (packet_id, data)"""
+        packet_type = buffer[0]  # unused
+        reserved_1 = buffer[1:4]  # unused
+        id = buffer[4:6]
+        reserved_2 = buffer[6:8]  # unused
+        size = buffer[8:12]
+        data = buffer[12:]
+
+        id = int.from_bytes(id, byteorder='little')
+        size = int.from_bytes(size, byteorder='little')
+
+        if size != len(data):
+            raise ProtocolException("Invalid packet: wrong size of packet data")
+
+        return {'id': id, 'data': data}
+
+    def pack(self, layer, packet_id, data=None):
+        """Pack an USB packet.
+
+        USB Packet Format:
+        | Byte Number | Byte Description | Notes                                          |
+        |-------------+------------------+------------------------------------------------|
+        |           0 | Packet Type      | USB Protocol Layer = 0, Application Layer = 20 |
+        |         1-3 | Reserved         | must be set to 0                               |
+        |         4-5 | Packet ID        |                                                |
+        |         6-7 | Reserved         | must be set to 0                               |
+        |        8-11 | Data size        |                                                |
+        |         12+ | Data             |                                                |
+        """
+        log.info("Pack packet")
+        if isinstance(data, bytes):
+            pass
+        elif isinstance(data, int):
+            # The packet data contains a 16-bit unsigned integer that indicates
+            # a particular command.
+            data = data.to_bytes(2, byteorder='little')
+        elif data is None:
+             # The packet data is not used and may have a zero size
+            data = bytes()
+        else:
+            data_type = type(data).__name__
+            raise ProtocolException(f"Invalid data type: should be 'bytes' or 'int', but is {data_type}")
+
+        size = len(data)
+        log.debug(f"Data size: {size}")
+
+        packet = bytes([layer]) \
+            + bytes([0]) * 3 \
+            + packet_id.to_bytes(2, byteorder='little') \
+            + bytes([0]) * 2 \
+            + size.to_bytes(4, byteorder='little') \
+            + data
+
+        return packet
+
+    def read(self):
+        """Read buffer."""
+        endpoint = self.Interrupt_IN
+        size = self.max_buffer_size
+        # The libusb timeout is specified in milliseconds
+        timeout = self.timeout * 1000 if self.timeout else None
+        buffer = self.dev.read(endpoint, size, timeout=timeout)
+        # pyusb returns an array object, but we want a bytes object
+        return buffer.tobytes()
+
+    def write(self, buffer):
+        """Write buffer."""
+        endpoint = self.Bulk_OUT
+        # The libusb timeout is specified in milliseconds
+        timeout = self.timeout * 1000 if self.timeout else None
+        self.dev.write(endpoint, buffer, timeout=timeout)
+
+    def readPacket(self):
+        """Read a packet."""
+        buffer = self.read()
+        log.debug(f"> {bytes.hex(buffer)}")
+        packet = self.unpack(buffer)
+        return packet
+
+    def sendPacket(self, packet_id, data):
+        """Send a packet."""
+        buffer = self.pack(self.Application_Layer, packet_id, data)
+        log.debug(f"< {bytes.hex(buffer)}")
+        self.write(buffer)
+
+    def send_start_session_packet(self):
+        """Send a Start Session packet.
+
+        The Start Session packet must be sent by the host to begin transferring
+        packets over USB. It must also be sent anytime the host deliberately
+        stops transferring packets continuously over USB and wishes to begin
+        again. No data is associated with this packet.
+
+        Start Session Packet
+        | N | Direction      | Packet ID         | Packet Data Type |
+        |---+----------------+-------------------+------------------|
+        | 0 | Host to Device | Pid_Start_Session | n/a              |
+
+        """
+        log.info("Send Start Session packet")
+        buffer = self.pack(self.USB_Protocol_Layer, self.Pid_Start_Session)
+        log.debug(f"< packet {self.Pid_Start_Session}: {bytes.hex(b'')}")
+        self.write(buffer)
+
+    def read_session_started_packet(self):
+        """Read Start Session packet.
+
+        The Session Started packet indicates that transfers can take place to
+        and from the device. The host should ignore any packets it receives
+        before receiving this packet. The data returned with this packet is the
+        device’s unit ID.
+
+        Session Started Packet
+        | N | Direction      | Packet ID           | Packet Data Type |
+        |---+----------------+---------------------+------------------|
+        | 0 | Device to Host | Pid_Session_Started | uint32           |
+
+        """
+        log.info("Read Session Started packet")
+        while True:
+            packet = self.readPacket()
+            if packet['id'] == self.Pid_Session_Started:
+                log.info("Received Session Started packet")
+                break
+
+        return packet
+
+    def start_session(self):
+        """Start USB session and return the unit ID.
+
+        """
+        log.info("Start USB session")
+        self.send_start_session_packet()
+        packet = self.read_session_started_packet()
+        unit_id = int.from_bytes(packet['data'], byteorder='little')
+        log.info(f"Unit ID: {unit_id}")
+
+        return unit_id
+
+
 class L000:
     """Basic Link Protocol.
 
@@ -157,10 +668,10 @@ class L000:
     Product Data Protocol to determine the product data of the connected device.
 
     """
-    Pid_Protocol_Array = 253  # may not be implemented in all devices
+    Pid_Ext_Product_Data = 248  # may not be implemented in all devices
+    Pid_Protocol_Array = 253    # may not be implemented in all devices
     Pid_Product_Rqst = 254
     Pid_Product_Data = 255
-    Pid_Ext_Product_Data = 248  # may not be implemented in all devices
 
     def __init__(self, physicalLayer):
         self.phys = physicalLayer
@@ -342,21 +853,21 @@ class A001:
             if tag == self.Tag_Phys_Prot_Id:
                 # We ignore the physical protocol, because it is initialized
                 # already
-                log.info(f"Ignore physical protocol '{protocol_datatype}'.")
+                log.info(f"Got physical protocol '{protocol_datatype}'. Ignoring...")
             elif tag == self.Tag_Link_Prot_Id:
                 # Append new list with protocol.
-                log.info(f"Add link protocol '{protocol_datatype}'.")
+                log.info(f"Got link protocol '{protocol_datatype}'. Adding...")
                 protocols.append([protocol_datatype])
             elif tag == self.Tag_Appl_Prot_Id:
                 # Append new list with protocol.
-                log.info(f"Add application protocol '{protocol_datatype}'.")
+                log.info(f"Got application protocol '{protocol_datatype}'. Adding...")
                 protocols.append([protocol_datatype])
             elif tag == self.Tag_Data_Type_Id:
                 # Append datatype to list of previous protocol
-                log.info(f"Add datatype '{protocol_datatype}'.")
+                log.info(f"Got datatype '{protocol_datatype}'. Adding...")
                 protocols[-1].append(protocol_datatype)
             else:
-                log.info(f"Ignore unknown protocol or datatype '{protocol_datatype}'.")
+                log.info(f"Got unknown protocol or datatype '{protocol_datatype}'. Ignoring...")
         log.info(f"Supported protocols and data types: {protocols}")
 
         return protocols
@@ -983,7 +1494,7 @@ class A650(SingleTransferProtocol):
     | 0   | Host to Device | Pid_Command_Data      | Command_Id_Type  |
     | 1   | Device to Host | Pid_Records           | Records_Type     |
     | 2   | Device to Host | Pid_FlightBook_Record | <D0>             |
-    | …   | …              | …                     | ...              |
+    | …   | …              | …                     | …              |
     | n-2 | Device to Host | Pid_FlightBook_Record | <D0>             |
     | n-1 | Device to Host | Pid_Xfer_Cmplt        | Command_Id_Type  |
 
@@ -1089,7 +1600,7 @@ class A906(SingleTransferProtocol):
     | 0   | Device to Host | Pid_Records    | Records_Type     |
     | 1   | Device to Host | Pid_Lap        | <D0>             |
     | 2   | Device to Host | Pid_Lap        | <D0>             |
-    | …   | …              | …              | ...              |
+    | …   | …              | …              | …              |
     | n-2 | Device to Host | Pid_Lap        | <D0>             |
     | n-1 | Device to Host | Pid_Xfer_Cmplt | Command_Id_Type  |
 
@@ -2113,516 +2624,6 @@ ModelProtocols = {
     106: ((None,            ("L001"), ("A010"), ("A100", "D103"), ("A200", "D201", "D103"), ("A300", "D300"), ("A400", "D403"), ("A500", "D501")),),
     112: ((None,            ("L001"), ("A010"), ("A100", "D152"), ("A200", "D201", "D152"), ("A300", "D300"), None,             ("A500", "D501")),)
 }
-
-
-class SerialLink(P000):
-    """Protocol to communicate over a serial link.
-
-    """
-    # Control characters
-    DLE = 16  # Data Link Escape
-    ETX = 3  # End of Text
-    Pid_Ack_Byte = 6  # Acknowledge
-    Pid_Nak_Byte = 21  # Negative Acknowledge
-
-    def __init__(self, port):
-        # Import serial here, so that you don't have to have that module
-        # installed, if you're not using a serial link.
-        import serial
-        self.port = port
-        self.timeout = 1
-        self.baudrate = 9600
-        self.max_retries = 5
-        self.ser = serial.Serial(port,
-                                 timeout=self.timeout,
-                                 baudrate=self.baudrate)
-        self.unit_id = None
-
-    def set_timeout(self, seconds):
-        self.ser.timeout = self.timeout = seconds
-
-    def get_timeout(self):
-        return self.ser.timeout
-
-    def set_baudrate(self, value):
-        self.ser.baudrate = value
-
-    def get_baudrate(self):
-        return self.ser.baudrate
-
-    def escape(self, data):
-        """Escape any DLE characters, aka "DLE stuffing".
-
-        If any byte in the Size, Data, or Checksum fields is equal to
-        DLE, then a second DLE is inserted immediately following the byte. This
-        extra DLE is not included in the size or checksum calculation. This
-        procedure allows the DLE character to be used to delimit the boundaries
-        of a packet."""
-        return data.replace(bytes([self.DLE]), bytes([self.DLE, self.DLE]))
-
-    def unescape(self, data):
-        """Unescape any DLE characters, aka "DLE unstuffing"."""
-        return data.replace(bytes([self.DLE, self.DLE]), bytes([self.DLE]))
-
-    def checksum(self, data):
-        """
-        The checksum value contains the two's complement of the modulo 256 sum
-        of all bytes in the data. Taking a two's complement of a number converts
-        it to binary, flips 1 bits to 0 bits and 0 bits to 1 bits, and adds one
-        to it.
-
-        """
-        sum = 0
-        for i in data:
-            sum = sum + i
-        sum %= 256
-        checksum = (256 - sum) % 256
-        return checksum
-
-    def unpack(self, buffer):
-        """All data is transferred in byte-oriented packets. A packet contains a
-        three-byte header (DLE, ID, and Size), followed by a variable number of
-        data bytes, followed by a three-byte trailer (Checksum, DLE, and ETX).
-
-        """
-        # Only the size, data, and checksum fields have to be unescaped, but
-        # unescaping the whole packet doesn't hurt
-        packet = self.unescape(buffer)
-        id = packet[1]
-        size = packet[2]
-        data = packet[3:-3]
-        checksum = packet[-3]
-        if size != len(data):
-            raise LinkException("Invalid packet: wrong size of packet data")
-        # 2's complement of the sum of all bytes from byte 1 to byte n-3
-        if checksum != self.checksum(packet[1:-3]):
-            raise LinkException("Invalid packet: checksum failed")
-
-        return {'id': id, 'data': data}
-
-    def pack(self, packet_id, data):
-        """
-        All data is transferred in byte-oriented packets. A packet contains a
-        three-byte header (DLE, ID, and Size), followed by a variable number of
-        data bytes, followed by a three-byte trailer (Checksum, DLE, and ETX).
-
-        Serial Packet Format
-        | Byte Number | Byte Description    | Notes                                                          |
-        |-------------+---------------------+----------------------------------------------------------------|
-        | 0           | Data Link Escape    | ASCII DLE character (16 decimal)                               |
-        | 1           | Packet ID           | identifies the type of packet                                  |
-        | 2           | Size of Packet Data | number of bytes of packet data (bytes 3 to n-4)                |
-        | 3 to n-4    | Packet Data         | 0 to 255 bytes                                                 |
-        | n-3         | Checksum            | 2's complement of the sum of all bytes from byte 1 to byte n-4 |
-        | n-2         | Data Link Escape    | ASCII DLE character (16 decimal)                               |
-        | n-1         | End of Text         | ASCII ETX character (3 decimal)                                |
-
-        """
-        log.info("Pack packet")
-        if isinstance(data, bytes):
-            pass
-        elif isinstance(data, int):
-            # The packet data contains a 16-bit unsigned integer that indicates
-            # a particular command.
-            data = data.to_bytes(2, byteorder='little')
-        elif data is None:
-             # The packet data is not used and may have a zero size
-            data = bytes()
-        else:
-            data_type = type(data).__name__
-            raise ProtocolException(f"Invalid data type: should be 'bytes' or 'int', but is {data_type}")
-        size = len(data)
-        log.debug(f"size: {size}")
-        checksum = self.checksum(bytes([packet_id])
-                                 + bytes([size])
-                                 + data)
-        log.debug(f"checksum: {checksum}")
-        packet = bytes([self.DLE]) \
-            + bytes([packet_id]) \
-            + self.escape(bytes([size])) \
-            + self.escape(data) \
-            + self.escape(bytes([checksum])) \
-            + bytes([self.DLE]) \
-            + bytes([self.ETX])
-
-        return packet
-
-    def read(self):
-        """Read one packet from the buffer."""
-        DLE = bytes([self.DLE])
-        ETX = bytes([self.ETX])
-        buffer = bytearray()
-        packet = bytearray()
-
-        while True:
-            # Buffer two bytes, because all DLEs occur in pairs except at packet
-            # boundaries
-            buffer += self.ser.read(2-len(buffer))
-            if len(buffer) != 2:
-                raise LinkException("Invalid packet: unexpected end")
-            elif len(packet) == 0:
-                # Packet header
-                if buffer.startswith(DLE):
-                    packet += bytes([buffer.pop(0)])
-                else:
-                    raise LinkException("Invalid packet: doesn't start with DLE character")
-            elif buffer.startswith(DLE):
-                # Escape DLE
-                if buffer == DLE + DLE:
-                    packet += buffer
-                    buffer.clear()
-                # Packet trailer
-                elif buffer == DLE + ETX:
-                    packet += buffer
-                    break
-                else:
-                    raise LinkException("Invalid packet: doesn't end with DLE and ETX character")
-            else:
-                packet += bytes([buffer.pop(0)])
-
-        return bytes(packet)
-
-    def write(self, buffer):
-        self.ser.write(buffer)
-
-    def readPacket(self, acknowledge=True):
-        retries = 0
-        while retries <= self.max_retries:
-            try:
-                buffer = self.read()
-                log.debug(f"> {bytes.hex(buffer)}")
-                packet = self.unpack(buffer)
-                if acknowledge:
-                    self.sendACK(packet['id'])
-                break
-            except LinkException as e:
-                log.info(e)
-                self.sendNAK()
-                retries += 1
-
-        if retries > self.max_retries:
-            raise LinkException("Maximum retries exceeded.")
-
-        return packet
-
-    def sendPacket(self, packet_id, data, acknowledge=True):
-        """Send a packet."""
-        buffer = self.pack(packet_id, data)
-        log.debug(f"< {bytes.hex(buffer)}")
-        retries = 0
-        while retries <= self.max_retries:
-            try:
-                self.write(buffer)
-                if acknowledge:
-                    self.readACK(packet_id)
-                break
-            except LinkException as e:
-                log.info(e)
-                retries += 1
-
-        if retries > self.max_retries:
-            raise LinkException("Maximum retries exceeded.")
-
-
-    def readACK(self, packet_id):
-        """Read a ACK/NAK packet.
-
-        If an ACK packet is received the packet was received correctly and
-        communication may continue. If a NAK packet is received, the data packet was not
-        received correctly and should be sent again.
-
-        """
-        log.info("Read ACK/NAK")
-        packet = self.readPacket(acknowledge=False)
-        expected_pid = packet_id
-        received_pid = int.from_bytes(packet['data'], byteorder='little')
-
-        if packet['id'] == self.Pid_Ack_Byte:
-            log.info("Received ACK packet")
-            if expected_pid != received_pid:
-                raise ProtocolException(f"Device expected {expected_pid}, got {received_pid}")
-        elif packet['id'] == self.Pid_Nak_Byte:
-            log.info("Received NAK packet")
-            raise LinkException("Packet was not received correctly.")
-        else:
-            raise GarminException("Received neither ACK nor NAK packet")
-
-    def sendACK(self, packet_id):
-        """Send an ACK packet."""
-        log.info("Send ACK packet")
-        data = packet_id.to_bytes(1, byteorder='little')
-        self.sendPacket(self.Pid_Ack_Byte, data, acknowledge=False)
-
-    def sendNAK(self):
-        """Send a NAK packet.
-
-        NAKs are used only to indicate errors in the communications link, not
-        errors in any higher-layer protocol.
-
-        """
-        log.info("Send NAK packet")
-        data = bytes()  # we cannot determine the packet id because it was corrupted
-        self.sendPacket(self.Pid_Nak_Byte, data, acknowledge=False)
-
-    def __del__(self):
-        """Should close down any opened resources."""
-        self.close()
-
-    def close(self):
-        """Close the serial port."""
-        if "ser" in self.__dict__:
-            self.ser.close()
-
-
-class USBLink(P000):
-    """Implementation of the Garmin USB protocol.
-
-    It will talk to the first Garmin GPS device it finds.
-
-    """
-    idVendor = 2334  # 0x091e
-    configuration_value = 1
-    max_buffer_size = 4096
-
-    # Packet Types
-    USB_Protocol_Layer = 0  # 0x00
-    Application_Layer = 20  # 0x14
-
-    # Endpoints
-    Bulk_OUT = 2        # 0x02
-    Interrupt_IN = 129  # 0x81
-    # Bulk_IN = 131       # 0x83
-
-    # USB Protocol Layer Packet Ids
-    # Pid_Data_Available = 2
-    Pid_Start_Session = 5
-    Pid_Session_Started = 6
-
-    def __init__(self):
-        # Import usb here, so that you don't have to have that module
-        # installed, if you're not using a usb link.
-        import usb
-        self.usb = usb
-        self.timeout = 1
-        self.unit_id = self.start_session()
-
-    def set_timeout(self, seconds):
-        self.timeout = seconds
-
-    def get_timeout(self):
-        return self.timeout
-
-    @cached_property
-    def dev(self):
-        """Return the Garmin device.
-
-        This property will cause some USB traffic the first time it is accessed
-        and cache the resulting value for future use.
-
-        """
-        dev = self.usb.core.find(idVendor=self.idVendor)
-        if dev is None:
-            raise ValueError('Garmin device not found')
-
-        return dev
-
-    @cached_property
-    def cfg(self):
-        """Configure the Garmin device and return the current configuration.
-
-        This property will cause some USB traffic the first time it is accessed
-        and cache the resulting value for future use.
-
-        """
-        # Check the currently active configuration. If the configuration we want
-        # is already active, then we don't have to select any configuration.
-        # This prevents the configuration selection problem described in the
-        # libusb documentation
-        # (http://libusb.sourceforge.net/api-1.0/libusb_caveats.html#configsel).
-        cfg = self.dev.get_active_configuration()
-        if cfg.bConfigurationValue != self.configuration_value:
-            self.dev.set_configuration(self.configuration_value)
-            cfg = self.dev.get_active_configuration()
-
-        return cfg
-
-    @cached_property
-    def intf(self):
-        """Return the current interface configuration.
-
-        This property will cause some USB traffic the first time it is accessed
-        and cache the resulting value for future use.
-
-        """
-        intf = self.cfg[(0, 0)]
-        return intf
-
-    @cached_property
-    def ep_in(self):
-        """Return the Interrupt IN instance.
-
-        This property will cause some USB traffic the first time it is accessed
-        and cache the resulting value for future use.
-
-        """
-        ep = self.usb.util.find_descriptor(self.intf,
-                                           bEndpointAddress=self.Interrupt_IN)
-        return ep
-
-    @cached_property
-    def ep_out(self):
-        """Return the Bulk OUT instance.
-
-        This property will cause some USB traffic the first time it is accessed
-        and cache the resulting value for future use.
-
-        """
-
-        ep = self.usb.util.find_descriptor(self.intf,
-                                           bEndpointAddress=self.Bulk_OUT)
-        return ep
-
-    def unpack(self, buffer):
-        """Unpack a raw USB packet.
-
-        Return a tuple: (packet_id, data)"""
-        packet_type = buffer[0]  # unused
-        reserved_1 = buffer[1:4]  # unused
-        id = buffer[4:6]
-        reserved_2 = buffer[6:8]  # unused
-        size = buffer[8:12]
-        data = buffer[12:]
-
-        id = int.from_bytes(id, byteorder='little')
-        size = int.from_bytes(size, byteorder='little')
-
-        if size != len(data):
-            raise ProtocolException("Invalid packet: wrong size of packet data")
-
-        return {'id': id, 'data': data}
-
-    def pack(self, layer, packet_id, data=None):
-        """Pack an USB packet.
-
-        USB Packet Format:
-        | Byte Number | Byte Description | Notes                                          |
-        |-------------+------------------+------------------------------------------------|
-        |           0 | Packet Type      | USB Protocol Layer = 0, Application Layer = 20 |
-        |         1-3 | Reserved         | must be set to 0                               |
-        |         4-5 | Packet ID        |                                                |
-        |         6-7 | Reserved         | must be set to 0                               |
-        |        8-11 | Data size        |                                                |
-        |         12+ | Data             |                                                |
-        """
-        log.info("Pack packet")
-        if isinstance(data, bytes):
-            pass
-        elif isinstance(data, int):
-            # The packet data contains a 16-bit unsigned integer that indicates
-            # a particular command.
-            data = data.to_bytes(2, byteorder='little')
-        elif data is None:
-             # The packet data is not used and may have a zero size
-            data = bytes()
-        else:
-            data_type = type(data).__name__
-            raise ProtocolException(f"Invalid data type: should be 'bytes' or 'int', but is {data_type}")
-
-        size = len(data)
-        log.debug(f"Data size: {size}")
-
-        packet = bytes([layer]) \
-            + bytes([0]) * 3 \
-            + packet_id.to_bytes(2, byteorder='little') \
-            + bytes([0]) * 2 \
-            + size.to_bytes(4, byteorder='little') \
-            + data
-
-        return packet
-
-    def read(self):
-        """Read buffer."""
-        endpoint = self.Interrupt_IN
-        size = self.max_buffer_size
-        # The libusb timeout is specified in milliseconds
-        timeout = self.timeout * 1000 if self.timeout else None
-        buffer = self.dev.read(endpoint, size, timeout=timeout)
-        # pyusb returns an array object, but we want a bytes object
-        return buffer.tobytes()
-
-    def write(self, buffer):
-        """Write buffer."""
-        endpoint = self.Bulk_OUT
-        # The libusb timeout is specified in milliseconds
-        timeout = self.timeout * 1000 if self.timeout else None
-        self.dev.write(endpoint, buffer, timeout=timeout)
-
-    def readPacket(self):
-        """Read a packet."""
-        buffer = self.read()
-        log.debug(f"> {bytes.hex(buffer)}")
-        packet = self.unpack(buffer)
-        return packet
-
-    def sendPacket(self, packet_id, data):
-        """Send a packet."""
-        buffer = self.pack(self.Application_Layer, packet_id, data)
-        log.debug(f"< {bytes.hex(buffer)}")
-        self.write(buffer)
-
-    def send_start_session_packet(self):
-        """Send a Start Session packet.
-
-        The Start Session packet must be sent by the host to begin transferring
-        packets over USB. It must also be sent anytime the host deliberately
-        stops transferring packets continuously over USB and wishes to begin
-        again. No data is associated with this packet.
-
-        Start Session Packet
-        | N | Direction      | Packet ID         | Packet Data Type |
-        |---+----------------+-------------------+------------------|
-        | 0 | Host to Device | Pid_Start_Session | n/a              |
-
-        """
-        log.info("Send Start Session packet")
-        buffer = self.pack(self.USB_Protocol_Layer, self.Pid_Start_Session)
-        log.debug(f"< packet {self.Pid_Start_Session}: {bytes.hex(b'')}")
-        self.write(buffer)
-
-    def read_session_started_packet(self):
-        """Read Start Session packet.
-
-        The Session Started packet indicates that transfers can take place to
-        and from the device. The host should ignore any packets it receives
-        before receiving this packet. The data returned with this packet is the
-        device’s unit ID.
-
-        Session Started Packet
-        | N | Direction      | Packet ID           | Packet Data Type |
-        |---+----------------+---------------------+------------------|
-        | 0 | Device to Host | Pid_Session_Started | uint32           |
-
-        """
-        log.info("Read Session Started packet")
-        while True:
-            packet = self.readPacket()
-            if packet['id'] == self.Pid_Session_Started:
-                log.info("Received Session Started packet")
-                break
-
-        return packet
-
-    def start_session(self):
-        """Start USB session and return the unit ID.
-
-        """
-        log.info("Start USB session")
-        self.send_start_session_packet()
-        packet = self.read_session_started_packet()
-        unit_id = int.from_bytes(packet['data'], byteorder='little')
-        log.info(f"Unit ID: {unit_id}")
-
-        return unit_id
 
 
 class Garmin:

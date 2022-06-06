@@ -1397,6 +1397,8 @@ class A302(A301):
 
     """
 
+    def putData(self, data, callback):
+        pass
 
 class A400(SingleTransferProtocol):
     """Proximity Waypoint Transfer Protocol.

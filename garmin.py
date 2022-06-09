@@ -62,15 +62,30 @@ log.addHandler(logging.NullHandler())
 # secs from Unix epoch (start of 1970) to Sun Dec 31 00:00:00 1989
 TimeEpoch = 631065600
 
+def str_to_bytes(s, size):
+    """Convert string to bytes object of the specified size.
+
+    If necessary, the string will be truncated or appended will null bytes.
+
+    """
+    # Initialize buffer with null bytes
+    buffer = bytearray(size)
+    # Insert data in buffer
+    buffer[:size] = bytearray(s, 'ascii')
+    return bytes(buffer)
+
 def pack(fmt, *args):
     """Wrapper around struct.pack().
 
     It supports the 'z' format character, which specifies a null-terminated
     string.
 
+    Strings will converted to bytes of the specified length.
+
     """
     new_fmt = ''
     arg_number = 0
+    args = list(args)
     # Iterate over all format characters and its preceding repeat count
     for match in re.finditer(r'(?P<count>\d*)(?P<char>\D)(?P<whitespace>\s*)', fmt):
         char = match.group('char')
@@ -79,11 +94,19 @@ def pack(fmt, *args):
             # length
             asciiz = args[arg_number]
             asciiz_len = len(asciiz) + 1  # added null byte
+            if isinstance(asciiz, str):
+                args[arg_number] = str_to_bytes(asciiz, asciiz_len)
             new_fmt += f'{asciiz_len}s' + match.group('whitespace')
             arg_number += 1
         elif char == 's':
             # For the 's' format character, the count is interpreted as the
             # length of the bytes
+            data = args[arg_number]
+            if isinstance(data, str):
+                count = match.group('count')
+                # If a count is not given, it defaults to 1.
+                size = int(count) if count else 1
+                args[arg_number] = str_to_bytes(data, size)
             new_fmt += match.group(0)
             arg_number += 1
         elif char in 'cbB?hHiIlLqQnNefdpP':

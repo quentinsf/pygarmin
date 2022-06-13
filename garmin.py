@@ -30,14 +30,14 @@
 """
 
 from array import array
+from datetime import datetime, timedelta
 import os
 import re
 import sys
-import time
 from functools import cached_property
-import struct
 import math
 import logging
+import rawutil
 
 
 # Set default logging handler to avoid "No handler found" warnings.
@@ -58,89 +58,6 @@ log.addHandler(logging.NullHandler())
 # to implement data transfers between a host and a device. The Physical, Link,
 # and Application protocol IDs are prefixed with P, L, and A respectively, and
 # data type IDs are prefixed with D.
-
-# secs from Unix epoch (start of 1970) to Sun Dec 31 00:00:00 1989
-TimeEpoch = 631065600
-
-def str_to_bytes(s, size):
-    """Convert string to bytes object of the specified size.
-
-    If necessary, the string will be truncated or appended will null bytes.
-
-    """
-    # Initialize buffer with null bytes
-    buffer = bytearray(size)
-    # Insert data in buffer
-    buffer[:size] = bytearray(s, 'ascii')
-    return bytes(buffer)
-
-def pack(fmt, *args):
-    """Wrapper around struct.pack().
-
-    It supports the 'z' format character, which specifies a null-terminated
-    string.
-
-    Strings will converted to bytes of the specified length.
-
-    """
-    new_fmt = ''
-    arg_number = 0
-    args = list(args)
-    # Iterate over all format characters and its preceding repeat count
-    for match in re.finditer(r'(?P<count>\d*)(?P<char>\D)(?P<whitespace>\s*)', fmt):
-        char = match.group('char')
-        if char == 'z':
-            # Replace the 'z' format character with the 's' preceded by the byte
-            # length
-            asciiz = args[arg_number]
-            asciiz_len = len(asciiz) + 1  # added null byte
-            if isinstance(asciiz, str):
-                args[arg_number] = str_to_bytes(asciiz, asciiz_len)
-            new_fmt += f'{asciiz_len}s' + match.group('whitespace')
-            arg_number += 1
-        elif char == 's':
-            # For the 's' format character, the count is interpreted as the
-            # length of the bytes
-            data = args[arg_number]
-            if isinstance(data, str):
-                count = match.group('count')
-                # If a count is not given, it defaults to 1.
-                size = int(count) if count else 1
-                args[arg_number] = str_to_bytes(data, size)
-            new_fmt += match.group(0)
-            arg_number += 1
-        elif char in 'cbB?hHiIlLqQnNefdpP':
-            # For the other format characters, the count is interpreted as a
-            # repeat count
-            count = match.group('count')
-            # If a count is not given, it defaults to 1.
-            repeat = int(count) if count else 1
-            new_fmt += match.group(0)
-            arg_number += repeat
-        else:
-            new_fmt += match.group(0)
-    return struct.pack(new_fmt, *args)
-
-def unpack(fmt, buffer):
-    """Wrapper around struct.unpack().
-
-    It supports the 'z' format character, which specifies a null-terminated
-    string.
-
-    Possible random bytes following a null-terminated string will be ignored.
-
-    """
-    while 'z' in fmt:
-        pos = fmt.find('z')
-        asciiz_pos = struct.calcsize(fmt[:pos])
-        asciiz_len = buffer[asciiz_pos:].find(b'\x00')
-        if asciiz_len == -1:
-            raise ValueError("Null-terminated string not found")
-        # replace 'z' with length + 's' + null byte
-        fmt = fmt.replace('z', f'{asciiz_len}sx', 1)
-    # Remove trailing bytes from buffer to prevent a struct error
-    buffer = buffer[:struct.calcsize(fmt)]
-    return struct.unpack(fmt, buffer)
 
 
 class GarminException(Exception):
@@ -720,7 +637,9 @@ class L000:
         return packet
 
     def expectPacket(self, packet_id):
-        "Expect and read a particular packet type. Return data."
+        """Expect and read a particular packet type. Return data.
+
+        """
         packet = self.readPacket()
         if packet['id'] != packet_id:
             raise ProtocolException(f"Expected {packet_id:3}, got {packet['id']:3}")
@@ -809,12 +728,10 @@ class A000:
         self.link.sendPacket(self.link.Pid_Product_Rqst, None)
         log.info("Expect Product_Data packet")
         packet = self.link.expectPacket(self.link.Pid_Product_Data)
-        size = len(packet['data']) - struct.calcsize('<Hh')
-        fmt = f'<Hh{size}s'
-        product_id, software_version, product_description = unpack(fmt, packet['data'])
         # The product description contains one or more null-terminated strings.
         # Only the first string is used, and all subsequent strings are ignored.
-        product_description = product_description[:product_description.find(b'\x00')]
+        fmt = '<Hhn'
+        product_id, software_version, product_description = rawutil.unpack(fmt, packet['data'])
 
         return {'id': product_id,
                 'version': software_version / 100,
@@ -851,25 +768,16 @@ class A001:
         # Protocol_Data_Type is comprised of a one-byte tag field and a two-byte
         # data field. The tag identifies which kind of ID is contained in the
         # data field, and the data field contains the actual ID.
-        # The format of the Protocol_Data_Type is:
-        # - unsigned char: tag
-        # - unsigned short: data
         fmt = '<BH'
-        size = struct.calcsize(fmt)
-        count = len(packet['data']) // size
-        fmt = '<' + count * 'BH'
-        # Unpack data to a list of tag+number pairs
-        records = unpack(fmt, packet['data'])
+        protocols = []
+        log.info("Parse supported protocols and datatypes...")
         # The order of array elements is used to associate data types with
         # protocols. For example, a protocol that requires two data types <D0>
         # and <D1> is indicated by a tag-encoded protocol ID followed by two
         # tag-encoded data type IDs, where the first data type ID identifies
         # <D0> and the second data type ID identifies <D1>.
-        protocols = []
-        log.info(f"Parse supported protocols and datatypes...")
-        for i in range(0, len(records), 2):
-            tag = chr(records[i])
-            number = records[i+1]
+        for tag, number in rawutil.iter_unpack(fmt, packet['data']):
+            tag = chr(tag)
             # Format the record to a string consisting of the tag and 3-digit number
             protocol_datatype = f"{tag}{number:03}"
             # Create a list of lists with supported protocols and associated datatypes
@@ -1673,822 +1581,2231 @@ class A1000(MultiTransferProtocol):
                                              self.link.Pid_Run)
 
 
-class A907(TransferProtocol):
-    """A907 implementation.
+class Data_Type():
+    byteorder = 'little'
+    data = bytes()
+    epoch = datetime(1989, 12, 31, 12, 0)  # 12:00 am December 31, 1989 UTC
+    re_upcase_digit = r'[A-Z0-9]'
+    re_upcase_digit_space = r'[A-Z0-9 ]'
+    re_upcase_digit_space_hyphen = r'[A-Z0-9 _]'
+    re_ascii = r'[\x20-\x7E]'
 
-    Used by GPSmap 60cs, no documentation as of 2004-09-26.
-    """
+    @classmethod
+    def get_names(cls):
+        names = list(zip(*cls._fields))[0]
+        return names
 
+    @classmethod
+    def get_format(cls):
+        fmt_chars = list(zip(*cls._fields))[1]
+        fmt = ' '.join(fmt_chars)
+        return fmt
 
-# Most of the following subclasses have a fmt member which is a format
-# string as understood by the struct module, detailing how the class
-# is transmitted on the wire, and a 'parts' member, listing the
-# atrributes that are serialized.
+    @classmethod
+    def get_struct(cls):
+        struct = rawutil.Struct(cls.get_format(),
+                                names=cls.get_names())
+        struct.setbyteorder(cls.byteorder)
+        return struct
 
-class Data_Type:
-    parts = ()
-    fmt = ""
+    def get_dict(self):
+        names = self.get_names()
+        return {key: self.__dict__.get(key) for key in names}
+
+    def get_values(self):
+        return list(self.get_dict().values())
+
+    def get_data(self):
+        return self.data
+
+    def unpack(self, data):
+        struct = self.get_struct()
+        values = struct.unpack(data)
+        self.data = data
+        self.__dict__.update(values._asdict())
 
     def pack(self):
-        dict = {key: self.__dict__[key] for key in self.parts}
-        values = list(dict.values())
-        return pack(self.fmt, *values)
+        struct = self.get_struct()
+        values = self.get_values()
+        self.data = struct.pack(*values)
 
-    def unpack(self, buffer):
-        values = unpack(self.fmt, buffer)
-        self.__dict__.update(zip(self.parts, values))
+    def is_valid_charset(self, pattern, bytes):
+        string = bytes.decode()
+        matches = [re.search(pattern, char) for char in string]
+        return all(matches)
+
+    def __str__(self):
+        return str(self.get_dict())
 
 
-# Waypoints  ---------------------------------------------------
+class Position_Type(Data_Type):
+    """The position_type is used to indicate latitude and longitude in semicircles,
+    where 2 31 semicircles equal 180 degrees. North latitudes and East
+    longitudes are indicated with positive numbers; South latitudes and West
+    longitudes are indicated with negative numbers.
 
-# Different products store different info in their waypoints
-# Internally, waypoints store latitude and longitude in 'semicircle'
-# coordinates. Here's the conversion:
+    The following formulas show how to convert between degrees and semicircles:
+    degrees = semicircles * ( 180 / 2^31 )
+    semicircles = degrees * ( 2^31 / 180 )
 
-def degrees(semi):
-    return semi * 180.0 / (1 << 31)
+    """
+    _fields = [('lat', 'i'),  # latitude in semicircles
+               ('lon', 'i'),  # longitude in semicircles
+               ]
 
-def semi(deg):
-    return int(deg * ((1 << 31) / 180))
+    def __init__(self, lat=0, lon=0):
+        self.lat = lat
+        self.lon = lon
 
-def radian(semi):
-    return semi * math.pi / (1 << 31)
+    def __str__(self):
+        return f'Lat: {self.lat}, Lon:{self.lon}'
 
-# Distance between two waypoints (in metres)
-# Haversine Formula (from R.W. Sinnott, "Virtues of the Haversine",
-# Sky and Telescope, vol. 68, no. 2, 1984, p. 159):
+    @staticmethod
+    def to_degrees(semi):
+        return semi * (1800 / 2 ** 31)
 
-def distance(wp1, wp2):
-    R = 6367000
-    rlat1 = radian(wp1.slat)
-    rlon1 = radian(wp1.slon)
-    rlat2 = radian(wp2.slat)
-    rlon2 = radian(wp2.slon)
-    dlon = rlon2 - rlon1
-    dlat = rlat2 - rlat1
-    a = (math.pow(math.sin(dlat/2), 2)
-         + math.cos(rlat1)
-         * math.cos(rlat2)
-         * math.pow(math.sin(dlon/2), 2))
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
-    return R*c
+    @staticmethod
+    def to_radians(semi):
+        return semi * (math.pi / 2 ** 31)
+
+    def as_degrees(self):
+        return (self.to_degrees(self.lat),
+                self.to_degrees(self.lon))
+
+    def as_radians(self):
+        return (self.to_radians(self.lat),
+                self.to_radians(self.lon))
+
+    def is_valid(self):
+        """Return whether the position is valid.
+
+        A waypoint is invalid if both the “lat” and “lon” members are equal to
+        0x7FFFFFFF (-129).
+
+        """
+        return not self.lat == -129 and self.lat == -129
+
+
+class Radian_Position_Type(Data_Type):
+    """The radian_position_type is used to indicate latitude and longitude in
+    radians, where π radians equal 180 degrees. North latitudes and East
+    longitudes are indicated with positive numbers; South latitudes and West
+    longitudes are indicated with negative numbers.
+
+    The following formulas show how to convert between degrees and radians:
+    degrees = radians * ( 180 / π )
+    radians = degrees * ( π / 180 )
+
+    """
+    _fields = [('lat', 'd'),  # latitude in radians
+               ('lon', 'd'),  # longitude in radians
+               ]
+
+    def __init__(self, lat=0, lon=0):
+        self.lat = lat
+        self.lon = lon
+
+    def __str__(self):
+        return f'Lat: {self.lat:.5f}, Lon: {self.lon:.5f}'
+
+    @staticmethod
+    def to_degrees(radians):
+        return radians * (180 / math.pi)
+
+    @staticmethod
+    def to_semicircles(radians):
+        return radians * (2 ** 31 / math.pi)
+
+    def as_degrees(self):
+        return (self.to_degrees(self.lat),
+                self.to_degrees(self.lon))
+
+    def as_semicircles(self):
+        return (self.to_semicircles(self.lat),
+                self.to_semicircles(self.lon))
+
+
+class Degree_Position_Type(Data_Type):
+    """The degree_position_type is used to indicate latitude and longitude in
+    degrees. North latitudes and East longitudes are indicated with positive
+    numbers; South latitudes and West longitudes are indicated with negative
+    numbers.
+
+    """
+    _fields = [('lat', 'f'),  # latitude in radians
+               ('lon', 'f'),  # longitude in radians
+               ]
+
+    def __init__(self, lat=0, lon=0):
+        self.lat = lat
+        self.lon = lon
+
+    def __str__(self):
+        return f'Lat: {self.lat:.5f}, Lon: {self.lon:.5f}'
+
+    @staticmethod
+    def to_semicircles(degrees):
+        return degrees * (2 ** 31 / 180)
+
+    @staticmethod
+    def to_radians(degrees):
+        return degrees * (math.pi / 180)
+
+    def as_semicircles(self):
+        return (self.to_semicircles(self.lat),
+                self.to_semicircles(self.lon))
+
+    def as_radians(self):
+        return (self.to_radians(self.lat),
+                self.to_radians(self.lon))
+
+
+class Time_Type(Data_Type):
+    _epoch = datetime(1989, 12, 31, 12, 0)  # 12:00 am December 31, 1989 UTC
+    _fields = [('time', 'I'),  # timestamp, invalid if 0xFFFFFFFF
+               ]
+
+    def __init__(self, time=4294967295):
+        self.time = time
+
+    def __str__(self):
+        datetime = self.get_datetime()
+        return str(datetime)
+
+    def get_datetime(self):
+        """Return a datetime object of the time.
+
+        The “time” member indicates the number of seconds since 12:00 am
+        December 31, 1989 UTC.
+
+        A value of 0xFFFFFFFF (4294967295) indicates that the “time” member is
+        unsupported or unknown.
+
+        """
+        delta = timedelta(seconds=self.time)
+        return self._epoch + delta
+
+
+class Symbol_Type(Data_Type):
+    _fields = [('smbl', 'H'),    # symbol id
+               ]
+    _smbl = {
+        # Marine symbols
+        0: 'sym_anchor',                          # white anchor symbol
+        1: 'sym_bell',                            # white bell symbol
+        2: 'sym_diamond_grn',                     # green diamond symbol
+        3: 'sym_diamond_red',                     # red diamond symbol
+        4: 'sym_dive1',                           # diver down flag 1
+        5: 'sym_dive2',                           # diver down flag 2
+        6: 'sym_dollar',                          # white dollar symbol
+        7: 'sym_fish',                            # white fish symbol
+        8: 'sym_fuel',                            # white fuel symbol
+        9: 'sym_horn',                            # white horn symbol
+        10: 'sym_house',                          # white house symbol
+        11: 'sym_knife',                          # white knife & fork symbol
+        12: 'sym_light',                          # white light symbol
+        13: 'sym_mug',                            # white mug symbol
+        14: 'sym_skull',                          # white skull and crossbones symbol*/
+        15: 'sym_square_grn',                     # green square symbol
+        16: 'sym_square_red',                     # red square symbol
+        17: 'sym_wbuoy',                          # white buoy waypoint symbol
+        18: 'sym_wpt_dot',                        # waypoint dot
+        19: 'sym_wreck',                          # white wreck symbol
+        20: 'sym_null',                           # null symbol (transparent)
+        21: 'sym_mob',                            # man overboard symbol
+        22: 'sym_buoy_ambr',                      # amber map buoy symbol
+        23: 'sym_buoy_blck',                      # black map buoy symbol
+        24: 'sym_buoy_blue',                      # blue map buoy symbol
+        25: 'sym_buoy_grn',                       # green map buoy symbol
+        26: 'sym_buoy_grn_red',                   # green/red map buoy symbol
+        27: 'sym_buoy_grn_wht',                   # green/white map buoy symbol
+        28: 'sym_buoy_orng',                      # orange map buoy symbol
+        29: 'sym_buoy_red',                       # red map buoy symbol
+        30: 'sym_buoy_red_grn',                   # red/green map buoy symbol
+        31: 'sym_buoy_red_wht',                   # red/white map buoy symbol
+        32: 'sym_buoy_violet',                    # violet map buoy symbol
+        33: 'sym_buoy_wht',                       # white map buoy symbol
+        34: 'sym_buoy_wht_grn',                   # white/green map buoy symbol
+        35: 'sym_buoy_wht_red',                   # white/red map buoy symbol
+        36: 'sym_dot',                            # white dot symbol
+        37: 'sym_rbcn',                           # radio beacon symbol
+        150: 'sym_boat_ramp',                     # boat ramp symbol
+        151: 'sym_camp',                          # campground symbol
+        152: 'sym_restrooms',                     # restrooms symbol
+        153: 'sym_showers',                       # shower symbol
+        154: 'sym_drinking_wtr',                  # drinking water symbol
+        155: 'sym_phone',                         # telephone symbol
+        156: 'sym_1st_aid',                       # first aid symbol
+        157: 'sym_info',                          # information symbol
+        158: 'sym_parking',                       # parking symbol
+        159: 'sym_park',                          # park symbol
+        160: 'sym_picnic',                        # picnic symbol
+        161: 'sym_scenic',                        # scenic area symbol
+        162: 'sym_skiing',                        # skiing symbol
+        163: 'sym_swimming',                      # swimming symbol
+        164: 'sym_dam',                           # dam symbol
+        165: 'sym_controlled',                    # controlled area symbol
+        166: 'sym_danger',                        # danger symbol
+        167: 'sym_restricted',                    # restricted area symbol
+        168: 'sym_null_2',                        # null symbol
+        169: 'sym_ball',                          # ball symbol
+        170: 'sym_car',                           # car symbol
+        171: 'sym_deer',                          # deer symbol
+        172: 'sym_shpng_cart',                    # shopping cart symbol
+        173: 'sym_lodging',                       # lodging symbol
+        174: 'sym_mine',                          # mine symbol
+        175: 'sym_trail_head',                    # trail head symbol
+        176: 'sym_truck_stop',                    # truck stop symbol
+        177: 'sym_user_exit',                     # user exit symbol
+        178: 'sym_flag',                          # flag symbol
+        179: 'sym_circle_x',                      # circle with x in the center
+        180: 'sym_open_24hr',                     # open 24 hours symbol
+        181: 'sym_fhs_facility',                  # U Fishing Hot Spots™ Facility
+        182: 'sym_bot_cond',                      # bottom conditions
+        183: 'sym_tide_pred_stn',                 # tide/current prediction station
+        184: 'sym_anchor_prohib',                 # U anchor prohibited symbol
+        185: 'sym_beacon',                        # U beacon symbol
+        186: 'sym_coast_guard',                   # U coast guard symbol
+        187: 'sym_reef',                          # U reef symbol
+        188: 'sym_weedbed',                       # U weedbed symbol
+        189: 'sym_dropoff',                       # U dropoff symbol
+        190: 'sym_dock',                          # U dock symbol
+        191: 'sym_marina',                        # U marina symbol
+        192: 'sym_bait_tackle',                   # U bait and tackle symbol
+        193: 'sym_stump',                         # U stump symbol
+        194: 'sym_dsc_posn',                      # DSC position report symbol
+        195: 'sym_dsc_distress',                  # DSC distress call symbol
+        196: 'sym_wbuoy_dark',                    # dark buoy waypoint symbol
+        197: 'sym_exp_wreck',                     # exposed wreck symbol
+        198: 'sym_rcmmd_anchor',                  # recommended anchor symbol
+        199: 'sym_brush_pile',                    # brush pile symbol
+        200: 'sym_caution',                       # caution symbol
+        201: 'sym_fish_1',                        # fish symbol 1
+        202: 'sym_fish_2',                        # fish symbol 2
+        203: 'sym_fish_3',                        # fish symbol 3
+        204: 'sym_fish_4',                        # fish symbol 4
+        205: 'sym_fish_5',                        # fish symbol 5
+        206: 'sym_fish_6',                        # fish symbol 6
+        207: 'sym_fish_7',                        # fish symbol 7
+        208: 'sym_fish_8',                        # fish symbol 8
+        209: 'sym_fish_9',                        # fish symbol 9
+        210: 'sym_fish_attract',                  # fish attractor
+        211: 'sym_hump',                          # hump symbol
+        212: 'sym_laydown',                       # laydown symbol
+        213: 'sym_ledge',                         # ledge symbol
+        214: 'sym_lilly_pads',                    # lilly pads symbol
+        215: 'sym_no_wake_zone',                  # no wake zone symbol
+        216: 'sym_rocks',                         # rocks symbol
+        217: 'sym_stop',                          # stop symbol
+        218: 'sym_undrwtr_grss',                  # underwater grass symbol
+        219: 'sym_undrwtr_tree',                  # underwater tree symbol
+        220: 'sym_pin_yllw',                      # yellow pin symbol
+        221: 'sym_flag_yllw',                     # yellow flag symbol
+        222: 'sym_diamond_yllw',                  # yellow diamond symbol
+        223: 'sym_cricle_yllw',                   # yellow circle symbol
+        224: 'sym_square_yllw',                   # yellow square symbol
+        225: 'sym_triangle_yllw',                 # yellow triangle symbol
+        # User customizable symbols
+        # The values from sym_begin_custom to sym_end_custom inclusive are
+        # reserved for the identification of user customizable symbols.
+        7680: 'sym_begin_custom',                 # first user customizable symbol
+        8191: 'sym_end_custom',                   # last user customizable symbol
+        # Land symbols
+        8192: 'sym_is_hwy',                       # interstate hwy symbol
+        8193: 'sym_us_hwy',                       # us hwy symbol
+        8194: 'sym_st_hwy',                       # state hwy symbol
+        8195: 'sym_mi_mrkr',                      # mile marker symbol
+        8196: 'sym_trcbck',                       # TracBack (feet) symbol
+        8197: 'sym_golf',                         # golf symbol
+        8198: 'sym_sml_cty',                      # small city symbol
+        8199: 'sym_med_cty',                      # medium city symbol
+        8200: 'sym_lrg_cty',                      # large city symbol
+        8201: 'sym_freeway',                      # intl freeway hwy symbol
+        8202: 'sym_ntl_hwy',                      # intl national hwy symbol
+        8203: 'sym_cap_cty',                      # capitol city symbol (star)
+        8204: 'sym_amuse_pk',                     # amusement park symbol
+        8205: 'sym_bowling',                      # bowling symbol
+        8206: 'sym_car_rental',                   # car rental symbol
+        8207: 'sym_car_repair',                   # car repair symbol
+        8208: 'sym_fastfood',                     # fast food symbol
+        8209: 'sym_fitness',                      # fitness symbol
+        8210: 'sym_movie',                        # movie symbol
+        8211: 'sym_museum',                       # museum symbol
+        8212: 'sym_pharmacy',                     # pharmacy symbol
+        8213: 'sym_pizza',                        # pizza symbol
+        8214: 'sym_post_ofc',                     # post office symbol
+        8215: 'sym_rv_park',                      # RV park symbol
+        8216: 'sym_school',                       # school symbol
+        8217: 'sym_stadium',                      # stadium symbol
+        8218: 'sym_store',                        # dept. store symbol
+        8219: 'sym_zoo',                          # zoo symbol
+        8220: 'sym_gas_plus',                     # convenience store symbol
+        8221: 'sym_faces',                        # live theater symbol
+        8222: 'sym_ramp_int',                     # ramp intersection symbol
+        8223: 'sym_st_int',                       # street intersection symbol
+        8226: 'sym_weigh_sttn',                   # inspection/weigh station symbol
+        8227: 'sym_toll_booth',                   # toll booth symbol
+        8228: 'sym_elev_pt',                      # elevation point symbol
+        8229: 'sym_ex_no_srvc',                   # exit without services symbol
+        8230: 'sym_geo_place_mm',                 # geographic place name, man-made
+        8231: 'sym_geo_place_wtr',                # geographic place name, water
+        8232: 'sym_geo_place_lnd',                # geographic place name, land
+        8233: 'sym_bridge',                       # bridge symbol
+        8234: 'sym_building',                     # building symbol
+        8235: 'sym_cemetery',                     # cemetery symbol
+        8236: 'sym_church',                       # church symbol
+        8237: 'sym_civil',                        # civil location symbol
+        8238: 'sym_crossing',                     # crossing symbol
+        8239: 'sym_hist_town',                    # historical town symbol
+        8240: 'sym_levee',                        # levee symbol
+        8241: 'sym_military',                     # military location symbol
+        8242: 'sym_oil_field',                    # oil field symbol
+        8243: 'sym_tunnel',                       # tunnel symbol
+        8244: 'sym_beach',                        # beach symbol
+        8245: 'sym_forest',                       # forest symbol
+        8246: 'sym_summit',                       # summit symbol
+        8247: 'sym_lrg_ramp_int',                 # large ramp intersection symbol
+        8249: 'sym_badge',                        # police/official badge symbol
+        8250: 'sym_cards',                        # gambling/casino symbol
+        8251: 'sym_snowski',                      # snow skiing symbol
+        8252: 'sym_iceskate',                     # ice skating symbol
+        8253: 'sym_wrecker',                      # tow truck (wrecker) symbol
+        8254: 'sym_border',                       # border crossing (port of entry)
+        8255: 'sym_geocache',                     # geocache location
+        8256: 'sym_geocache_fnd',                 # found geocache
+        8257: 'sym_cntct_smiley',                 # Rino contact symbol, "smiley"
+        8258: 'sym_cntct_ball_cap',               # Rino contact symbol, "ball cap"
+        8259: 'sym_cntct_big_ears',               # Rino contact symbol, "big ear"
+        8260: 'sym_cntct_spike',                  # Rino contact symbol, "spike"
+        8261: 'sym_cntct_goatee',                 # Rino contact symbol, "goatee"
+        8262: 'sym_cntct_afro',                   # Rino contact symbol, "afro"
+        8263: 'sym_cntct_dreads',                 # Rino contact symbol, "dreads"
+        8264: 'sym_cntct_female1',                # Rino contact symbol, "female 1"
+        8265: 'sym_cntct_female2',                # Rino contact symbol, "female 2"
+        8266: 'sym_cntct_female3',                # Rino contact symbol, "female 3"
+        8267: 'sym_cntct_ranger',                 # Rino contact symbol, "ranger"
+        8268: 'sym_cntct_kung_fu',                # Rino contact symbol, "kung fu"
+        8269: 'sym_cntct_sumo',                   # Rino contact symbol, "sumo"
+        8270: 'sym_cntct_pirate',                 # Rino contact symbol, "pirate"
+        8271: 'sym_cntct_biker',                  # Rino contact symbol, "biker"
+        8272: 'sym_cntct_alien',                  # Rino contact symbol, "alien"
+        8273: 'sym_cntct_bug',                    # Rino contact symbol, "bug"
+        8274: 'sym_cntct_cat',                    # Rino contact symbol, "cat"
+        8275: 'sym_cntct_dog',                    # Rino contact symbol, "dog"
+        8276: 'sym_cntct_pig',                    # Rino contact symbol, "pig"
+        8277: 'sym_cntct_blond_woman',            # contact symbol - blond woman
+        8278: 'sym_cntct_clown',                  # contact symbol - clown
+        8279: 'sym_cntct_glasses_boy',            # contact symbol - glasses boy
+        8280: 'sym_cntct_panda',                  # contact symbol - panda
+        8281: 'sym_cntct_reserved5',              # contact symbol -
+        8282: 'sym_hydrant',                      # water hydrant symbol
+        8283: 'sym_voice_rec',                    # icon for a voice recording
+        8284: 'sym_flag_blue',                    # blue flag symbol
+        8285: 'sym_flag_green',                   # green flag symbol
+        8286: 'sym_flag_red',                     # red flag symbol
+        8287: 'sym_pin_blue',                     # blue pin symbol
+        8288: 'sym_pin_green',                    # green pin symbol
+        8289: 'sym_pin_red',                      # red pin symbol
+        8290: 'sym_block_blue',                   # blue block symbol
+        8291: 'sym_block_green',                  # green block symbol
+        8292: 'sym_block_red',                    # red block symbol
+        8293: 'sym_bike_trail',                   # bike trail symbol
+        8294: 'sym_circle_red',                   # red circle symbol
+        8295: 'sym_circle_green',                 # green circle symbol
+        8296: 'sym_circle_blue',                  # blue circle symbol
+        8299: 'sym_diamond_blue',                 # blue diamond symbol
+        8300: 'sym_oval_red',                     # red oval symbol
+        8301: 'sym_oval_green',                   # green oval symbol
+        8302: 'sym_oval_blue',                    # blue oval symbol
+        8303: 'sym_rect_red',                     # red rectangle symbol
+        8304: 'sym_rect_green',                   # green rectangle symbol
+        8305: 'sym_rect_blue',                    # blue rectangle symbol
+        8308: 'sym_square_blue',                  # blue square symbol
+        8309: 'sym_letter_a_red',                 # red letter 'A' symbol
+        8310: 'sym_letter_b_red',                 # red letter 'B' symbol
+        8311: 'sym_letter_c_red',                 # red letter 'C' symbol
+        8312: 'sym_letter_d_red',                 # red letter 'D' symbol
+        8313: 'sym_letter_a_green',               # green letter 'A' symbol
+        8314: 'sym_letter_b_green',               # green letter 'B' symbol
+        8315: 'sym_letter_c_green',               # green letter 'C' symbol
+        8316: 'sym_letter_d_green',               # green letter 'D' symbol
+        8317: 'sym_letter_a_blue',                # blue letter 'A' symbol
+        8318: 'sym_letter_b_blue',                # blue letter 'B' symbol
+        8319: 'sym_letter_c_blue',                # blue letter 'C' symbol
+        8320: 'sym_letter_d_blue',                # blue letter 'D' symbol
+        8321: 'sym_number_0_red',                 # red number '0' symbol
+        8322: 'sym_number_1_red',                 # red number '1' symbol
+        8323: 'sym_number_2_red',                 # red number '2' symbol
+        8324: 'sym_number_3_red',                 # red number '3' symbol
+        8325: 'sym_number_4_red',                 # red number '4' symbol
+        8326: 'sym_number_5_red',                 # red number '5' symbol
+        8327: 'sym_number_6_red',                 # red number '6' symbol
+        8328: 'sym_number_7_red',                 # red number '7' symbol
+        8329: 'sym_number_8_red',                 # red number '8' symbol
+        8330: 'sym_number_9_red',                 # red number '9' symbol
+        8331: 'sym_number_0_green',               # green number '0' symbol
+        8332: 'sym_number_1_green',               # green number '1' symbol
+        8333: 'sym_number_2_green',               # green number '2' symbol
+        8334: 'sym_number_3_green',               # green number '3' symbol
+        8335: 'sym_number_4_green',               # green number '4' symbol
+        8336: 'sym_number_5_green',               # green number '5' symbol
+        8337: 'sym_number_6_green',               # green number '6' symbol
+        8338: 'sym_number_7_green',               # green number '7' symbol
+        8339: 'sym_number_8_green',               # green number '8' symbol
+        8340: 'sym_number_9_green',               # green number '9' symbol
+        8341: 'sym_number_0_blue',                # blue number '0' symbol
+        8342: 'sym_number_1_blue',                # blue number '1' symbol
+        8343: 'sym_number_2_blue',                # blue number '2' symbol
+        8344: 'sym_number_3_blue',                # blue number '3' symbol
+        8345: 'sym_number_4_blue',                # blue number '4' symbol
+        8346: 'sym_number_5_blue',                # blue number '5' symbol
+        8347: 'sym_number_6_blue',                # blue number '6' symbol
+        8348: 'sym_number_7_blue',                # blue number '7' symbol
+        8349: 'sym_number_8_blue',                # blue number '8' symbol
+        8350: 'sym_number_9_blue',                # blue number '9' symbol
+        8351: 'sym_triangle_blue',                # blue triangle symbol
+        8352: 'sym_triangle_green',               # green triangle symbol
+        8353: 'sym_triangle_red',                 # red triangle symbol
+        8354: 'sym_library',                      # library (book)
+        8355: 'sym_bus',                          # ground transportation
+        8356: 'sym_city_hall',                    # city hall
+        8357: 'sym_wine',                         # winery
+        8358: 'sym_oem_dealer',                   # OEM dealer
+        8359: 'sym_food_asian',                   # asian food symbol
+        8360: 'sym_food_deli',                    # deli symbol
+        8361: 'sym_food_italian',                 # italian food symbol
+        8362: 'sym_food_seafood',                 # seafood symbol
+        8363: 'sym_food_steak',                   # steak symbol
+        8364: 'sym_atv',                          # ATV
+        8365: 'sym_big_game',                     # big game
+        8366: 'sym_blind',                        # blind
+        8367: 'sym_blood_trail',                  # blood trail
+        8368: 'sym_cover',                        # cover
+        8369: 'sym_covey',                        # covey
+        8370: 'sym_food_source',                  # food source
+        8371: 'sym_furbearer',                    # furbearer
+        8372: 'sym_lodge',                        # lodge
+        8373: 'sym_small_game',                   # small game
+        8374: 'sym_tracks',                       # tracks
+        8375: 'sym_treed_quarry',                 # treed quarry
+        8376: 'sym_tree_stand',                   # tree stand
+        8377: 'sym_truck',                        # truck
+        8378: 'sym_upland_game',                  # upland game
+        8379: 'sym_waterfowl',                    # waterfowl
+        8380: 'sym_water_source',                 # water source
+        8381: 'sym_tracker_auto_dark_blue',       # tracker - vehicles
+        8382: 'sym_tracker_auto_green',
+        8383: 'sym_tracker_auto_light_blue',
+        8384: 'sym_tracker_auto_light_purple',
+        8385: 'sym_tracker_auto_lime',
+        8386: 'sym_tracker_auto_normal',
+        8387: 'sym_tracker_auto_orange',
+        8388: 'sym_tracker_auto_purple',
+        8389: 'sym_tracker_auto_red',
+        8390: 'sym_tracker_auto_sky_blue',
+        8391: 'sym_tracker_auto_yellow',
+        8392: 'sym_tracker_gnrc_dark_blue',       # tracker - generic
+        8393: 'sym_tracker_gnrc_green',
+        8394: 'sym_tracker_gnrc_light_blue',
+        8395: 'sym_tracker_gnrc_light_purple',
+        8396: 'sym_tracker_gnrc_lime',
+        8397: 'sym_tracker_gnrc_normal',
+        8398: 'sym_tracker_gnrc_orange',
+        8399: 'sym_tracker_gnrc_purple',
+        8400: 'sym_tracker_gnrc_red',
+        8401: 'sym_tracker_gnrc_sky_blue',
+        8402: 'sym_tracker_gnrc_yellow',
+        8403: 'sym_tracker_pdstrn_dark_blue',     # tracker - pedestrians
+        8404: 'sym_tracker_pdstrn_green',
+        8405: 'sym_tracker_pdstrn_light_blue',
+        8406: 'sym_tracker_pdstrn_light_purple',
+        8407: 'sym_tracker_pdstrn_lime',
+        8408: 'sym_tracker_pdstrn_normal',
+        8409: 'sym_tracker_pdstrn_orange',
+        8410: 'sym_tracker_pdstrn_purple',
+        8411: 'sym_tracker_pdstrn_red',
+        8412: 'sym_tracker_pdstrn_sky_blue',
+        8413: 'sym_tracker_pdstrn_yellow',
+        8414: 'sym_tracker_auto_dsbl_dark_blue',  # tracker - vehicles
+        8415: 'sym_tracker_auto_dsbl_green',
+        8416: 'sym_tracker_auto_dsbl_light_blue',
+        8417: 'sym_tracker_auto_dsbl_light_purple',
+        8418: 'sym_tracker_auto_dsbl_lime',
+        8419: 'sym_tracker_auto_dsbl_normal',
+        8420: 'sym_tracker_auto_dsbl_orange',
+        8421: 'sym_tracker_auto_dsbl_purple',
+        8422: 'sym_tracker_auto_dsbl_red',
+        8423: 'sym_tracker_auto_dsbl_sky_blue',
+        8424: 'sym_tracker_auto_dsbl_yellow',
+        8425: 'sym_tracker_gnrc_dsbl_dark_blue',  # tracker - generic
+        8426: 'sym_tracker_gnrc_dsbl_green',
+        8427: 'sym_tracker_gnrc_dsbl_light_blue',
+        8428: 'sym_tracker_gnrc_dsbl_light_purple',
+        8429: 'sym_tracker_gnrc_dsbl_lime',
+        8430: 'sym_tracker_gnrc_dsbl_normal',
+        8431: 'sym_tracker_gnrc_dsbl_orange',
+        8432: 'sym_tracker_gnrc_dsbl_purple',
+        8433: 'sym_tracker_gnrc_dsbl_red',
+        8434: 'sym_tracker_gnrc_dsbl_sky_blue',
+        8435: 'sym_tracker_gnrc_dsbl_yellow',
+        8436: 'sym_tracker_pdstrn_dsbl_dark_blue',  # tracker – pedestrians
+        8437: 'sym_tracker_pdstrn_dsbl_green',
+        8438: 'sym_tracker_pdstrn_dsbl_light_blue',
+        8439: 'sym_tracker_pdstrn_dsbl_light_purple',
+        8440: 'sym_tracker_pdstrn_dsbl_lime',
+        8441: 'sym_tracker_pdstrn_dsbl_normal',
+        8442: 'sym_tracker_pdstrn_dsbl_orange',
+        8443: 'sym_tracker_pdstrn_dsbl_purple',
+        8444: 'sym_tracker_pdstrn_dsbl_red',
+        8445: 'sym_tracker_pdstrn_dsbl_sky_blue',
+        8446: 'sym_tracker_pdstrn_dsbl_yellow',
+        8447: 'sym_sm_red_circle',                # small red circle
+        8448: 'sym_sm_yllw_circle',               # small yellow circle
+        8449: 'sym_sm_green_circle',              # small green circle
+        8450: 'sym_sm_blue_circle',               # small blue circle
+        8451: 'sym_alert',                        # red alert (! point)
+        8452: 'sym_snow_mobile',                  # snow mobile
+        8453: 'sym_wind_turbine',                 # wind turbine
+        8454: 'sym_camp_fire',                    # camp fire
+        8455: 'sym_binoculars',                   # binoculars
+        8456: 'sym_kayak',                        # kayak
+        8457: 'sym_canoe',                        # canoe
+        8458: 'sym_shelter',                      # lean to
+        8459: 'sym_xski',                         # cross country skiing
+        8460: 'sym_hunting',                      # hunting
+        8461: 'sym_horse_tracks',                 # horse trail
+        8462: 'sym_tree',                         # deciduous tree
+        8463: 'sym_lighthouse',                   # lighthouse
+        8464: 'sym_creek_crossing',               # creek crossing
+        8465: 'sym_deer_sign_scrape',             # deer sign (scrape)
+        8466: 'sym_deer_sign_rub',                # deer sign (rub)
+        8467: 'sym_elk',                          # elk
+        8468: 'sym_elk_wallow',                   # elk wallow
+        8469: 'sym_shed_antlers',                 # shed (antlers)
+        8470: 'sym_turkey',                       # turkey
+        # Aviation symbols
+        16384: 'sym_airport',                     # airport symbol
+        16385: 'sym_int',                         # intersection symbol
+        16386: 'sym_ndb',                         # non-directional beacon symbol
+        16387: 'sym_vor',                         # VHF omni-range symbol
+        16388: 'sym_heliport',                    # heliport symbol
+        16389: 'sym_private',                     # private field symbol
+        16390: 'sym_soft_fld',                    # soft field symbol
+        16391: 'sym_tall_tower',                  # tall tower symbol
+        16392: 'sym_short_tower',                 # short tower symbol
+        16393: 'sym_glider',                      # glider symbol
+        16394: 'sym_ultralight',                  # ultralight symbol
+        16395: 'sym_parachute',                   # parachute symbol
+        16396: 'sym_vortac',                      # VOR/TACAN symbol
+        16397: 'sym_vordme',                      # VOR-DME symbol
+        16398: 'sym_faf',                         # first approach fix
+        16399: 'sym_lom',                         # localizer outer marker
+        16400: 'sym_map',                         # missed approach point
+        16401: 'sym_tacan',                       # TACAN symbol
+        16402: 'sym_seaplane',                    # seaplane base
+    }
+
+    def __init__(self, smbl=0):
+        self.smbl = smbl
+
+    def __str__(self):
+        return f'Symbol: {self.get_smbl()}'
+
+    def get_smbl(self):
+        """Return the symbol value.
+
+        """
+        return self._smbl.get(self.smbl)
 
 
 class Wpt_Type(Data_Type):
-    parts = ("ident", "slat", "slon", "unused", "cmnt")
-    fmt = "< 6s l l L 40s"
 
-    def __init__(self, ident="", slat=0, slon=0, cmnt=""):
-        self.ident = ident         # text identidier (upper case)
-        self.slat = slat           # lat & long in semicircle terms
-        self.slon = slon
-        self.cmnt = cmnt           # comment (must be upper case)
-        self.unused = 0
+    def is_valid_ident(self):
+        return self.is_valid_charset(self.re_upcase_digit, self.ident)
 
-    def __repr__(self):
-        return f"""<Wpt_Type {self.ident}
-        ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}})
-        (at {id(self)})>"""
+    def is_valid_wpt_ident(self):
+        wpt_class = self.get_wpt_class
+        if wpt_class == 'user_wpt' or wpt_class == 'usr_wpt_class':
+            pattern = self.re_upcase_digit
+        else:
+            pattern = self.re_ascii
+        return self.is_valid_charset(pattern, self.wpt_ident)
 
-    def __str__(self):
-        return f"""{self.ident}
-        ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}})"""
+    def is_valid_lnk_ident(self):
+        pattern = self.re_ascii
+        return self.is_valid_charset(pattern, self.lnk_ident)
 
-    def getDict(self):
-        self.data = {
-            'name': self.ident,
-            'comment': self.cmnt,
-            'latitude': self.slat,
-            'longitude': self.slon,
-        }
+    def is_valid_cmnt(self):
+        pattern = self.re_upcase_digit_space_hyphen
+        return self.is_valid_charset(pattern, self.cmnt)
 
-        return self.data
+    def is_valid_cc(self):
+        pattern = self.re_upcase_digit_space
+        return self.is_valid_charset(pattern, self.cc)
 
 
 class D100(Wpt_Type):
-    pass
+    _posn_fmt = Position_Type.get_format()
+    _fields = [('ident', '6s'),             # identifier
+               ('posn', f'({_posn_fmt})'),  # position
+               ('unused', 'I'),             # should be set to zero
+               ('cmnt', '40s'),             # comment
+               ]
 
-
-class D101(Wpt_Type):
-    parts = Wpt_Type.parts + ("dst", "smbl")
-    fmt = "< 6s l l L 40s f b"
-    dst = 0.0                  # proximity distance (m)
-    smbl = 0                   # symbol_type id (0-255)
-
-    def __init__(self, ident="", slat=0, slon=0, cmnt="", dst=0, smbl=0):
-        self.ident = ident         # text identidier (upper case)
-        self.slat = slat           # lat & long in semicircle terms
-        self.slon = slon
-        self.cmnt = cmnt           # comment (must be upper case)
+    def __init__(self, ident=b'', posn=[0, 0], cmnt=b''):
+        self.ident = ident
+        self.posn = posn
         self.unused = 0
+        self.cmnt = cmnt
+
+    def get_posn(self):
+        return Position_Type(*self.posn)
+
+
+class D101(D100):
+    _posn_fmt = Position_Type.get_format()
+    _fields = [('ident', '6s'),             # identifier
+               ('posn', f'({_posn_fmt})'),  # position
+               ('unused', 'I'),             # should be set to zero
+               ('cmnt', '40s'),             # comment
+               ('dst', 'f'),                # proximity distance (meters)
+               ('smbl', 'B'),               # symbol id
+               ]
+
+    def __init__(self, dst=0, smbl=0, **kwargs):
+        super().__init__(**kwargs)
         self.dst = dst
         self.smbl = smbl
-        self.data = {}
 
-    def __repr__(self):
-        return f"""<Wpt_Type {self.ident}
-        ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}})
-        (at {id(self)})>"""
+    def get_symbol(self):
+        return Symbol_Type(self.smbl)
 
-    def __str__(self):
-        return f"{self.ident} ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}})"
-
-    def getDict(self):
-        self.data = {'name': self.ident,
-                     'comment': self.cmnt.strip(),
-                     'latitude': self.slat,
-                     'longitude': self.slon,
-                     'distance': self.dst,
-                     'symbol': self.smbl,
-                     }
-        return self.data
+    def get_smbl(self):
+        symbol = self.get_symbol()
+        return symbol.get_smbl()
 
 
-class D102(Wpt_Type):
-    parts = Wpt_Type.parts + ("dst", "smbl")
-    fmt = "< 6s l l L 40s f h"
-    dst = 0.0                  # proximity distance (m)
-    smbl = 0                   # symbol_type id
+class D102(D101):
+    _posn_fmt = Position_Type.get_format()
+    _smbl_fmt = Symbol_Type.get_format()
+    _fields = [('ident', '6s'),             # identifier
+               ('posn', f'({_posn_fmt})'),  # position
+               ('unused', 'I'),             # should be set to zero
+               ('cmnt', '40s'),             # comment
+               ('dst', 'f'),                # proximity distance (meters)
+               ('smbl', f'{_smbl_fmt}'),    # symbol id
+               ]
 
-    def __init__(self, ident="", slat=0, slon=0, cmnt="", dst=0, smbl=0):
-        self.ident = ident         # text identidier (upper case)
-        self.slat = slat           # lat & long in semicircle terms
-        self.slon = slon
-        self.cmnt = cmnt           # comment (must be upper case)
-        self.unused = 0
-        self.dst = dst
+
+class D103(D100):
+    _posn_fmt = Position_Type.get_format()
+    _fields = [('ident', '6s'),             # identifier
+               ('posn', f'({_posn_fmt})'),  # position
+               ('unused', 'I'),             # should be set to zero
+               ('cmnt', '40s'),             # comment
+               ('smbl', 'B'),               # symbol id
+               ('dspl', 'B'),               # display option
+               ]
+    _smbl = {0:  'smbl_dot',         # dot symbol
+             1:  'smbl_house',       # house symbol
+             2:  'smbl_gas',         # gas symbol
+             3:  'smbl_car',         # car symbol
+             4:  'smbl_fish',        # fish symbol
+             5:  'smbl_boat',        # boat symbol
+             6:  'smbl_anchor',      # anchor symbol
+             7:  'smbl_wreck',       # wreck symbol
+             8:  'smbl_exit',        # exit symbol
+             9:  'smbl_skull',       # skull symbol
+             10: 'smbl_flag',        # flag symbol
+             11: 'smbl_camp',        # camp symbol
+             12: 'smbl_circle_x',    # circle with x symbol
+             13: 'smbl_deer',        # deer symbol
+             14: 'smbl_1st_aid',     # first aid symbol
+             15: 'smbl_back_track',  # back track symbol
+             }
+    _dspl = {0: 'dspl_smbl_name',  # display symbol with waypoint name
+             1: 'dspl_smbl_none',  # display symbol by itself
+             2: 'dspl_smbl_cmnt',  # display symbol with comment
+             }
+
+    def __init__(self, smbl=0, dspl=0, **kwargs):
+        super().__init__(**kwargs)
         self.smbl = smbl
-        self.data = {}
-
-    def __repr__(self):
-        return f"""<Wpt_Type {self.ident}
-        ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}})
-        (at {id(self)})>"""
-
-    def __str__(self):
-        return f"{self.ident} ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}})"
-
-    def getDict(self):
-        self.data = {'name': self.ident,
-                     'comment': self.cmnt.strip(),
-                     'latitude': self.slat,
-                     'longitude': self.slon,
-                     'distance': self.dst,
-                     'symbol': self.smbl
-                     }
-        return self.data
-
-
-class D103(Wpt_Type):
-    parts = Wpt_Type.parts + ("smbl", "dspl")
-    fmt = "<6s l l L 40s b b"
-    smbl = 0                   # D103 symbol id
-    dspl = 0                   # D103 display option
-
-    def __init__(self, ident="", slat=0, slon=0, cmnt="", dspl=0, smbl=0):
-        self.ident = ident         # text identidier (upper case)
-        self.slat = slat           # lat & long in semicircle terms
-        self.slon = slon
-        self.cmnt = cmnt           # comment (must be upper case)
-        self.unused = 0
         self.dspl = dspl
-        self.smbl = smbl
-        self.data = {}
 
-    def __repr__(self):
-        return f"""<Wpt_Type {self.ident}
-        ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}})
-        (at {id(self)})>"""
+    def get_smbl(self):
+        """Return the symbol value.
 
-    def __str__(self):
-        return f"{self.ident} ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}})"
+        """
+        return _smbl.get(self.smbl)
 
-    def getDict(self):
-        self.data = {'name': self.ident,
-                     'comment': self.cmnt.strip(),
-                     'latitude': self.slat,
-                     'longitude': self.slon,
-                     'display': self.dspl,
-                     'symbol': self.smbl
-                     }
-        return self.data
+    def get_dspl(self):
+        """Return the display attribute value.
+
+        """
+        return self._dspl.get(self.dspl, 0)
 
 
-class D104(Wpt_Type):
-    parts = Wpt_Type.parts + ("dst", "smbl", "dspl")
-    fmt = "<6s l l L 40s f h b"
-    dst = 0.0                  # proximity distance (m)
-    smbl = 0                   # symbol_type id
-    dspl = 0                   # D104 display option
+class D104(D101):
+    _posn_fmt = Position_Type.get_format()
+    _smbl_fmt = Symbol_Type.get_format()
+    _fields = [('ident', '6s'),             # identifier
+               ('posn', f'({_posn_fmt})'),  # position
+               ('unused', 'I'),             # should be set to zero
+               ('cmnt', '40s'),             # comment
+               ('dst', 'B'),                # proximity distance (meters)
+               ('smbl', f'{_smbl_fmt}'),    # symbol id
+               ('dspl', 'B'),               # display option
+               ]
+    _dspl = {0: 'dspl_smbl_none',  # display symbol by itself
+             1: 'dspl_smbl_only',  # display symbol by itself
+             3: 'dspl_smbl_name',  # display symbol with waypoint name
+             5: 'dspl_smbl_cmnt',  # display symbol with comment
+             }
 
-    def __init__(self, ident="", slat=0, slon=0, cmnt="",
-                 dst=0, smbl=0, dspl=0):
-        self.ident = ident         # text identidier (upper case)
-        self.slat = slat           # lat & long in semicircle terms
-        self.slon = slon
-        self.cmnt = cmnt           # comment (must be upper case)
-        self.unused = 0
-        self.dst = dst             # proximity distance (m)
-        self.smbl = smbl           # symbol_type id
-        self.dspl = dspl           # D104 display option
+    def __init__(self, dspl=0, **kwargs):
+        super().__init__(**kwargs)
+        self.dspl = dspl
 
-    def __repr__(self):
-        return f"""<Wpt_Type {self.ident}
-        ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}})
-        (at {id(self)})>"""
+    def get_dspl(self):
+        """Return the display attribute value.
 
-    def __str__(self):
-        return f"{self.ident} ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}})"
-
-    def getDict(self):
-        self.data = {'name': self.ident,
-                     'comment': self.cmnt.strip(),
-                     'latitude': self.slat,
-                     'longitude': self.slon,
-                     'distance': self.dst,
-                     'symbol': self.smbl,
-                     'display': self.dspl
-                     }
-        return self.data
+        """
+        return self._dspl.get(self.dspl, 0)
 
 
-class D105(Wpt_Type):
-    parts = ("slat", "slon", "smbl", "ident")
-    fmt = "<l l h z"
-    smbl = 0
+class D105(D101):
+    _posn_fmt = Position_Type.get_format()
+    _smbl_fmt = Symbol_Type.get_format()
+    _fields = [('posn', f'({_posn_fmt})'),  # position
+               ('smbl', f'{_smbl_fmt}'),    # symbol id
+               ('wpt_ident', 'n'),          # waypoint identifier
+               ]
 
-    def __init__(self, ident="", slat=0, slon=0, smbl=0):
-        self.ident = ident         # text identidier (upper case)
-        self.slat = slat           # lat & long in semicircle terms
-        self.slon = slon
-        self.unused = 0
-        self.smbl = smbl
-
-    def __repr__(self):
-        return f"""<Wpt_Type {self.ident}
-        ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}})
-        (at {id(self)})>"""
-
-    def __str__(self):
-        return f"{self.ident} ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}})"
-
-    def getDict(self):
-        self.data = {'name': self.ident,
-                     'latitude': self.slat,
-                     'longitude': self.slon,
-                     'symbol': self.smbl
-                     }
-        return self.data
+    def __init__(self, wpt_ident=b'', **kwargs):
+        super().__init__(**kwargs)
+        self.wpt_ident = wpt_ident
 
 
-class D106(Wpt_Type):
-    parts = ("wpt_class", "subclass", "slat", "slon", "smbl",
-             "ident", "lnk_ident")
-    fmt = "<b 13s l l h z z"
-    wpt_class = 0
-    subclass = ""
-    smbl = 0
-    lnk_ident = ""
+class D106(D101):
+    _posn_fmt = Position_Type.get_format()
+    _smbl_fmt = Symbol_Type.get_format()
+    _fields = [('wpt_class', 'B'),          # class
+               ('subclass', '13s'),         # subclass
+               ('posn', f'({_posn_fmt})'),  # position
+               ('smbl', f'{_smbl_fmt}'),    # symbol id
+               ('wpt_ident', 'n'),          # waypoint identifier
+               ('lnk_ident', 'n'),          # link identifier
+               ]
 
-    def __init__(self, ident="", slat=0, slon=0, subclass="",
-                 wpt_class=0, lnk_ident="", smbl=0):
-        self.ident = ident         # text identidier (upper case)
-        self.slat = slat           # lat & long in semicircle terms
-        self.slon = slon
+    def __init__(self, wpt_class=0, subclass=b'', wpt_ident=b'', lnk_ident=b'', **kwargs):
+        super().__init__(**kwargs)
         self.wpt_class = wpt_class
-        self.unused = 0
         self.subclass = subclass
+        self.wpt_ident = wpt_ident
         self.lnk_ident = lnk_ident
-        self.smbl = smbl
-
-    def __repr__(self):
-        return f"""<Wpt_Type {self.ident}
-        ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}})
-        (at {id(self)})>"""
-
-    def __str__(self):
-        return f"{self.ident} ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}})"
-
-    def getDict(self):
-        self.data = {'name': self.ident,
-                     'class': self.wpt_class,
-                     'subclass': self.subclass,
-                     'latitude': self.slat,
-                     'longitude': self.slon,
-                     'link': self.lnk_ident,
-                     'symbol': self.smbl
-                     }
-        return self.data
 
 
-class D107(Wpt_Type):
-    parts = Wpt_Type.parts + ("smbl", "dspl", "dst", "color")
-    fmt = "<6s l l L 40s b b f b"
-    smbl = 0                   # D103 symbol id
-    dspl = 0                   # D103 display option
-    dst = 0.0
-    color = 0
+class D107(D103):
+    _posn_fmt = Position_Type.get_format()
+    _fields = [('ident', '6s'),             # identifier
+               ('posn', f'({_posn_fmt})'),  # position
+               ('unused', 'I'),             # should be set to zero
+               ('cmnt', '40s'),             # comment
+               ('smbl', 'B'),               # symbol id
+               ('dspl', 'B'),               # display option
+               ('dst', 'f'),                # proximity distance (meters)
+               ('color', 'B'),              # waypoint color
+               ]
+    _color = {0: 'clr_default',  # default waypoint color
+              1: 'clr_red',      # red
+              2: 'clr_green',    # green
+              3: 'clr_blue',     # blue
+              }
 
-    def __init__(self, ident="", slat=0, slon=0, cmnt="",
-                 dst=0, smbl=0, dspl=0, color=0):
-        self.ident = ident         # text identidier (upper case)
-        self.slat = slat           # lat & long in semicircle terms
-        self.slon = slon
-        self.cmnt = cmnt           # comment (must be upper case)
-        self.unused = 0
-        self.dst = dst             # proximity distance (m)
-        self.smbl = smbl           # symbol_type id
-        self.dspl = dspl           # D107 display option
+    def __init__(self, dst=0, color=0, **kwargs):
+        super().__init__(**kwargs)
+        self.dst = dst
         self.color = color
 
-    def __repr__(self):
-        return f"""<Wpt_Type {self.ident}
-        ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}})
-        (at {id(self)})>"""
+    def get_color(self):
+        """Return the color value.
 
-    def __str__(self):
-        return f"{self.ident} ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}})"
-
-    def getDict(self):
-        self.data = {'name': self.ident,
-                     'comment': self.cmnt.strip(),
-                     'latitude': self.slat,
-                     'longitude': self.slon,
-                     'distance': self.dst,
-                     'symbol': self.smbl,
-                     'display': self.dspl,
-                     'color': self.color
-                     }
-        return self.data
+        """
+        return self._color.get(self.color, 0)
 
 
-class D108(Wpt_Type):
-    parts = ("wpt_class", "color", "dspl", "attr", "smbl",
-             "subclass", "slat", "slon", "alt", "dpth", "dist",
-             "state", "cc", "ident", "cmnt", "facility", "city",
-             "addr", "cross_road")
-    fmt = "<b b b b h 18s l l f f f 2s 2s z z z z z z"
-    wpt_class = 0
-    color = 0
-    dspl = 0
-    attr = 0x60
-    smbl = 0
-    subclass = ""
-    alt = 1.0e25
-    dpth = 1.0e25
-    dist = 0.0
-    state = ""
-    cc = ""
-    facility = ""
-    city = ""
-    addr = ""
-    cross_road = ""
+class D108(D103):
+    _posn_fmt = Position_Type.get_format()
+    _smbl_fmt = Symbol_Type.get_format()
+    _fields = [('wpt_class', 'B'),          # class
+               ('color', 'B'),              # waypoint color
+               ('dspl', 'B'),               # display option
+               ('attr', 'B'),               # attributes (0x60 for D108)
+               ('smbl', f'{_smbl_fmt}'),    # symbol id
+               ('subclass', '18s'),         # subclass
+               ('posn', f'({_posn_fmt})'),  # position
+               ('alt', 'f'),                # altitude in meters
+               ('dpth', 'f'),               # depth in meters
+               ('dist', 'f'),               # proximity distance in meters
+               ('state', '2s'),             # state
+               ('cc', '2s'),                # country code
+               ('ident', 'n'),              # identifier
+               ('cmnt', 'n'),               # waypoint user comment
+               ('facility', 'n'),           # facility name
+               ('city', 'n'),               # city name
+               ('addr', 'n'),               # address number
+               ('cross_road', 'n'),         # intersecting road label
+               ]
+    _wpt_class = {0:   'user_wpt',       # user waypoint
+                  64:  'avtn_apt_wpt',   # aviation airport waypoint
+                  65:  'avtn_int_wpt',   # aviation intersection waypoint
+                  66:  'avtn_ndb_wpt',   # aviation NDB waypoint
+                  67:  'avtn_vor_wpt',   # aviation VOR waypoint
+                  68:  'avtn_arwy_wpt',  # aviation airport runway waypoint
+                  69:  'avtn_aint_wpt',  # aviation airport intersection
+                  70:  'avtn_andb_wpt',  # aviation airport ndb waypoint
+                  128: 'map_pnt_wpt',    # map point waypoint
+                  129: 'map_area_wpt',   # map area waypoint
+                  130: 'map_int_wpt',    # map intersection waypoint
+                  131: 'map_adrs_wpt',   # map address waypoint
+                  132: 'map_line_wpt',   # map line waypoint
+                  }
+    _color = {0:   'clr_black',
+              1:   'clr_dark_red',
+              2:   'clr_dark_green',
+              3:   'clr_dark_yellow',
+              4:   'clr_dark_blue',
+              5:   'clr_dark_magenta',
+              6:   'clr_dark_cyan',
+              7:   'clr_light_gray',
+              8:   'clr_dark_gray',
+              9:   'clr_red',
+              10:  'clr_green',
+              11:  'clr_yellow',
+              12:  'clr_blue',
+              13:  'clr_magenta',
+              14:  'clr_cyan',
+              15:  'clr_white',
+              255: 'clr_default_color'
+              }
 
-    def __init__(self, ident="", slat=0, slon=0, alt=1.0e25, dpth=1.0e25,
-                 cmnt="", subclass="", wpt_class=0, lnk_ident="", smbl=18):
-        self.ident = ident         # text identifier (upper case)
-        self.slat = slat           # lat & long in semicircle terms
-        self.slon = slon
+    # According to the specification the “subclass” member should be set to
+    # 0x0000 0x00000000 0xFFFFFFFF 0xFFFFFFFF 0xFFFFFFFF for all waypoints
+    # classes but map waypoints, but this cannot be encoded to ascii.
+    def __init__(self, wpt_class=0, color=255, attr=96, smbl=0,
+                 subclass=b'\x00\x00\x00\x00\x00\x00\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff', alt=1.0e25, dpth=1.0e25, dist=1.0e25, state=b'',
+                 cc=b'', cmnt=b'', facility=b'', city=b'', addr=b'',
+                 cross_road=b'', **kwargs):
+        super().__init__(**kwargs)
         self.wpt_class = wpt_class
-        self.unused = 0
-        self.subclass = subclass
-        self.lnk_ident = lnk_ident
+        self.color = color
+        self.attr = attr
         self.smbl = smbl
-        self.cmnt = cmnt
-
-    def __repr__(self):
-        return f"""<Wpt_Type {self.ident}
-        ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}})
-        (at {id(self)})>"""
-
-    def __str__(self):
-        return f"""{self.ident}
-        ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}}, {self.alt:{3}})
-        '{self.cmnt.strip()}'
-        class {self.wpt_class}
-        symbl {self.smbl}"""
-
-
-class D109(Wpt_Type):
-    parts = ("dtyp", "wpt_class", "dspl_color", "attr", "smbl",
-             "subclass", "slat", "slon", "alt", "dpth", "dist",
-             "state", "cc", "ete", "ident", "cmnt", "facility", "city",
-             "addr", "cross_road")
-    fmt = "<b b b b h 18s l l f f f 2s 2s l z z z z z z"
-    dtyp = 0x01
-    wpt_class = 0
-    dspl_color = 0
-    attr = 0x70
-    smbl = 0
-    subclass = ""
-    alt = 1.0e25
-    dpth = 1.0e25
-    dist = 0.0
-    state = ""
-    cc = ""
-    ete = -1   # Estimated time en route in seconds to next waypoint
-    facility = ""
-    city = ""
-    addr = ""
-    cross_road = ""
-
-    def __init__(self, ident="", slat=0, slon=0, alt=1.0e25, dpth=1.0e25,
-                 cmnt="", subclass="", wpt_class=0, lnk_ident="", smbl=18):
-        self.ident = ident
-        self.slat = slat
-        self.slon = slon
-        self.wpt_class = wpt_class
-        self.unused = 0
         self.subclass = subclass
-        self.lnk_ident = lnk_ident
-        self.smbl = smbl
+        self.alt = alt
+        self.dpth = dpth
+        self.dist = dist
+        self.state = state
+        self.cc = cc
         self.cmnt = cmnt
+        self.facility = facility
+        self.city = city
+        self.addr = addr
+        self.cross_road = cross_road
 
-    def __repr__(self):
-        return f"""<Wpt_Type {self.ident}
-        ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}})
-        (at {id(self)})>"""
+    def get_wpt_class(self):
+        """return the waypoint class value.
 
-    def __str__(self):
-        return f"""{self.ident}
-        ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}}, {self.alt:{3}})
-        '{self.cmnt.strip()}'
-        class {self.wpt_class}
-        symbl {self.smbl}"""
+        if an invalid value is received, the value will be user_wpt.
+
+        """
+        return self._wpt_class.get(self.wpt_class, 0)
+
+    def get_color(self):
+        """return the color value.
+
+        """
+        return self._color.get(self.color, 255)
+
+    def get_symbol(self):
+        return Symbol_Type(self.smbl)
+
+    def get_smbl(self):
+        symbol = self.get_symbol()
+        return symbol.get_smbl()
+
+    def is_valid_alt(self):
+        """Return whether the altitude is valid.
+
+        A “alt” value of 1.0e25 indicates that this parameter is not supported or unknown.
+
+        """
+        return not self.alt == 1.0e25
+
+    def is_valid_dpth(self):
+        """Return whether the depth is valid.
+
+        A “dpth” value of 1.0e25 indicates that this parameter is not supported or unknown.
+
+        """
+        return not self.dpth == 1.0e25
 
 
-class D110(Wpt_Type):
-    parts = ("dtyp", "wpt_class", "dspl_color", "attr", "smbl",
-             "subclass", "slat", "slon", "alt", "dpth", "dist",
-             "state", "cc", "ete", "temp", "time", "wpt_cat",
-             "ident", "cmnt", "facility", "city", "addr", "cross_road")
-    fmt = "<b b b b h 18s l l f f f 2s 2s l f l i z z z z z z"
+class D109(D108):
+    _smbl_fmt = Symbol_Type.get_format()
+    _posn_fmt = Position_Type.get_format()
+    _fields = [('dtyp', 'B'),               # data packet type (0x01 for d109)
+               ('wpt_class', 'B'),          # class
+               ('dspl_color', 'B'),         # display & color
+               ('attr', 'B'),               # attributes (0x70 for d109)
+               ('smbl', f'{_smbl_fmt}'),    # symbol id
+               ('subclass', '18s'),         # subclass
+               ('posn', f'({_posn_fmt})'),  # position
+               ('alt', 'f'),                # altitude in meters
+               ('dpth', 'f'),               # depth in meters
+               ('dist', 'f'),               # proximity distance in meters
+               ('state', '2s'),             # state
+               ('cc', '2s'),                # country code
+               ('ete', 'I'),                # outbound link ete in seconds (default value is 0xffffffff)
+               ('ident', 'n'),              # identifier
+               ('cmnt', 'n'),               # waypoint user comment
+               ('facility', 'n'),           # facility name
+               ('city', 'n'),               # city name
+               ('addr', 'n'),               # address number
+               ('cross_road', 'n'),         # intersecting road label
+               ]
+
+    def __init__(self, dtyp=1, dspl_color=0, attr=112, ete=4294967295, **kwargs):
+        super().__init__(**kwargs)
+        self.dtyp = dtyp
+        self.dspl_color = dspl_color
+        self.attr = attr
+        self.ete = ete
+
+    def get_color(self):
+        """Return the color value.
+
+        The “dspl_color” member contains three fields; bits 0-4 specify the color,
+        bits 5-6 specify the waypoint display attribute and bit 7 is unused and
+        must be 0.
+
+        """
+        bits = f"{self.dspl_color:08b}"
+        color = int(bits[0:5], 2)
+        # According to the specification the default color value should be 0x1f,
+        # but this is an invalid value. It probably should be 0xff.
+        return self._color.get(color, 255)
+
+    def get_dspl(self):
+        """Return the display attribute value.
+
+        The “dspl_color” member contains three fields; bits 0-4 specify the
+        color, bits 5-6 specify the waypoint display attribute and bit 7 is
+        unused and must be 0.
+
+        If an invalid display attribute value is received, the value will be
+        Name.
+
+        """
+        bits = f"{self.dspl_color:08b}"
+        dspl = int(bits[5:7], 2)
+        return self._dspl.get(dspl, 0)
 
 
-class D120(Data_Type):
-    parts = ("name",)
-    fmt = "<17s"
+class D110(D109):
+    _smbl_fmt = Symbol_Type.get_format()
+    _posn_fmt = Position_Type.get_format()
+    _time_fmt = Time_Type.get_format()
+    _fields = [('dtyp', 'B'),               # data packet type (0x01 for D110)
+               ('wpt_class', 'B'),          # class
+               ('dspl_color', 'B'),         # display & color
+               ('attr', 'B'),               # attributes (0x80 for D110)
+               ('smbl', f'{_smbl_fmt}'),    # symbol id
+               ('subclass', '18s'),         # subclass
+               ('posn', f'({_posn_fmt})'),  # position
+               ('alt', 'f'),                # altitude in meters
+               ('dpth', 'f'),               # depth in meters
+               ('dist', 'f'),               # proximity distance in meters
+               ('state', '2s'),             # state
+               ('cc', '2s'),                # country code
+               ('ete', 'I'),                # outbound link ete in seconds
+               ('temp', 'f'),               # temperature, invalid if 1.0e25
+               ('time', f'{_time_fmt}'),    # timestamp, invalid if 0xFFFFFFFF
+               ('wpt_cat', 'H'),            # category membership (default value is 0x0000)
+               ('ident', 'n'),              # identifier
+               ('cmnt', 'n'),               # waypoint user comment
+               ('facility', 'n'),           # facility name
+               ('city', 'n'),               # city name
+               ('addr', 'n'),               # address number
+               ('cross_road', 'n'),         # intersecting road label
+               ]
+    _wpt_class = {0:   'user_wpt',       # user waypoint
+                  64:  'avtn_apt_wpt',   # aviation airport waypoint
+                  65:  'avtn_int_wpt',   # aviation intersection waypoint
+                  66:  'avtn_ndb_wpt',   # aviation NDB waypoint
+                  67:  'avtn_vor_wpt',   # aviation VOR waypoint
+                  68:  'avtn_arwy_wpt',  # aviation airport runway waypoint
+                  69:  'avtn_aint_wpt',  # aviation airport intersection
+                  70:  'avtn_andb_wpt',  # aviation airport ndb waypoint
+                  128: 'map_pnt_wpt',    # map point waypoint
+                  129: 'map_area_wpt',   # map area waypoint
+                  130: 'map_int_wpt',    # map intersection waypoint
+                  131: 'map_adrs_wpt',   # map address waypoint
+                  132: 'map_line_wpt',   # map line waypoint
+                  }
+    _color = {0:  'clr_black',
+              1:  'clr_dark_red',
+              2:  'clr_dark_green',
+              3:  'clr_dark_yellow',
+              4:  'clr_dark_blue',
+              5:  'clr_dark_magenta',
+              6:  'clr_dark_cyan',
+              7:  'clr_light_gray',
+              8:  'clr_dark_gray',
+              9:  'clr_red',
+              10: 'clr_green',
+              11: 'clr_yellow',
+              12: 'clr_blue',
+              13: 'clr_magenta',
+              14: 'clr_cyan',
+              15: 'clr_white',
+              16: 'clr_transparent'
+              }
+
+    def __init__(self, attr=128, temp=1.0e25, time=4294967295,
+                 wpt_cat=0, **kwargs):
+        super().__init__(**kwargs)
+        self.attr = attr
+        self.temp = temp
+        self.time = time
+        self.wpt_cat = wpt_cat
+
+    def get_wpt_class(self):
+        """Return the waypoint class value.
+
+        If an invalid value is received, the value will be user_wpt.
+
+        """
+        return self._wpt_class.get(self.wpt_class, 0)
+
+    def get_color(self):
+        """Return the color value.
+
+        The “dspl_color” member contains three fields; bits 0-4 specify the color,
+        bits 5-6 specify the waypoint display attribute and bit 7 is unused and
+        must be 0.
+
+        If an invalid color value is received, the value will be Black.
+
+        """
+        bits = f"{self.dspl_color:08b}"
+        color = int(bits[0:5], 2)
+        return self._color.get(color, 0)
+
+    def get_dspl(self):
+        """Return the display attribute value.
+
+        The “dspl_color” member contains three fields; bits 0-4 specify the
+        color, bits 5-6 specify the waypoint display attribute and bit 7 is
+        unused and must be 0.
+
+        If an invalid display attribute value is received, the value will be
+        Name.
+
+        """
+        bits = f"{self.dspl_color:08b}"
+        dspl = int(bits[5:7], 2)
+        return self._dspl.get(dspl, 0)
+
+    def get_datetime(self):
+        return Time_Type(self.time).get_datetime()
+
+    def get_wpt_cat(self):
+        """Return a list of waypoint categories.
+
+        The “wpt_cat” member contains a 16 bits that provide category membership
+        information for the waypoint. If a bit is set then the waypoint is a
+        member of the corresponding category.
+
+        """
+        categories = []
+        bits = f"{self.wpt_cat:016b}"
+        for count, bit in enumerate(bits):
+            if bit == '1':
+                categories.append(count + 1)
+        return categories
+
+    def is_valid(self):
+        """Return whether the waypoint is valid.
+
+        A waypoint is invalid if the “lat” member of the “posn” member contains
+        a value greater than 2^30 or less than -2^30
+
+        """
+        return not self.posn.lat > 2**30 or self.posn.lat < -2**30
+
+    def is_valid_temp(self):
+        """Return whether the temperature is valid.
+
+        A “temp” value of 1.0e25 indicates that this parameter is not supported or unknown.
+
+        """
+        return not self.temp == 1.0e25
+
+    def is_valid_time(self):
+        """Return whether the time is valid.
+
+        A “time” value of 0xFFFFFFFF that this parameter is not supported or unknown.
+
+        """
+        return not self.time == 4294967295
+
+
+class Wpt_Cat_Type(Data_Type):
+
+    def is_valid(self):
+        """Return whether the waypoint category is valid.
+
+        A waypoint category is invalid if the “name” member contains a value
+        with a null byte in the first character.
+
+        """
+        self.name[0] != 0
+
+
+class D120(Wpt_Cat_Type):
+    _fields = [('name', '17s'),  # category name
+               ]
+
+    def __init__(self, name=b''):
+        self.name = name
 
 
 class D150(Wpt_Type):
-    parts = ("ident", "cc", "clss", "lat", "lon", "alt",
-             "city", "state", "name", "cmnt")
-    fmt = "<6s 2s b l l i 24s 2s 30s 40s"
-    cc = "  "
-    clss = 0
-    alt = 0
-    city = ""
-    state = ""
-    name = ""
+    _posn_fmt = Position_Type.get_format()
+    _fields = [('ident', '6s'),             # identifier
+               ('cc', '2s'),                # country code
+               ('wpt_class', 'B'),          # class
+               ('posn', f'({_posn_fmt})'),  # position
+               ('alt', 'h'),                # altitude in meters
+               ('city', '24s'),             # city
+               ('state', '2s'),             # state
+               ('facility', '30s'),         # facility name
+               ('cmnt', '40s'),             # comment
+               ]
+    _wpt_class = {0: 'apt_wpt_class',     # airport waypoint class
+                  1: 'int_wpt_class',     # intersection waypoint class
+                  2: 'ndb_wpt_class',     # NDB waypoint class
+                  3: 'vor_wpt_class',     # VOR waypoint class
+                  4: 'usr_wpt_class',     # user defined waypoint class
+                  5: 'rwy_wpt_class',     # airport runway threshold waypoint class
+                  6: 'aint_wpt_class',    # airport intersection waypoint class
+                  7: 'locked_wpt_class',  # locked waypoint class
+                  }
+
+    def __init__(self, ident=b'', cc=b'', wpt_class=0, posn=[0, 0], alt=1.0e25,
+                 city=b'', state=b'', facility=b'', cmnt=b''):
+        self.ident = ident
+        self.cc = cc
+        self.wpt_class = wpt_class
+        self.posn = posn
+        self.alt = alt
+        self.city = city
+        self.state = state
+        self.facility = facility
+        self.cmnt = cmnt
+
+    def get_posn(self):
+        return Position_Type(*self.posn)
+
+    def get_wpt_class(self):
+        """Return the waypoint class value.
+
+        If an invalid value is received, the value will be user_wpt.
+
+        """
+        return self._wpt_class.get(self.wpt_class, 0)
 
 
-class D151(Wpt_Type):
-    parts = Wpt_Type.parts + ("dst", "name", "city", "state",
-                              "alt", "cc", "unused2", "wpt_class")
-    fmt = "< 6s l l L 40s f 30s 24s 2s i 2s c b"
-    dst = 0.0
-    name = ""
-    city = ""
-    state = ""
-    alt = 0
-    cc = ""
-    unused2 = ""
-    wpt_cass = 0
+class D151(D150):
+    _posn_fmt = Position_Type.get_format()
+    _fields = [('ident', '6s'),             # identifier
+               ('posn', f'({_posn_fmt})'),  # position
+               ('unused', 'I'),             # should be set to zero
+               ('cmnt', '40s'),             # comment
+               ('dst', 'f'),                # proximity distance (meters)
+               ('name', '30s'),             # facility name
+               ('city', '24s'),             # city
+               ('state', '2s'),             # state
+               ('alt', 'h'),                # altitude (meters)
+               ('cc', '2s'),                # country code
+               ('unused2', 'B'),            # should be set to zero
+               ('wpt_class', 'B'),          # class
+               ]
+    _wpt_class = {0: 'apt_wpt_class',    # airport waypoint class
+                  1: 'vor_wpt_class',    # VOR waypoint class
+                  2: 'usr_wpt_class',    # user defined waypoint class
+                  3: 'locked_wpt_class'  # locked waypoint class
+                  }
+
+    def __init__(self, dst=0, name=b'', **kwargs):
+        super().__init__(**kwargs)
+        self.unused = 0
+        self.dst = dst
+        self.name = name
+        self.unused2 = 0
 
 
-class D152(Wpt_Type):
-    parts = Wpt_Type.parts + ("dst", "name", "city", "state",
-                              "alt", "cc", "unused2", "wpt_class")
-    fmt = "< 6s l l L 40s f 30s 24s 2s i 2s c b"
-    dst = 0.0
-    name = ""
-    city = ""
-    state = ""
-    alt = 0
-    cc = ""
-    unused2 = ""
-    wpt_cass = 0
+class D152(D150):
+    _wpt_class = {0: 'apt_wpt_class',    # airport waypoint class
+                  1: 'int_wpt_class',    # intersection waypoint class
+                  2: 'ndb_wpt_class',    # NDB waypoint class
+                  3: 'vor_wpt_class',    # VOR waypoint class
+                  4: 'usr_wpt_class',    # user defined waypoint class
+                  5: 'locked_wpt_class'  # locked waypoint class
+                  }
 
 
-class D154(Wpt_Type):
-    parts = Wpt_Type.parts + ("dst", "name", "city", "state", "alt",
-                              "cc", "unused2", "wpt_class", "smbl")
-    fmt = "< 6s l l L 40s f 30s 24s 2s i 2s c b i"
-    dst = 0.0
-    name = ""
-    city = ""
-    state = ""
-    alt = 0
-    cc = ""
-    unused2 = ""
-    wpt_cass = 0
-    smbl = 0
+class D154(D101, D150):
+    _smbl_fmt = Symbol_Type.get_format()
+    _fields = D150._fields.copy()
+    _fields.append(('smbl', f'{_smbl_fmt}'))  # symbol id
+
+    _wpt_class = {0: 'apt_wpt_class',     # airport waypoint class
+                  1: 'int_wpt_class',     # intersection waypoint class
+                  2: 'ndb_wpt_class',     # NDB waypoint class
+                  3: 'vor_wpt_class',     # VOR waypoint class
+                  4: 'usr_wpt_class',     # user defined waypoint class
+                  5: 'rwy_wpt_class',     # airport runway threshold waypoint class
+                  6: 'aint_wpt_class',    # airport intersection waypoint class
+                  7: 'andb_wpt_class',    # airport NDB waypoint class
+                  8: 'sym_wpt_class',     # user defined symbol-only waypoint class
+                  9: 'locked_wpt_class',  # locked waypoint class
+                  }
+
+    def __init__(self, smbl=0, **kwargs):
+        super().__init__(**kwargs)
+        self.smbl = smbl
 
 
-class D155(Wpt_Type):
-    parts = Wpt_Type.parts + ("dst", "name", "city", "state", "alt",
-                              "cc", "unused2", "wpt_class", "smbl", "dspl")
-    fmt = "< 6s l l L 40s f 30s 24s 2s i 2s c b i b"
-    dst = 0.0
-    name = ""
-    city = ""
-    state = ""
-    alt = 0
-    cc = ""
-    unused2 = ""
-    wpt_cass = 0
-    smbl = 0
-    dspl = 0
+class D155(D101, D150):
+    _smbl_fmt = Symbol_Type.get_format()
+    _fields = D150._fields.copy()
+    _fields.extend([('smbl', f'{_smbl_fmt}'),    # symbol id
+                    ('dspl', 'B'),               # display option
+                    ])
+    _dspl = {1: 'dspl_smbl_only',  # display symbol by itself
+             3: 'dspl_smbl_name',  # display symbol with waypoint name
+             5: 'dspl_smbl_cmnt',  # display symbol with comment
+             }
+    _wpt_class = {0: 'apt_wpt_class',     # airport waypoint class
+                  1: 'int_wpt_class',     # intersection waypoint class
+                  2: 'ndb_wpt_class',     # NDB waypoint class
+                  3: 'vor_wpt_class',     # VOR waypoint class
+                  4: 'usr_wpt_class',     # user defined waypoint class
+                  5: 'locked_wpt_class',  # locked waypoint class
+                  }
+
+    def __init__(self, smbl=0, dspl=1, **kwargs):
+        super().__init__(**kwargs)
+        self.smbl = smbl
+        self.dspl = dspl
+
+    def get_dspl(self):
+        """Return the display attribute value.
+
+        """
+        return self._dspl.get(self.dspl, 1)
 
 
 class Rte_Hdr_Type(Data_Type):
-    def __repr__(self):
-        return f"<Rte_Hdr_Type (at {id(self)})>"
+
+    def is_valid_ident(self):
+        pattern = self.re_upcase_digit_space_hyphen
+        return self.is_valid_charset(pattern, self.ident)
+
+    def is_valid_cmnt(self):
+        pattern = self.re_upcase_digit_space_hyphen
+        return self.is_valid_charset(pattern, self.cmnt)
 
 
 class D200(Rte_Hdr_Type):
-    parts = ("route_num",)
-    fmt = "<b"
+    _fields = [('nmbr', 'B'),  # route number
+               ]
+
+    def __init__(self, nmbr=0):
+        self.nmbr = nmbr
 
 
 class D201(Rte_Hdr_Type):
-    parts = ("route_num", "cmnt")
-    fmt = "<b 20s"
-    cmnt = ""
+    _fields = [('nmbr', 'B'),    # route number
+               ('cmnt', '20s'),  # comment
+               ]
+
+    def __init__(self, nmbr=0, cmnt=b''):
+        self.nmbr = nmbr
+        self.cmnt = cmnt
 
 
 class D202(Rte_Hdr_Type):
-    parts = ("ident",)
-    fmt = "<z"
+    _fields = [('ident', 'n'),  # identifier
+               ]
+
+    def __init__(self, ident=b''):
+        self.ident = ident
 
 
 class Rte_Link_Type(Data_Type):
-    def __repr__(self):
-        return f"<Rte_Link_Type (at {id(self)})"
+
+    def is_valid_ident(self):
+        pattern = self.re_upcase_digit_space_hyphen
+        self.is_valid_charset(pattern, self.ident)
 
 
 class D210(Rte_Link_Type):
-    parts = ("class", "subclass", "ident")
-    fmt = "<h 18s z"
+    _fields = [('lnk_class', 'H'),   # link class
+               ('subclass', '18s'),  # subclass
+               ('ident', 'n'),       # identifier
+               ]
+    _lnk_class = {0:   'line',
+                  1:   'link',
+                  2:   'net',
+                  3:   'direct',
+                  255: 'snap'}
 
-class TrkPoint_Type(Data_Type):
-    slat = 0
-    slon = 0
-    time = 0  # secs since midnight 31/12/89?
+    # According to the specification the “subclass” member should be set to
+    # 0x0000 0x00000000 0xFFFFFFFF 0xFFFFFFFF 0xFFFFFFFF for all waypoints
+    # classes but map waypoints, but this cannot be encoded to ascii.
+    def __init__(self, lnk_class=0,
+                 subclass=b'\x00\x00\x00\x00\x00\x00\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff',
+                 ident=b''):
+        self.lnk_class = lnk_class
+        self.subclass = subclass
+        self.ident = ident
 
-    def __repr__(self):
-        return f"""<Trackpoint
-        ({degrees(self.slat):{3}.{5}}, {degrees(self.slon):{3}.{5}})
-        {time.asctime(time.gmtime(TimeEpoch+self.time))}
-        (at {id(self)})>"""
+    def get_lnk_class(self):
+        """Return the link class value.
 
-
-class D300(TrkPoint_Type):
-    parts = ("slat", "slon", "time", "newtrk")
-    fmt = "<l l L B"
-    newtrk = 0
-
-
-class D301(TrkPoint_Type):
-    parts = ("slat", "slon", "time", "alt", "depth", "new_trk")
-    fmt = "<l l L f f b"
-    alt = 0.0
-    depth = 0.0
-    new_trk = 0
+        """
+        return self._lnk_class.get(self.lnk_class, 0)
 
 
-class D302(TrkPoint_Type):
-    parts = ("slat", "slon", "time", "alt", "depth", "temp", "new_trk")
-    fmt = "<l l L f f f b"
+class Trk_Point_Type(Data_Type):
+
+    def get_posn(self):
+        return Position_Type(*self.posn)
+
+    def get_datetime(self):
+        return Time_Type(self.time).get_datetime()
+
+    def is_valid_time(self):
+        """Return whether the time is valid.
+
+        A “time” value of 0xFFFFFFFF  that this parameter is not supported or unknown.
+
+        """
+        return not self.time == 4294967295
 
 
-class D304(TrkPoint_Type):
-    parts = (
-        "slat", "slon", "time", "alt", "distance", "heart_rate", "cadence",
-        "sensor")
-    fmt = "<l l L f f B B B"
-    alt = 0.0
-    distance = 0.0
-    heart_rate = 0
-    cadence = 0
-    sensor = False
+class D300(Trk_Point_Type):
+    _posn_fmt = Position_Type.get_format()
+    _time_fmt = Time_Type.get_format()
+    _fields = [('posn', f'({_posn_fmt})'),  # position
+               ('time', f'{_time_fmt}'),    # time, invalid if 0xFFFFFFFF
+               ('new_trk', '?'),            # new track segment?
+               ]
+
+    def __init__(self, posn=[0, 0], time=4294967295, new_trk=False):
+        self.posn = posn
+        self.time = time
+        self.new_trk = new_trk
 
 
-# Track headers ----------------------------------------------
+class D301(D300):
+    _posn_fmt = Position_Type.get_format()
+    _time_fmt = Time_Type.get_format()
+    _fields = [('posn', f'({_posn_fmt})'),  # position
+               ('time', f'{_time_fmt}'),    # time, invalid if 0xFFFFFFFF
+               ('alt', 'f'),                # altitude in meters
+               ('dpth', 'f'),               # depth in meters
+               ('new_trk', '?'),            # new track segment?
+               ]
+
+    def __init__(self, alt=1.0e25, dpth=1.0e25, **kwargs):
+        super().__init__(**kwargs)
+        self.alt = alt
+        self.dpth = dpth
+
+    def is_valid_alt(self):
+        """Return whether the altitude is valid.
+
+        A “alt” value of 1.0e25 indicates that this parameter is not supported or unknown.
+
+        """
+        return not self.alt == 1.0e25
+
+    def is_valid_dpth(self):
+        """Return whether the depth is valid.
+
+        A “dpth” value of 1.0e25 indicates that this parameter is not supported or unknown.
+
+        """
+        return not self.dpth == 1.0e25
+
+
+class D302(D300):
+    _posn_fmt = Position_Type.get_format()
+    _time_fmt = Time_Type.get_format()
+    _fields = [('posn', f'({_posn_fmt})'),  # position
+               ('time', f'{_time_fmt}'),    # time, invalid if 0xFFFFFFFF
+               ('alt', 'f'),                # altitude in meters, invalid if 1.0e25
+               ('dpth', 'f'),               # depth in meters, invalid if 1.0e25
+               ('temp', 'f'),               # temp in degrees C, invalid if 1.0e25
+               ('new_trk', '?'),            # new track segment?
+               ]
+
+    def __init__(self, alt=1.0e25, dpth=1.0e25, temp=1.0e25, **kwargs):
+        super().__init__(**kwargs)
+        self.alt = alt
+        self.dpth = dpth
+        self.temp = temp
+
+    def is_valid_alt(self):
+        """Return whether the altitude is valid.
+
+        A “alt” value of 1.0e25 indicates that this parameter is not supported or unknown.
+
+        """
+        return not self.alt == 1.0e25
+
+    def is_valid_dpth(self):
+        """Return whether the depth is valid.
+
+        A “dpth” value of 1.0e25 indicates that this parameter is not supported or unknown.
+
+        """
+        return not self.dpth == 1.0e25
+
+    def is_valid_temp(self):
+        """Return whether the temperature is valid.
+
+        A “temp” value of 1.0e25 indicates that this parameter is not supported or unknown.
+
+        """
+        return not self.temp == 1.0e25
+
+
+class D303(D301):
+    _posn_fmt = Position_Type.get_format()
+    _time_fmt = Time_Type.get_format()
+    _fields = [('posn', f'({_posn_fmt})'),  # position
+               ('time', f'{_time_fmt}'),    # time, invalid if 0xFFFFFFFF
+               ('alt', 'f'),                # altitude in meters, invalid if 1.0e25
+               ('heart_rate', 'B'),         # heart rate in beats per minute, invalid if 0
+               ]
+
+    def __init__(self, posn=[0, 0], time=4294967295, alt=1.0e25, heart_rate=0):
+        self.posn = posn
+        self.time = time
+        self.alt = alt
+        self.heart_rate = heart_rate
+
+    def is_valid_alt(self):
+        """Return whether the altitude is valid.
+
+        A “alt” value of 1.0e25 indicates that this parameter is not supported or unknown.
+
+        """
+        return not self.alt == 1.0e25
+
+    def is_valid_heart_rate(self):
+        """Return whether the heart rate is valid.
+
+        A “heart_rate” value of 0 indicates that this parameter is not supported or unknown.
+
+        """
+        return not self.heart_rate == 0
+
+
+class D304(D303):
+    _fields = D303._fields.copy()
+    _fields.extend([('distance', 'f'),    # distance traveled in meters, invalid if 1.0e25
+                    ('cadence', 'B'),     # in revolutions per minute, invalid if 0xFF
+                    ('sensor', '?'),      # is a wheel sensor present?
+                    ])
+
+    def __init__(self, distance=1.0e25, heart_rate=0, cadence=255, sensor=False, **kwargs):
+        super().__init__(**kwargs)
+        self.distance = distance
+        self.heart_rate = heart_rate
+        self.cadence = cadence
+        self.sensor = sensor
+
+    def is_valid_distance(self):
+        """Return whether the distance is valid.
+
+        A “distance” value of 0 indicates that this parameter is not supported or unknown.
+
+        """
+        return not self.distance == 0
+
+    def is_valid_cadence(self):
+        """Return whether the cadence is valid.
+
+        A “cadence” value of 0xFF indicates that this parameter is not supported or unknown.
+
+        """
+        return not self.cadence == 255
+
 
 class Trk_Hdr_Type(Data_Type):
-    trk_ident = ""
 
-    def __repr__(self):
-        return f"<Trk_Hdr_Type {self.trk_ident} (at {id(self)})>"
+    def is_valid_trk_ident(self):
+        return self.is_valid_charset(self.re_upcase_digit_space_hyphen, self.trk_ident)
 
 
 class D310(Trk_Hdr_Type):
-    parts = ("dspl", "color", "trk_ident")
-    fmt = "<b b z"
-    dspl = 0
-    color = 0
+    _fields = [('dspl', '?'),       # display on the map?
+               ('color', 'B'),      # color
+               ('trk_ident', 'n'),  # track identifier
+               ]
+    _color = {0:   'clr_black',
+              1:   'clr_dark_red',
+              2:   'clr_dark_green',
+              3:   'clr_dark_yellow',
+              4:   'clr_dark_blue',
+              5:   'clr_dark_magenta',
+              6:   'clr_dark_cyan',
+              7:   'clr_light_gray',
+              8:   'clr_dark_gray',
+              9:   'clr_red',
+              10:  'clr_green',
+              11:  'clr_yellow',
+              12:  'clr_blue',
+              13:  'clr_magenta',
+              14:  'clr_cyan',
+              15:  'clr_white',
+              255: 'clr_default_color'
+              }
+
+    def __init__(self, dspl=True, color=255, trk_ident=b''):
+        self.dspl = dspl
+        self.color = color
+        self.trk_ident = trk_ident
+
+    def get_color(self):
+        """Return the color value.
+
+        """
+        return self._color.get(self.color, 255)
 
 
 class D311(Trk_Hdr_Type):
-    parts = ("index",)
-    fmt = "<H"
+    _fields = [('index', 'H'),  # unique among all tracks received from device
+               ]
+
+    def __init__(self, index=0):
+        self.index = index
 
 
-class D312(Trk_Hdr_Type):
-    parts = ("dspl", "color", "trk_ident")
-    fmt = "<b b z"
+class D312(D310):
+    _color = {0:   'clr_black',
+              1:   'clr_dark_red',
+              2:   'clr_dark_green',
+              3:   'clr_dark_yellow',
+              4:   'clr_dark_blue',
+              5:   'clr_dark_magenta',
+              6:   'clr_dark_cyan',
+              7:   'clr_light_gray',
+              8:   'clr_dark_gray',
+              9:   'clr_red',
+              10:  'clr_green',
+              11:  'clr_yellow',
+              12:  'clr_blue',
+              13:  'clr_magenta',
+              14:  'clr_cyan',
+              15:  'clr_white',
+              16:  'clr_transparent',
+              255: 'clr_defaultcolor',
+              }
 
 
-# Proximity waypoints  ---------------------------------------
-
-class Prx_Wpt_Type(Data_Type):
-    dst = 0.0
+class Prx_Wpt_Type(Wpt_Type):
+    pass
 
 
 class D400(Prx_Wpt_Type, D100):
-    parts = D100.parts + ("dst",)
-    fmt = D100.fmt + " f"
+    _fields = D100._fields.copy()
+    _fields.append(('dst', 'f'))  # proximity distance (meters)
+
+    def __init__(self, dst=0, **kwargs):
+        super().__init__(**kwargs)
+        self.dst = dst
 
 
 class D403(Prx_Wpt_Type, D103):
-    parts = D103.parts + ("dst",)
-    fmt = D103.fmt + " f"
+    _fields = D103._fields.copy()
+    _fields.append(('dst', 'f'))  # proximity distance (meters)
+
+    def __init__(self, dst=0, **kwargs):
+        super().__init__(**kwargs)
+        self.dst = dst
 
 
 class D450(Prx_Wpt_Type, D150):
-    parts = ("idx",) + D150.parts + ("dst",)
-    fmt = "<i " + D150.fmt[1:] + " f"
-    idx = 0
+    _fields = D150._fields.copy()
+    _fields.insert(0, ('idx', 'i'))  # proximity index
+    _fields.append(('dst', 'f'))     # proximity distance (meters)
 
+    def __init__(self, idx=0, dst=0, **kwargs):
+        super().__init__(**kwargs)
+        self.idx = idx
+        self.dst = dst
 
-# Almanacs ---------------------------------------------------
 
 class Almanac_Type(Data_Type):
     pass
 
 
 class D500(Almanac_Type):
-    parts = ("weeknum", "toa", "af0", "af1", "e",
-             "sqrta", "m0", "w", "omg0", "odot", "i")
-    fmt = "<i f f f f f f f f f f"
+    _fields = [('wn', 'H'),     # week number (weeks)
+               ('toa', 'f'),    # almanac data reference time (s)
+               ('af0', 'f'),    # clock correction coefficient (s)
+               ('af1', 'f'),    # clock correction coefficient (s/s)
+               ('e', 'f'),      # eccentricity (-)
+               ('sqrta', 'f'),  # square root of semi-major axis (a)(m**1/2)
+               ('m0', 'f'),     # mean anomaly at reference time (r)
+               ('w', 'f'),      # argument of perigee (r)
+               ('omg0', 'f'),   # right ascension (r)
+               ('odot', 'f'),   # rate of right ascension (r/s)
+               ('i', 'f'),      # inclination angle (r)
+               ]
 
 
-class D501(Almanac_Type):
-    parts = ("weeknum", "toa", "af0", "af1", "e",
-             "sqrta", "m0", "w", "omg0", "odot", "i", "hlth")
-    fmt = "<i f f f f f f f f f f b"
+class D501(D500):
+    _fields = D500._fields.copy()
+    _fields.append(('hlth', 'B'))  # almanac health
 
 
-class D550(Almanac_Type):
-    parts = ("svid", "weeknum", "toa", "af0", "af1", "e",
-             "sqrta", "m0", "w", "omg0", "odot", "i")
-    fmt = "<c i f f f f f f f f f f"
+class D550(D500):
+    _fields = D500._fields.copy()
+    _fields.insert(0, ('svid', 'B'))  # satellite id
+
+    def get_prn(self):
+        """Return the PRN.
+
+        The “svid” member identifies a satellite in the GPS constellation as
+        follows: PRN-01 through PRN-32 are indicated by “svid” equal to 0
+        through 31, respectively.
+
+        """
+        return self.svid + 1
 
 
-class D551(Almanac_Type):
-    parts = ("svid", "weeknum", "toa", "af0", "af1", "e",
-             "sqrta", "m0", "w", "omg0", "odot", "i", "hlth")
-    fmt = "<c i f f f f f f f f f f b"
+class D551(D501):
+    _fields = D501._fields.copy()
+    _fields.insert(0, ('svid', 'B'))  # satellite id
 
+    def get_prn(self):
+        """Return the PRN.
 
-# Date & Time  ---------------------------------------------------
+        The “svid” member identifies a satellite in the GPS constellation as
+        follows: PRN-01 through PRN-32 are indicated by “svid” equal to 0
+        through 31, respectively.
+
+        """
+        return self.svid + 1
+
 
 class Date_Time_Type(Data_Type):
-    # Not sure what the last four bytes are. Not in docs.
-    # hmm... eTrex just sends 8 bytes, no trailing 4 bytes
-    parts = ("month", "day", "year", "hour", "min", "sec")  # , "unknown")
-    fmt = "<b b H h b b"  # L"
-    month = 0         # month (1-12)
-    day = 0           # day (1-32)
-    year = 0          # year
-    hour = 0          # hour (0-23)
-    min = 0           # min (0-59)
-    sec = 0           # sec (0-59)
+    def get_datetime(self):
+        """Return a datetime object of the time.
+
+        """
+        return datetime(self.year,
+                        self.month,
+                        self.day,
+                        self.hour,
+                        self.minute,
+                        self.second)
 
     def __str__(self):
-        return f"""{self.year}-{self.month:02}-{self.day:02}
-        {self.hour:02}:{self.min:02}:{self.sec:02} UTC"""
+        datetime = self.get_datetime()
+        return str(datetime)
 
 
 class D600(Date_Time_Type):
+    _fields = [('month', 'B'),   # month (1-12)
+               ('day', 'B'),     # day (1-31)
+               ('year', 'H'),    # year (1990 means 1990)
+               ('hour', 'H'),    # hour (0-23)
+               ('minute', 'B'),  # minute (0-59)
+               ('second', 'B'),  # second (0-59)
+               ]
+
+
+class FlightBook_Record_Type(Data_Type):
+
+    def get_takeoff_datetime(self):
+        return Time_Type(self.takeoff_time).get_datetime()
+
+    def get_landing_datetime(self):
+        return Time_Type(self.landing_time).get_datetime()
+
+    def get_takeoff_posn(self):
+        return Position_Type(*self.takeoff_posn)
+
+    def get_landing_posn(self):
+        return Position_Type(*self.landing_posn)
+
+
+class D650(FlightBook_Record_Type):
+    _time_fmt = Time_Type.get_format()
+    _posn_fmt = Position_Type.get_format()
+    _fields = [('takeoff_time', f'{_time_fmt}'),    # Time flight started
+               ('landing_time', f'{_time_fmt}'),    # Time flight ended
+               ('takeoff_posn', f'({_posn_fmt})'),  # Takeoff lat/lon
+               ('landing_posn', f'({_posn_fmt})'),  # Landing lat/lon
+               ('night_time', 'I'),                 # Seconds flown in night time conditions
+               ('num_landings', 'I'),               # Number of landings during the flight
+               ('max_speed', 'I'),                  # Max velocity during flight (meters/sec)
+               ('max_alt', 'I'),                    # Max altitude above WGS84 ellipsoid (meters)
+               ('distance', 'f'),                   # Distance of flight (meters)
+               ('cross_country_flag', 'f'),         # Flight met cross country criteria
+               ('departure_name', 'f'),             # Name of airport
+               ('departure_ident', 'B'),            # ID of airport
+               ('arrival_name', 'n'),               # Name of airport
+               ('arrival_ident', 'n'),              # ID of airport
+               ('ac_id', 'n'),                      # N Number of airplane
+               ]
+
+
+class D700(Radian_Position_Type):
+    _fields = Radian_Position_Type._fields.copy()
+
+
+class Pvt_Data_Type(Data_Type):
+
+    def get_posn(self):
+        return Radian_Position_Type(*self.posn)
+
+    def get_msl_alt(self):
+        """Return the altitude above mean sea level.
+
+        To find the altitude above mean sea level, add “msl_hght” (height of the
+        WGS 84 ellipsoid above mean sea level) to “alt” (altitude above the WGS
+        84 ellipsoid).
+
+        """
+        return self.msl_hght + self.alt
+
+    def get_datetime(self):
+        """Return a datetime object of the time.
+
+        """
+        seconds = math.floor(self.tow - self.leap_scnds)
+        days = self.wn_days
+        delta = timedelta(days=days, seconds=seconds)
+        return self.epoch + delta
+
+    def get_fix(self):
+        """Return the fix value.
+
+        The default enumerated values for the “fix” member of the D800_Pvt_Data_Type
+        are shown below. It is important for the host to inspect this value to
+        ensure that other data members in the D800_Pvt_Data_Type are valid. No
+        indication is given as to whether the device is in simulator mode versus
+        having an actual position fix.
+
+        """
+        self._fix.get(self.fix, 1)
+
+
+class D800(Pvt_Data_Type):
+    _posn_fmt = Radian_Position_Type.get_format()
+    _fields = [('alt', 'f'),                # altitude above WGS 84 ellipsoid (meters)
+               ('epe', 'f'),                # estimated position error, 2 sigma (meters)
+               ('eph', 'f'),                # epe, but horizontal only (meters)
+               ('epv', 'f'),                # epe, but vertical only (meters)
+               ('fix', 'H'),                # type of position fix
+               ('tow', 'd'),                # time of week (seconds)
+               ('posn', f'({_posn_fmt})'),  # latitude and longitude (radians)
+               ('east', 'f'),               # velocity east (meters/second)
+               ('north', 'f'),              # velocity north (meters/second)
+               ('up', 'f'),                 # velocity up (meters/second)
+               ('msl_hght', 'f'),           # height of WGS84 ellipsoid above MSL(meters)
+               ('leap_scnds', 'h'),         # difference between GPS and UTC (seconds)
+               ('wn_days', 'I'),            # week number days
+               ]
+    _fix = {0: 'unusable',  # failed integrity check
+            1: 'invalid',   # invalid or unavailable
+            2: '2D',        # two dimensional
+            3: '3D',        # three dimensional
+            4: '2D_diff',   # two dimensional differential
+            5: '3D_diff',   # three dimensional differential
+            }
+
+
+class Lap_Type(Data_Type):
+
+    def get_start_datetime(self):
+        return Time_Type(self.start_time).get_datetime()
+
+    def get_begin(self):
+        return Position_Type(*self.begin)
+
+    def get_end(self):
+        return Position_Type(*self.end)
+
+
+class D906(Lap_Type):
+    _time_fmt = Time_Type.get_format()
+    _posn_fmt = Position_Type.get_format()
+    _fields = [('start_time', f'{_time_fmt}'),
+               ('total_time', 'I'),          # In hundredths of a second
+               ('total_dist', 'f'),          # In meters
+               ('begin', f'({_posn_fmt})'),  # Invalid if both lat and lon are 0x7FFFFFFF
+               ('end', f'({_posn_fmt})'),    # Invalid if both lat and lon are 0x7FFFFFFF
+               ('calories', 'H'),
+               ('track_index', 'B'),         # See below
+               ('unused', 'B'),              # Unused. Set to 0.
+               ]
+
+
+class Step_Type(Data_Type):
+    _fields = [('custom_name', '16s'),            # Null-terminated step name
+               ('target_custom_zone_low', 'f'),   # See below
+               ('target_custom_zone_high', 'f'),  # See below
+               ('duration_value', 'H'),           # See below
+               ('intensity', 'B'),                # Same as D1001
+               ('duration_type', 'B'),            # See below
+               ('target_type', 'B'),              # See below
+               ('target_value', 'B'),             # See below
+               ('unused', 'H'),                   # Unused. Set to 0
+               ]
+
+
+class Run_Type(Data_Type):
+    _fields = [('track_index', 'I'),      # Index of associated track
+               ('first_lap_index', 'I'),  # Index of first associated lap
+               ('last_lap_index', 'I'),   # Index of last associated lap
+               ('sport_type', 'B'),       # See below
+               ('program_type', 'B'),     # See below
+               ]
+    _sport_type = {0: 'running',
+                   1: 'biking',
+                   2: 'other',
+                   }
+    _program_type = {0: 'none',
+                     1: 'virtual_partner',  # Completed with Virtual Partner
+                     2: 'workout',          # Completed as part of a workout
+                     }
+
+
+class Virtual_Partner(Data_Type):
+    _fields = ([('time', 'I'),      # Time result of virtual partner
+                ('distance', 'f'),  # Distance result of virtual partner
+                ])
+
+
+class Workout_Type(Data_Type):
+    _fields = [('num_valid_steps', 'I'),  # Number of valid steps (1-20)
+               ('steps', '/0[32c]'),      # Steps
+               ('name', '16s'),           # Null-terminated workout name
+               ('sport_type', 'B'),       # Same as D1000
+               ]
+    _sport_type = {0: 'running',
+                   1: 'biking',
+                   2: 'other',
+                   }
+
+    def get_steps(self):
+        steps = []
+        for data in self.steps:
+            step = Step_Type()
+            step.unpack(data)
+            steps.append(step)
+        return steps
+
+
+class D1000(Run_Type):
+    _fields = Run_Type._fields.copy()
+    _fields.append(('unused', 'H'))          # Unused. Set to 0.
+    _fields.extend(Virtual_Partner._fields)  # Virtual partner
+    _fields.extend(Workout_Type._fields)     # Workout
+
+
+class D1001(Lap_Type):
+    _time_fmt = Time_Type.get_format()
+    _posn_fmt = Position_Type.get_format()
+    _fields = [('index', 'I'),                  # Unique among all laps received from device
+               ('start_time', f'{_time_fmt}'),  # Start of lap time
+               ('total_time', 'I'),             # Duration of lap, in hundredths of a second
+               ('total_dist', 'f'),             # Distance in meters
+               ('max_speed;', 'f'),             # In meters per second
+               ('begin', f'({_posn_fmt})'),     # Invalid if both lat and lon are 0x7FFFFFFF
+               ('end', f'({_posn_fmt})'),       # Invalid if both lat and lon are 0x7FFFFFFF
+               ('calories', 'H'),               # Calories burned this lap
+               ('avg_heart_rate', 'B'),         # In beats-per-minute, invalid if 0
+               ('max_heart_rate', 'B'),         # In beats-per-minute, invalid if 0
+               ('intensity', 'B'),
+               ]
+    _intensity = {0: 'active',  # This is a standard, active lap
+                  1: 'rest',    # This is a rest lap in a workout
+                  }
+
+
+class D1002(Workout_Type):
     pass
 
 
-class D601(Date_Time_Type):
-    """D601 time point.
-
-    Used by GPSmap 60cs, no documentation as of 2004-09-26.
-    """
-
-
-class D650(Data_Type):
-    parts = ("takeoff_time", "landing_time", "takeoff_slat", "takeoff_slon",
-             "landing_slat", "landing_slon", "night_time", "num_landings",
-             "max_speed", "max_alt", "distance", "cross_country_flag",
-             "departure_name", "departure_ident", "arrival_name",
-             "arrival_ident", "ac_id")
-    fmt = "<L L l l l l L L f f f B z z z z z"
+class Workout_Occurrence_Type(Data_Type):
+    _fields = [('workout_name', '16s'),  # Null-terminated workout name
+               ('day', 'I'),             # Day on which the workout falls
+               ]
 
 
-# Position   ---------------------------------------------------
-
-class D700(Data_Type):
-    parts = ("rlat", "rlon")
-    fmt = "<d d"
-    rlat = 0.0  # radians
-    rlon = 0.0  # radians
+class D1003(Workout_Occurrence_Type):
+    _fields = Workout_Occurrence_Type._fields.copy()
 
 
-# Pvt ---------------------------------------------------------
-
-# Live position info
-
-class D800(Data_Type):
-    parts = ("alt", "epe", "eph", "epv", "fix", "tow", "rlat", "rlon",
-             "east", "north", "up", "msl_height", "leap_secs", "wn_days")
-    fmt = "<f f f f h d d d f f f f h l"
-
-    def __str__(self):
-        return f"""tow: {self.tow}
-        rlat: {self.rlat}
-        rlon: {self.rlon}
-        east: {self.east}
-        north {self.north}"""
+class Heart_Rate_Zones(Data_Type):
+    _fields = [('low_heart_rate', 'B'),   # In beats-per-minute, must be > 0
+               ('high_heart_rate', 'B'),  # In beats-per-minute, must be > 0
+               ('unused', 'H'),           # Unused. Set to 0.
+               ]
 
 
-class D906(Data_Type):
-    parts = ("start_time", "total_time", "total_distance", "begin_slat",
-             "begin_slon", "end_slat", "end_slon", "calories",
-             "track_index", "unused")
-    fmt = "<l l f l l l l i b b"
+class Speed_Zones(Data_Type):
+    _fields = [('low_speed', 'f'),   # In meters-per-second
+               ('high_speed', 'f'),  # In meters-per-second
+               ('name', '16s'),      # Null-terminated speed-zone name
+               ]
 
 
-class D907(Data_Type):
-    """D907 data point.
-
-    Used by GPSmap 60cs, no documentation as of 2004-09-26.
-    """
-
-
-class D908(Data_Type):
-    """D908 data point.
-
-    Used by GPSmap 60cs, no documentation as of 2004-09-26.
-    """
+class Activities(Data_Type):
+    _fields = [('gear_weight', 'f'),     # Weight of equipment in kilograms
+               ('max_heart_rate', 'B'),  # In beats-per-minute, must be > 0
+               ('unused1', 'B'),         # Unused. Set to 0.
+               ('unused2', 'H'),         # Unused. Set to 0.
+               ]
 
 
-class D909(Data_Type):
-    """D909 data point.
+class Fitness_User_Profile_Type(Data_Type):
+    _fields = [('weight', 'f'),       # User’s weight, in kilograms
+               ('birth_year', 'H'),   # No base value (i.e. 1990 means 1990)
+               ('birth_month', 'B'),  # 1 = January, etc.
+               ('birth_day', 'B'),    # 1 = first day of month, etc.
+               ('gender', 'B'),       # See below
+               ]
+    _gender = {0: 'female',
+               1: 'male',
+               }
 
-    Used by GPSmap 60cs, no documentation as of 2004-09-26.
-    """
-
-
-class D910(Data_Type):
-    """D910 data point.
-
-    Used by GPSmap 60cs, no documentation as of 2004-09-26.
-    """
-
-
-class D1011(Data_Type):
-    """A lap point.
-
-    Used by Edge 305.
-    """
-    parts = ("index", "unused", "start_time", "total_time", "total_dist",
-             "max_speed", "begin_lat", "begin_lon", "end_lat", "end_lon",
-             "calories", "avg_heart_rate", "max_heart_rate",
-             "intensity", "avg_cadence", "trigger_method")
-    fmt = "<H H L L f f l l l l H B B B B B"
-
-    def __repr__(self):
-        return f"""<Lap {self.index}
-        ({degrees(self.begin_lat)}, {degrees(self.begin_lon)})
-        {time.asctime(time.gmtime(TimeEpoch+self.start_time))}
-        (duration {int(self.total_time/100)} seconds)>"""
+    def get_gender(self):
+        return self._gender.get(self.gender)
 
 
-class D1015(D1011):
-    """A lap point.
-
-    Used by Forerunner 305. This data type is not documented in the
-    specification, but there has been reports that this works.
-    """
+class D1004(Fitness_User_Profile_Type):
+    pass
 
 
-class D1009(Data_Type):
-    """A run data point."""
-    parts = ("track_index", "first_lap_index", "last_lap_index",
-             "sport_type", "program_type",
-             "multisport", "unused1", "unused2",
-             "quick_workout_time", "quick_workout_distance")
-    fmt = "<H H H B B B B H L f"
+class Workout_Limits(Data_Type):
+    _fields = [('max_workouts', 'L'),              # Maximum workouts
+               ('max_unscheduled_workouts', 'L'),  # Maximum unscheduled workouts
+               ('max_occurrences', 'L'),           # Maximum workout occurrences
+               ]
 
-    def __repr__(self):
-        return f"""<Run {self.track_index},
-        lap {self.first_lap_index} to {self.last_lap_index}>"""
+
+class D1005(Workout_Limits):
+    pass
+
+
+class Course_Type(Data_Type):
+    pass
+
+
+class D1006(Course_Type):
+    _fields = [('index', 'H'),          # Unique among courses on device
+               ('unused', 'H'),         # Unused. Set to 0.
+               ('course_name', '16s'),  # Null-terminated, unique course name
+               ('track_index', 'H'),    # Index of the associated track
+               ]
+
+
+class Course_Lap_Type(Data_Type):
+
+    def get_begin(self):
+        return Position_Type(*self.begin)
+
+    def get_end(self):
+        return Position_Type(*self.end)
+
+
+class D1007(Course_Lap_Type):
+    _posn_fmt = Position_Type.get_format()
+    _fields = [('course_index', 'H'),        # Index of associated course
+               ('lap_index', 'H'),           # This lap’s index in the course
+               ('total_time', 'L'),          # In hundredths of a second
+               ('total_dist', 'f'),          # In meters
+               ('begin', f'({_posn_fmt})'),  # Starting position of the lap. Invalid if both lat and lon are 0x7FFFFFFF
+               ('end', f'({_posn_fmt})'),    # Final position of the lap. Invalid if both lat and lon are 0x7FFFFFFF
+               ('avg_heart_rate', 'B'),      # In beats-per-minute, invalid if 0
+               ('max_heart_rate', 'B'),      # In beats-per-minute, invalid if 0
+               ('intensity', 'B'),           # Same as D1001
+               ('avg_cadence', 'B'),         # In revolutions-per-minute, invalid if 0xFF
+               ]
+
+
+class D1008(Workout_Type):
+    pass
+
+
+class D1009(Run_Type):
+    _fields = Run_Type._fields.copy()
+    _fields.extend([('multisport', 'B'),
+                    ('unused1', 'B'),
+                    ('unused2', 'H'),
+                    ('quick_workout_time', 'I'),
+                    ('quick_workout_distance', 'f'),
+                    ])
+
+
+class D1011(Lap_Type):
+    _time_fmt = Time_Type.get_format()
+    _posn_fmt = Position_Type.get_format()
+    _fields = [('index', 'H'),                  # Unique among all laps received from device
+               ('unused', 'H'),                 # Unused. Set to 0.
+               ('start_time', f'{_time_fmt}'),  # Start of lap time
+               ('total_time', 'I'),             # Duration of lap, in hundredths of a second
+               ('total_dist', 'f'),             # Distance in meters
+               ('max_speed', 'f'),              # In meters per second
+               ('begin', f'({_posn_fmt})'),     # Invalid if both lat and lon are 0x7FFFFFFF
+               ('end', f'({_posn_fmt})'),       # Invalid if both lat and lon are 0x7FFFFFFF
+               ('calories', 'H'),               # Calories burned this lap
+               ('avg_heart_rate', 'B'),         # In beats-per-minute, invalid if 0
+               ('max_heart_rate', 'B'),         # In beats-per-minute, invalid if 0
+               ('intensity', 'B'),              # Same as D1001
+               ('avg_cadence', 'B'),            # In revolutions-per-minute, invalid if 0xFF
+               ('trigger_method', 'B'),         # See below
+               ]
+    _trigger_method = {0: 'manual',
+                       1: 'distance',
+                       2: 'location',
+                       3: 'time',
+                       4: 'heart_rate',
+                       }
+
+    def get_trigger_method(self):
+        return self._trigger_method.get(self.trigger_method)
+
+
+class D1010(Run_Type):
+    _time_fmt = Time_Type.get_format()
+    _fields = [('track_index', 'I'),      # Index of associated track
+               ('first_lap_index', 'I'),  # Index of first associated lap
+               ('last_lap_index', 'I'),   # Index of last associated lap
+               ('sport_type', 'B'),       # Sport type (same as D1000)
+               ('program_type', 'B'),     # See below
+               ('multisport', 'B'),       # Same as D1009
+               ('unused', 'B'),           # Unused. Set to 0.
+               ('time', f'{_time_fmt}'),  # Time result of virtual partner
+               ('distance', 'f'),         # Distance result of virtual partner
+               ]
+    _fields.extend(Workout_Type._fields)  # Workout
+    _program_type = {0: 'none',
+                     1: 'virtual_partner',  # Completed with Virtual Partner
+                     2: 'workout',          # Completed as part of a workout
+                     3: 'auto_multisport',  # Completed as part of an auto MultiSport
+                     }
+
+    def get_datetime(self):
+        return Time_Type(self.time).get_datetime()
+
+
+class Course_Point_Type(Data_Type):
+    _time_fmt = Time_Type.get_format()
+    _fields = [('name', '11s'),                       # Null-terminated name
+               ('unused1', 'B'),                      # Unused. Set to 0.
+               ('course_index', 'H'),                 # Index of associated course
+               ('unused2', 'H'),                      # Unused. Set to 0.
+               ('track_point_time', f'{_time_fmt}'),  # Time
+               ('point_type', 'B'),                   # See below
+               ]
+    _point_type = {0: 'generic',
+                   1: 'summit',
+                   2: 'valley',
+                   3: 'water',
+                   4: 'food',
+                   5: 'danger',
+                   6: 'left',
+                   7: 'right',
+                   8: 'straight',
+                   9: 'first_aid',
+                   10: 'fourth_category',
+                   11: 'third_category',
+                   12: 'second_category',
+                   13: 'first_category',
+                   14: 'hors_category',
+                   15: 'sprint',
+                   }
+
+    def get_track_point_datetime(self):
+        return Time_Type(self.track_point_time).get_datetime()
+
+    def get_point_type(self):
+        return self._point_type.get(self.point_type)
+
+
+class D1012(Course_Point_Type):
+    pass
+
+
+class Course_Limits_Type(Data_Type):
+    _fields = [('max_courses', 'I'),         # Maximum courses
+               ('max_course_laps', 'I'),     # Maximum course laps
+               ('max_course_pnt', 'I'),      # Maximum course points
+               ('max_course_trk_pnt', 'I'),  # Maximum course track points
+               ]
+
+
+class D1013(Course_Limits_Type):
+    pass
+
+
+class External_Time_Sync_Data_Type(Data_Type):
+    _time_fmt = Time_Type.get_format()
+    _fields = [('current_utc', f'{_time_fmt}'),  # Current UTC
+               ('timezone_offset', 'i'),         # Local timezone in seconds from UTC
+               ('is_dst_info_included', '?'),    # Is DST information valid?
+               ('dst_adjustment', 'B'),          # DST adjustment in 15 minute increments
+               ('dst_start', f'{_time_fmt}'),    # Specified in UTC
+               ('dst_end', f'{_time_fmt}'),      # Specified in UTC
+               ]
+
+    def get_datetime(self):
+        """Return timezone aware datetime object.
+
+        """
+        datetime = Time_Type(self.current_utc).get_datetime()
+        return datetime.replace(tzinfo=self.timezone_offset)
+
+    def get_dst(self):
+        """Return Daylight Saving Time adjustment as timedelta.
+
+        """
+        if self.is_dst_info_included:
+            if self.dst_start < self.current_utc < self.dest_end:
+                # convert DST adjustment value from quarters to minutes
+                dst_adjustment = self.dst_adjustment * 15
+                return timedelta(minutes=dst_adjustment)
+            else:
+                return timedelta(0)
+
+
+class D1051(External_Time_Sync_Data_Type):
+    pass
 
 
 # Garmin models ==============================================

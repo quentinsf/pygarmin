@@ -922,23 +922,6 @@ class TransferProtocol:
         self.cmdproto = cmdproto
         self.datatypes = datatypes
 
-    def putData(self, callback, cmd, sendData):
-        numrecords = len(sendData)
-        log.info(f"{type(self).__name__}: Sending {numrecords} records")
-        self.link.sendPacket(self.link.Pid_Records, numrecords)
-        for packet_id, data in sendData:
-            log.debug(f"> packet {packet_id:3}: {bytes.hex(data)}")
-            self.link.sendPacket(packet_id, data.pack())
-            if callback:
-                x = 0
-                try:
-                    x += 1
-                    callback(data, x, numrecords, packet_id)
-                except:
-                    raise
-
-        self.link.sendPacket(self.link.Pid_Xfer_Cmplt, cmd)
-
 
 class SingleTransferProtocol(TransferProtocol):
     """Transfer protocols to send or receive one set of data.
@@ -958,25 +941,39 @@ class SingleTransferProtocol(TransferProtocol):
 
     """
 
-    def getData(self, callback, cmd, pid):
+    def getData(self, cmd, pid, callback=None):
         self.link.sendPacket(self.link.Pid_Command_Data, cmd)
         packet = self.link.expectPacket(self.link.Pid_Records)
-        numrecords = int.from_bytes(packet['data'], byteorder='little')
-        log.info(f"{type(self).__name__}: Expecting {numrecords} records")
+        datatype = Records_Type()
+        datatype.unpack(packet['data'])
+        packet_count = datatype.records
+        log.info(f"{type(self).__name__}: Expecting {packet_count} records")
         result = []
-        for i in range(numrecords):
+        for idx in range(packet_count):
             packet = self.link.expectPacket(pid)
-            p = self.datatypes[0]()
-            p.unpack(packet['data'])
-            result.append(p)
+            datatype = self.datatypes[0]()
+            datatype.unpack(packet['data'])
+            result.append(datatype)
             if callback:
-                try:
-                    callback(p, i+1, numrecords, pid)
-                except:
-                    raise
+                callback(datatype, idx, packet_count, pid)
         self.link.expectPacket(self.link.Pid_Xfer_Cmplt)
 
         return result
+
+    def putData(self, cmd, packets, callback=None):
+        packet_count = len(packets)
+        log.info(f"{type(self).__name__}: Sending {packet_count} records")
+        self.link.sendPacket(self.link.Pid_Records, packet_count)
+        for idx, packet in enumerate(packets):
+            pid = packet['pid']
+            datatype = packet['datatype']
+            data = datatype.get_data()
+            log.debug(f"> packet {pid:3}: {bytes.hex(data)}")
+            self.link.sendPacket(pid, data)
+            if callback:
+                callback(datatype, idx, packet_count, pid)
+
+        self.link.sendPacket(self.link.Pid_Xfer_Cmplt, cmd)
 
 
 class MultiTransferProtocol(TransferProtocol):
@@ -1004,41 +1001,33 @@ class MultiTransferProtocol(TransferProtocol):
 
     """
 
-    def getData(self, callback, cmd, hdr_pid, *data_pids):
+    def getData(self, cmd, *pids, callback=None):
         self.link.sendPacket(self.link.Pid_Command_Data, cmd)
         packet = self.link.expectPacket(self.link.Pid_Records)
-        numrecords = int.from_bytes(packet['data'], byteorder='little')
-        log.info(f"{type(self).__name__}: Expecting {numrecords} records")
-        data_pids = list(data_pids)
-        result = []
-        last = []
-        for i in range(numrecords):
+        packet_count = int.from_bytes(packet['data'], byteorder='little')
+        log.info(f"Protocol {type(self).__name__}: Expecting {packet_count} records")
+        hdr_pid = pids[0]
+        data_pids = pids[1:]
+        packets = []
+        for idx in range(packet_count):
             packet = self.link.readPacket()
-            if packet['id'] == hdr_pid:
-                if last:
-                    result.append(last)
-                    last = []
-                index = 0
+            pid = packet['id']
+            data = packet['data']
+            idx = pids.index(pid)
+            datatype = self.datatypes[idx]()
+            log.info(f"Datatype {type(datatype).__name__}")
+            datatype.unpack(data)
+            if pid == hdr_pid:
+                packets.append([datatype])
+            elif pid in data_pids:
+                packets[-1].append(datatype)
             else:
-                try:
-                    index = data_pids.index(packet['id']) + 1
-                except ValueError:
-                    raise ProtocolException("Expected header or point")
-
-            p = self.datatypes[index]()
-            p.unpack(packet['data'])
-            last.append(p)
+                raise ProtocolException(f"Expected one of {*pids,}, got {pid}")
             if callback:
-                try:
-                    callback(p, i + 1, numrecords, packet['id'])
-                except:
-                    raise
-
+                callback(datatype, idx, packet_count, pid)
         self.link.expectPacket(self.link.Pid_Xfer_Cmplt)
-        if last:
-            result.append(last)
 
-        return result
+        return packets
 
 
 class T001:
@@ -1064,22 +1053,22 @@ class A100(SingleTransferProtocol):
 
     def getData(self, callback=None):
         return SingleTransferProtocol.getData(self,
-                                              callback,
                                               self.cmdproto.Cmnd_Transfer_Wpt,
-                                              self.link.Pid_Wpt_Data)
+                                              self.link.Pid_Wpt_Data,
+                                              callback=callback)
 
-    def putData(self, data, callback):
-        sendData = []
-
-        log.debug(f"self.datatypes: {repr(self.datatypes)}")
-        for waypoint in data:
-            waypointInstance = self.datatypes[0](**waypoint)
-            sendData.append((self.link.Pid_Wpt_Data, waypointInstance))
+    def putData(self, waypoints, callback=None):
+        packets = []
+        log.info(f"Datatypes: {*[datatype.__name__ for datatype in self.datatypes],}")
+        for waypoint in waypoints:
+            pid = self.link.Pid_Wpt_Data
+            datatype = self.datatypes[0](**waypoint)
+            packets.append({'pid': pid, 'datatype': datatype})
 
         return SingleTransferProtocol.putData(self,
-                                              callback,
                                               self.cmdproto.Cmnd_Transfer_Wpt,
-                                              sendData)
+                                              packets,
+                                              callback=callback)
 
 
 class A101(SingleTransferProtocol):
@@ -1099,9 +1088,9 @@ class A101(SingleTransferProtocol):
 
     def getData(self, callback=None):
         return SingleTransferProtocol.getData(self,
-                                              callback,
                                               self.cmdproto.Cmnd_Transfer_Wpt_Cats,
-                                              self.link.Pid_Wpt_Cat)
+                                              self.link.Pid_Wpt_Cat,
+                                              callback=callback)
 
 
 class A200(MultiTransferProtocol):
@@ -1122,44 +1111,28 @@ class A200(MultiTransferProtocol):
 
     def getData(self, callback=None):
         return MultiTransferProtocol.getData(self,
-                                             callback,
                                              self.cmdproto.Cmnd_Transfer_Rte,
                                              self.link.Pid_Rte_Hdr,
-                                             self.link.Pid_Rte_Wpt_Data)
+                                             self.link.Pid_Rte_Wpt_Data,
+                                             callback=callback)
 
-    def putData(self, data, callback):
-        sendData = []
-        header = {}
-        routenr = 0
-
-        for route in data:
-            routenr += 1
-            # Copy the header fields
-            header = {}
-            for head in list(route[0].keys()):
-                header[head] = route[0][head]
-            # Give a routenr
-            if 'nmbr' not in header:
-                header['nmbr'] = routenr
-            # Check route names
-            # if no name, give it a name
-            if 'ident' not in header or 'cmnt' not in header:
-                if 'ident' in header:
-                    header['cmnt'] = header['ident']
-                elif 'cmnt' in header:
-                    header['ident'] = header['cmnt']
-                else:
-                    header['ident'] = header['cmnt'] = "ROUTE " + str(routenr)
-            headerInstance = self.datatypes[0](header)
-            sendData.append((self.link.Pid_Rte_Hdr, headerInstance))
-            for waypoint in route[1:]:
-                waypointInstance = self.datatypes[1](waypoint)
-                sendData.append((self.link.Pid_Rte_Wpt_Data, waypointInstance))
+    def putData(self, routes, callback=None):
+        packets = []
+        for route in routes:
+            header = route[0]
+            waypoints = route[1:]
+            pid = self.link.Pid_Rte_Hdr
+            datatype = self.datatypes[0](**header)
+            packets.append({'pid': pid, 'datatype': datatype})
+            for waypoint in waypoints:
+                pid = self.link.Pid_Rte_Wpt_Data
+                datatype = self.datatypes[1](**waypoint)
+                packets.append({'pid': pid, 'datatype': datatype})
 
         return MultiTransferProtocol.putData(self,
-                                             callback,
                                              self.cmdproto.Cmnd_Transfer_Rte,
-                                             sendData)
+                                             packets,
+                                             callback=callback)
 
 
 class A201(MultiTransferProtocol):
@@ -1182,50 +1155,31 @@ class A201(MultiTransferProtocol):
 
     def getData(self, callback=None):
         return MultiTransferProtocol.getData(self,
-                                             callback,
                                              self.cmdproto.Cmnd_Transfer_Rte,
                                              self.link.Pid_Rte_Hdr,
                                              self.link.Pid_Rte_Wpt_Data,
-                                             self.link.Pid_Rte_Link_Data)
+                                             self.link.Pid_Rte_Link_Data,
+                                             callback=callback)
 
-    def putData(self, data, callback):
-        sendData = []
-        header = {}
-        routenr = 0
-
-        for route in data:
-            routenr += 1
-            # Copy the header fields
-            header = {}
-            for head in list(route[0].keys()):
-                header[head] = route[0][head]
-            # Give a routenr
-            if 'nmbr' not in header:
-                header['nmbr'] = routenr
-            headerInstance = self.datatypes[0]()
-            # Check route names
-            # if no name, give it a name
-            if 'ident' not in header or 'cmnt' not in header:
-                if 'ident' in header:
-                    headerInstance.ident = header['ident']
-                elif 'cmnt' in header:
-                    headerInstance.cmnt = header['cmnt']
-                else:
-                    headerInstance.ident = f"Route {routenr}"
-            sendData.append((self.link.Pid_Rte_Hdr, headerInstance))
-            for waypoint in route[1:]:
-                waypointInstance = self.datatypes[1]()
-                waypointInstance.ident = waypoint['ident']
-                waypointInstance.slon = waypoint['slon']
-                waypointInstance.slat = waypoint['slat']
-                linkInstance = self.datatypes[2]()
-                sendData.append((self.link.Pid_Rte_Wpt_Data, waypointInstance))
-                # sendData.append((self.link.Pid_Rte_Link_Data, linkInstance))
+    def putData(self, routes, callback=None):
+        packets = []
+        for route in routes:
+            header = route[0]
+            waypoints = route[1:]
+            pid = self.link.Pid_Rte_Hdr
+            datatype = self.datatypes[0](**header)
+            packets.append({'pid': pid, 'datatype': datatype})
+            for waypoint in waypoints:
+                datatype = self.datatypes[1](**waypoint)
+                # REVIEW: append linkInstance?
+                # linkInstance = self.datatypes[2]()
+                packets.append((self.link.Pid_Rte_Wpt_Data, datatype))
+                # packets.append((self.link.Pid_Rte_Link_Data, linkInstance))
 
         return MultiTransferProtocol.putData(self,
-                                             callback,
                                              self.cmdproto.Cmnd_Transfer_Rte,
-                                             sendData)
+                                             packets,
+                                             callback=callback)
 
 
 class A300(SingleTransferProtocol):
@@ -1245,21 +1199,21 @@ class A300(SingleTransferProtocol):
 
     def getData(self, callback=None):
         return SingleTransferProtocol.getData(self,
-                                              callback,
                                               self.cmdproto.Cmnd_Transfer_Trk,
-                                              self.link.Pid_Trk_Data)
+                                              self.link.Pid_Trk_Data,
+                                              callback=callback)
 
-    def putData(self, data, callback):
-        sendData = []
-
-        for waypoint in data:
-            waypointInstance = self.datatypes[0](waypoint)
-            sendData.append((self.link.Pid_Trk_Data, waypointInstance))
+    def putData(self, tracks, callback=None):
+        packets = []
+        for track in tracks:
+            pid = self.link.Pid_Trk_Data
+            datatype = self.datatypes[0](track)
+            packets.append({'pid': pid, 'datatype': datatype})
 
         return SingleTransferProtocol.putData(self,
-                                              callback,
                                               self.cmdproto.Cmnd_Transfer_Trk,
-                                              sendData)
+                                              packets,
+                                              callback=callback)
 
 
 class A301(MultiTransferProtocol):
@@ -1280,40 +1234,32 @@ class A301(MultiTransferProtocol):
 
     def getData(self, callback=None):
         return MultiTransferProtocol.getData(self,
-                                             callback,
                                              self.cmdproto.Cmnd_Transfer_Trk,
                                              self.link.Pid_Trk_Hdr,
-                                             self.link.Pid_Trk_Data)
+                                             self.link.Pid_Trk_Data,
+                                             callback=callback)
 
-    def putData(self, data, callback):
-        sendData = []
-        header = {}
-
-        for tracknr, track in enumerate(data, start=1):
-            # Copy the header fields
-            header = {}
-            for head in list(track[0].keys()):
-                header[head] = track[0][head]
-            headerInstance = self.datatypes[0]()
-            # Check track names
-            # if no name, give it a name
-            headerInstance.trk_ident = track[0].get('ident', f'TRACK{tracknr}')
-            sendData.append((self.link.Pid_Trk_Hdr, headerInstance))
-            firstSegment = True
-            for waypoint in track[1:]:
-                trackPointInstance = self.datatypes[1]()
-                trackPointInstance.slat = waypoint['slat']
-                trackPointInstance.slon = waypoint['slon']
-                # First point in a track is always a new track segment
-                if firstSegment:
-                    trackPointInstance.new_trk = True
-                    firstSegment = False
-                sendData.append((self.link.Pid_Trk_Data, trackPointInstance))
+    def putData(self, tracks, callback=None):
+        packets = []
+        for track_idx, track in enumerate(tracks):
+            header = track[0]
+            points = track[1:]
+            pid = self.link.Pid_Trk_Hdr
+            datatype = self.datatypes[0](**header)
+            if not datatype.trk_ident:
+                datatype.trk_ident = f"TRACK{track_idx+1}"
+            packets.append({'pid': pid, 'datatype': datatype})
+            for point_idx, point in enumerate(points):
+                pid = self.link.Pid_Trk_Data
+                datatype = self.datatypes[1](**point)
+                if point_idx == 0:
+                    datatype.new_trk = True
+                packets.append({'pid': pid, 'datatype': datatype})
 
         return MultiTransferProtocol.putData(self,
-                                             callback,
                                              self.cmdproto.Cmnd_Transfer_Trk,
-                                             sendData)
+                                             packets,
+                                             callback=callback)
 
 
 class A302(A301):
@@ -1326,7 +1272,7 @@ class A302(A301):
 
     """
 
-    def putData(self, data, callback):
+    def putData(self, tracks, callback=None):
         pass
 
 
@@ -1347,21 +1293,21 @@ class A400(SingleTransferProtocol):
 
     def getData(self, callback=None):
         return SingleTransferProtocol.getData(self,
-                                              callback,
                                               self.cmdproto.Cmnd_Transfer_Prx,
-                                              self.link.Pid_Prx_Wpt_Data)
+                                              self.link.Pid_Prx_Wpt_Data,
+                                              callback=callback)
 
-    def putData(self, data, callback):
-        sendData = []
-
-        for waypoint in data:
-            waypointInstance = self.datatypes[0](waypoint)
-            sendData.append((self.link.Pid_Prx_Wpt_Data, waypointInstance))
+    def putData(self, waypoints, callback=None):
+        packets = []
+        for waypoint in waypoints:
+            pid = self.link.Pid_Prx_Wpt_Data
+            datatype = self.datatypes[0](waypoint)
+            packets.append({'pid': pid, 'datatype': datatype})
 
         return SingleTransferProtocol.putData(self,
-                                              callback,
                                               self.cmdproto.Cmnd_Transfer_Prx,
-                                              sendData)
+                                              packets,
+                                              callback=callback)
 
 
 class A500(SingleTransferProtocol):
@@ -1379,11 +1325,11 @@ class A500(SingleTransferProtocol):
 
     """
 
-    def getData(self, callback):
+    def getData(self, callback=None):
         return SingleTransferProtocol.getData(self,
-                                              callback,
                                               self.cmdproto.Cmnd_Transfer_Alm,
-                                              self.link.Pid_Almanac_Data)
+                                              self.link.Pid_Almanac_Data,
+                                              callback=callback)
 
 
 class A600(TransferProtocol):
@@ -1396,23 +1342,20 @@ class A600(TransferProtocol):
 
     """
 
-    def getData(self, callback):
+    def getData(self, callback=None):
         self.link.sendPacket(self.link.Pid_Command_Data,
                              self.cmdproto.Cmnd_Transfer_Time)
         packet = self.link.expectPacket(self.link.Pid_Date_Time_Data)
-        p = self.datatypes[0]()
-        p.unpack(packet['data'])
+        datatype = self.datatypes[0]()
+        datatype.unpack(packet['data'])
         if callback:
-            try:
-                callback(p, 1, 1, self.link.Pid_Command_Data)
-            except:
-                raise
+            callback(datatype, 1, 1, self.link.Pid_Date_Time_Data)
 
-        return p
+        return datatype
 
 
 class A601(TransferProtocol):
-    """A601 implementaion.
+    """A601 implementation.
 
     Used by GPSmap 60cs, no specifications as of 2004-09-26."""
 
@@ -1432,11 +1375,11 @@ class A650(SingleTransferProtocol):
 
     """
 
-    def getData(self, callback):
+    def getData(self, callback=None):
         return SingleTransferProtocol.getData(self,
-                                              callback,
                                               self.cmdproto.Cmnd_FlightBook_Transfer,
-                                              self.link.Pid_FlightBook_Record)
+                                              self.link.Pid_FlightBook_Record,
+                                              callback=callback)
 
 
 class A700(TransferProtocol):
@@ -1448,6 +1391,17 @@ class A700(TransferProtocol):
     | 0 | Device1 to Device2 | Pid_Position_Data | <D0>             |
 
     """
+
+    def get_data(self, callback=None):
+        self.link.send_packet(self.link.Pid_Command_Data,
+                              self.command.Cmnd_Transfer_Posn)
+        packet = self.link.expectPacket(self.link.Pid_Position_Data)
+        datatype = PositionType()
+        datatype.unpack(packet['data'])
+        if callback:
+            callback(datatype, 1, 1, self.link.Pid_Position_Data)
+
+        return datatype
 
 
 class A800(TransferProtocol):
@@ -1468,18 +1422,14 @@ class A800(TransferProtocol):
         self.link.sendPacket(self.link.Pid_Command_Data,
                              self.cmdproto.Cmnd_Stop_Pvt_Data)
 
-    def getData(self, callback):
-        packet = self.link.readPacket()
-
-        p = self.datatypes[0]()
-        p.unpack(packet['data'])
+    def getData(self, callback=None):
+        packet = self.link.expectPacket(self.link.Pid_Pvt_Data)
+        datatype = self.datatypes[0]()
+        datatype.unpack(packet['data'])
         if callback:
-            try:
-                callback(p, 1, 1, packet['id'])
-            except:
-                raise
+            callback(datatype, 1, 1, packet['id'])
 
-        return p
+        return datatype
 
 
 class A801:
@@ -1539,11 +1489,11 @@ class A906(SingleTransferProtocol):
 
     """
 
-    def getData(self, callback):
+    def getData(self, callback=None):
         return MultiTransferProtocol.getData(self,
-                                             callback,
                                              self.cmdproto.Cmnd_Transfer_Laps,
-                                             self.link.Pid_Lap)
+                                             self.link.Pid_Lap,
+                                             callback=callback)
 
 
 class A1000(MultiTransferProtocol):
@@ -1574,11 +1524,11 @@ class A1000(MultiTransferProtocol):
 
     """
 
-    def getData(self, callback):
+    def getData(self, callback=None):
         return MultiTransferProtocol.getData(self,
-                                             callback,
                                              self.cmdproto.Cmnd_Transfer_Runs,
-                                             self.link.Pid_Run)
+                                             self.link.Pid_Run,
+                                             callback=callback)
 
 
 class Data_Type():

@@ -141,11 +141,10 @@ class SerialLink(P000):
         return data.replace(bytes([self.DLE, self.DLE]), bytes([self.DLE]))
 
     def checksum(self, data):
-        """
-        The checksum value contains the two's complement of the modulo 256 sum
-        of all bytes in the data. Taking a two's complement of a number converts
-        it to binary, flips 1 bits to 0 bits and 0 bits to 1 bits, and adds one
-        to it.
+        """The checksum value contains the two's complement of the modulo 256 sum of
+        all bytes in the data. Taking a two's complement of a number converts it
+        to binary, flips 1 bits to 0 bits and 0 bits to 1 bits, and adds one to
+        it.
 
         """
         sum = 0
@@ -202,7 +201,7 @@ class SerialLink(P000):
             # a particular command.
             data = data.to_bytes(2, byteorder='little')
         elif data is None:
-             # The packet data is not used and may have a zero size
+            # The packet data is not used and may have a zero size
             data = bytes()
         else:
             data_type = type(data).__name__
@@ -298,7 +297,6 @@ class SerialLink(P000):
 
         if retries > self.max_retries:
             raise LinkException("Maximum retries exceeded.")
-
 
     def readACK(self, packet_id):
         """Read a ACK/NAK packet.
@@ -462,10 +460,10 @@ class USBLink(P000):
         """Unpack a raw USB packet.
 
         Return a tuple: (packet_id, data)"""
-        packet_type = buffer[0]  # unused
-        reserved_1 = buffer[1:4]  # unused
+        # packet_type = buffer[0]  # unused
+        # reserved_1 = buffer[1:4]  # unused
         id = buffer[4:6]
-        reserved_2 = buffer[6:8]  # unused
+        # reserved_2 = buffer[6:8]  # unused
         size = buffer[8:12]
         data = buffer[12:]
 
@@ -498,7 +496,7 @@ class USBLink(P000):
             # a particular command.
             data = data.to_bytes(2, byteorder='little')
         elif data is None:
-             # The packet data is not used and may have a zero size
+            # The packet data is not used and may have a zero size
             data = bytes()
         else:
             data_type = type(data).__name__
@@ -1331,6 +1329,7 @@ class A302(A301):
     def putData(self, data, callback):
         pass
 
+
 class A400(SingleTransferProtocol):
     """Proximity Waypoint Transfer Protocol.
 
@@ -1382,9 +1381,9 @@ class A500(SingleTransferProtocol):
 
     def getData(self, callback):
         return SingleTransferProtocol.getData(self,
-                                               callback,
-                                               self.cmdproto.Cmnd_Transfer_Alm,
-                                               self.link.Pid_Almanac_Data)
+                                              callback,
+                                              self.cmdproto.Cmnd_Transfer_Alm,
+                                              self.link.Pid_Almanac_Data)
 
 
 class A600(TransferProtocol):
@@ -1523,6 +1522,7 @@ class A904:
 
     No documentation as of 2004-02-24.
     """
+
 
 class A906(SingleTransferProtocol):
     """Lap Transfer Protocol.
@@ -4004,7 +4004,6 @@ class Garmin:
         'A1009': 'course_limits_transfer_protocol',
         'A1051': 'external_time_data_sync_protocol',
     }
-
 
     def __init__(self, physicalLayer):
         self.phys = physicalLayer

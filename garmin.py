@@ -655,6 +655,7 @@ class L001(L000):
     Pid_Xfer_Cmplt = 12
     Pid_Date_Time_Data = 14
     Pid_Position_Data = 17
+    Pid_Rqst_Data = 18
     Pid_Prx_Wpt_Data = 19
     Pid_Records = 27
     Pid_Rte_Hdr = 29
@@ -662,12 +663,15 @@ class L001(L000):
     Pid_Almanac_Data = 31
     Pid_Trk_Data = 34
     Pid_Wpt_Data = 35
+    Pid_Baud_Rqst_Data = 48  # undocumented
+    Pid_Baud_Acpt_Data = 49  # undocumented
     Pid_Pvt_Data = 51
     Pid_Rte_Link_Data = 98
     Pid_Trk_Hdr = 99
     Pid_FlightBook_Record = 134  # packet with FlightBook data
     Pid_Lap = 149  # part of Forerunner data
     Pid_Wpt_Cat = 152
+    Pid_Baud_Data = 252  # undocumented
     Pid_Run = 990
     Pid_Workout = 991
     Pid_Workout_Occurrence = 992
@@ -751,6 +755,7 @@ class A001:
 
     """
     Tag_Phys_Prot_Id = 'P'  # Physical protocol ID
+    Tag_Tx_Prot_Id = 'T'  # Transmission protocol ID
     Tag_Link_Prot_Id = 'L'  # Link protocol ID
     Tag_Appl_Prot_Id = 'A'  # Application protocol ID
     Tag_Data_Type_Id = 'D'  # Data Type ID
@@ -783,6 +788,10 @@ class A001:
                 # We ignore the physical protocol, because it is initialized
                 # already
                 log.info(f"Got physical protocol '{protocol_datatype}'. Ignoring...")
+            elif tag == self.Tag_Tx_Prot_Id:
+                # Append new list with protocol.
+                log.info(f"Got transmission protocol '{protocol_datatype}'. Adding...")
+                protocols.append([protocol_datatype])
             elif tag == self.Tag_Link_Prot_Id:
                 # Append new list with protocol.
                 log.info(f"Got link protocol '{protocol_datatype}'. Adding...")
@@ -867,6 +876,8 @@ class A010(CommandProtocol):
     Cmnd_Turn_Off_Pwr = 8                     # turn off power
     Cmnd_Start_Pvt_Data = 49                  # start transmitting PVT data
     Cmnd_Stop_Pvt_Data = 50                   # stop transmitting PVT data
+    Cmnd_Transfer_Baud = 57                   # transfer supported baudrates (undocumented)
+    Cmnd_Ack_Ping = 58                        # ping device (undocumented)
     Cmnd_FlightBook_Transfer = 92             # transfer flight records
     Cmnd_Transfer_Laps = 117                  # transfer fitness laps
     Cmnd_Transfer_Wpt_Cats = 121              # transfer waypoint categories
@@ -895,6 +906,102 @@ class A011(CommandProtocol):
     Cmnd_Transfer_Time = 20   # transfer time
     Cmnd_Transfer_Wpt = 21    # transfer waypoints
     Cmnd_Turn_Off_Pwr = 26    # turn off power
+
+
+class T001:
+    """Transmission Protocol.
+
+    This protocol is undocumented, but it appears to be a transmission protocol
+    according to the GPS Manager (gpsman) application
+    (https://sourceforge.net/projects/gpsman/).
+
+    This feature is undocumented in the spec. The implementation is derived
+    from Appendix C: Changing the baud rate in Garmin mode in the GPS 18x
+    Technical Specifications
+    (https://static.garmin.com/pumac/GPS_18x_Tech_Specs.pdf)
+
+    """
+
+    def __init__(self, phys, link, cmdproto):
+        self.phys = phys
+        self.link = link
+        self.cmdproto = cmdproto
+
+    @staticmethod
+    def desired_baudrate(baudrate):
+        """Return the desired baudrate.
+
+        Asynchronous protocols do not allow for much tolerance. The relative baudrate
+        error tolerance for UART with 8N1 configuration is only ±5%.
+
+        However, since both transmitter and receiver may not generate the exact
+        baudrate, the error must not exceed ±5% in total, which in the worst
+        case (one too fast, one too slow) imposes a tight allowed deviation of
+        +2.5% and -2.5% on the modules respectively. We therefore choose ±2.5%
+        tolerance.
+
+        """
+        tolerance = 0.025
+        baudrates = (9600, 14400, 19200, 28800, 38400, 57600, 115200, 250000)
+        for x in baudrates:
+            if math.isclose(baudrate, x, rel_tol=tolerance):
+                return x
+
+    def get_supported_baudrates(self):
+        log.info("Get supported baudrates")
+        self.link.sendPacket(self.link.Pid_Command_Data,
+                             self.cmdproto.Cmnd_Transfer_Baud)
+        packet = self.link.expectPacket(self.link.Pid_Baud_Data)
+        baudrates = []
+        for baudrate, in rawutil.iter_unpack('<I', packet['data']):
+            baudrate = self.desired_baudrate(baudrate)
+            if baudrate:
+                baudrates.append(baudrate)
+        log.info(f"Supported baudrates: {*baudrates, }.")
+        return baudrates
+
+    def set_baudrate(self, baudrate):
+        """Change the baudrate of the device.
+
+        """
+        log.info("Turn off all requests")
+        self.link.sendPacket(self.link.Pid_Rqst_Data,
+                             None)
+        log.info("Request baudrate change")
+        data = baudrate.to_bytes(4, byteorder='little')
+        self.link.sendPacket(self.link.Pid_Baud_Rqst_Data,
+                             data)
+        # The device will respond by sending a packet with the highest
+        # acceptable baudrate closest to what was requested
+        packet = self.link.expectPacket(self.link.Pid_Baud_Acpt_Data)
+        baudrate = int.from_bytes(packet['data'], byteorder='little')
+        log.info(f"Accepted baudrate: {baudrate}")
+        # Determine the desired baudrate value from accepted baudrate
+        desired_baudrate = self.desired_baudrate(baudrate)
+        if desired_baudrate:
+            log.info(f"Desired baudrate: {desired_baudrate}")
+            # Set the new baudrate
+            log.info(f"Set the baudrate to {desired_baudrate}")
+            self.phys.set_baudrate(desired_baudrate)
+            try:
+                # Immediately after setting the baudrate, transmit an Ack ping packet
+                self.link.sendPacket(self.link.Pid_Command_Data,
+                                     self.cmdproto.Cmnd_Ack_Ping)
+                # Transmit the same packet again
+                self.link.sendPacket(self.link.Pid_Command_Data,
+                                     self.cmdproto.Cmnd_Ack_Ping)
+                # The baudrate has been successfully changed upon acknowledging the
+                # above two ping packets. If the device does not receive these two
+                # packets within two seconds, it will reset its baudrate to the default
+                # 9600.
+                log.info(f"Baudrate successfully changed to {desired_baudrate}")
+            except:
+                log.info("Failed to change baudrate")
+        else:
+            log.warning("Unsupported baudrate {baudrate}")
+
+    def get_baudrate(self):
+        return self.phys.get_baudrate()
 
 
 class TransferProtocol:
@@ -1028,12 +1135,6 @@ class MultiTransferProtocol(TransferProtocol):
         self.link.expectPacket(self.link.Pid_Xfer_Cmplt)
 
         return packets
-
-
-class T001:
-    """T001 implementation.
-
-    No documentation as of 2004-02-24."""
 
 
 class A100(SingleTransferProtocol):
@@ -3932,6 +4033,7 @@ class Garmin:
         'A001': 'protocol_capability_protocol',
         'A010': 'device_command_protocol',
         'A011': 'device_command_protocol',
+        'T001': 'transmission_protocol',
         'A100': 'waypoint_transfer_protocol',
         'A101': 'waypoint_category_transfer_protocol',
         'A200': 'route_transfer_protocol',
@@ -3969,6 +4071,8 @@ class Garmin:
         self.registered_protocols = self.register_protocols(self.supported_protocols)
         self.link = self.create_protocol('link_protocol', self.phys)
         self.device_command = self.create_protocol('device_command_protocol', self.link)
+        self.unit_id = self.get_unit_id()
+        self.transmission = self.create_protocol('transmission_protocol', self.phys, self.link, self.device_command)
         self.waypoint_transfer = self.create_protocol('waypoint_transfer_protocol', self.link, self.device_command)
         self.route_transfer = self.create_protocol('route_transfer_protocol', self.link, self.device_command)
         self.track_log_transfer = self.create_protocol('track_log_transfer_protocol', self.link, self.device_command)

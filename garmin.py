@@ -112,7 +112,6 @@ class SerialLink(P000):
         self.ser = serial.Serial(port,
                                  timeout=self.timeout,
                                  baudrate=self.baudrate)
-        self.unit_id = None
 
     def set_timeout(self, seconds):
         self.ser.timeout = self.timeout = seconds
@@ -378,7 +377,7 @@ class USBLink(P000):
         import usb
         self.usb = usb
         self.timeout = 1
-        self.unit_id = self.start_session()
+        self.start_session()
 
     def set_timeout(self, seconds):
         self.timeout = seconds
@@ -569,7 +568,8 @@ class USBLink(P000):
         The Session Started packet indicates that transfers can take place to
         and from the device. The host should ignore any packets it receives
         before receiving this packet. The data returned with this packet is the
-        device’s unit ID.
+        device’s unit ID. We ignore this, because it is retrieved elsewhere as
+        well.
 
         Session Started Packet
         | N | Direction      | Packet ID           | Packet Data Type |
@@ -584,7 +584,6 @@ class USBLink(P000):
                 log.info("Received Session Started packet")
                 break
 
-        return packet
 
     def start_session(self):
         """Start USB session and return the unit ID.
@@ -592,11 +591,7 @@ class USBLink(P000):
         """
         log.info("Start USB session")
         self.send_start_session_packet()
-        packet = self.read_session_started_packet()
-        unit_id = int.from_bytes(packet['data'], byteorder='little')
-        log.info(f"Unit ID: {unit_id}")
-
-        return unit_id
+        self.read_session_started_packet()
 
 
 class L000:
@@ -663,6 +658,7 @@ class L001(L000):
     Pid_Almanac_Data = 31
     Pid_Trk_Data = 34
     Pid_Wpt_Data = 35
+    Pid_Unit_Id = 38  # undocumented
     Pid_Baud_Rqst_Data = 48  # undocumented
     Pid_Baud_Acpt_Data = 49  # undocumented
     Pid_Pvt_Data = 51
@@ -874,6 +870,7 @@ class A010(CommandProtocol):
     Cmnd_Transfer_Trk = 6                     # transfer track log
     Cmnd_Transfer_Wpt = 7                     # transfer waypoints
     Cmnd_Turn_Off_Pwr = 8                     # turn off power
+    Cmnd_Transfer_Unit_Id = 14             # transfer product id (undocumented)
     Cmnd_Start_Pvt_Data = 49                  # start transmitting PVT data
     Cmnd_Stop_Pvt_Data = 50                   # stop transmitting PVT data
     Cmnd_Transfer_Baud = 57                   # transfer supported baudrates (undocumented)
@@ -4059,7 +4056,6 @@ class Garmin:
 
     def __init__(self, physicalLayer):
         self.phys = physicalLayer
-        self.unit_id = self.phys.unit_id
         self.link = L000(self.phys)
         self.product_data_protocol = A000(self.link)
         self.product_data = self.product_data_protocol.getProductData()
@@ -4134,6 +4130,24 @@ class Garmin:
                 return protocol(*args)
         else:
             log.info(f"Protocol {key} is not supported.")
+
+    def get_unit_id(self):
+        """Return the device’s unit ID.
+
+        This feature is undocumented in the spec. The implementation is derived
+        from capturing raw USB traffic from Garmin's proprietary MapSource
+        application version 6.16.3
+        (https://www8.garmin.com/support/download_details.jsp?id=209).
+
+        """
+        log.info("Request Product Id")
+        self.link.sendPacket(self.link.Pid_Command_Data,
+                             self.device_command.Cmnd_Transfer_Unit_Id)
+        log.info("Expect Product Id packet")
+        packet = self.link.expectPacket(self.link.Pid_Unit_Id)
+        unit_id = int.from_bytes(packet['data'], byteorder='little')
+
+        return unit_id
 
     def getWaypoints(self, callback=None):
         return self.waypoint_transfer.getData(callback)

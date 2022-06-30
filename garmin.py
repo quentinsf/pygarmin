@@ -4081,6 +4081,10 @@ class Garmin:
         self.lap_transfer = self.create_protocol('lap_transfer_protocol', self.link, self.device_command)
         self.run_transfer = self.create_protocol('run_transfer_protocol', self.link, self.device_command)
 
+    @staticmethod
+    def class_by_name(name):
+        return globals()[name]
+
     def get_protocols(self, link, product_id, software_version):
         # Wait for the unit to announce its capabilities using A001.  If
         # that doesn't happen, try reading the protocols supported by the
@@ -4096,8 +4100,6 @@ class Garmin:
                 raise Exception("Couldn't determine product capabilities")
         return protocols
 
-    def class_by_name(self, name):
-        return globals()[name]
 
     def register_protocols(self, supported_protocols):
         """Register the supported protocols."""

@@ -722,18 +722,14 @@ class A000:
         self.link = linkLayer
 
     def getProductData(self):
-        log.info("Request Product Data")
+        log.info("Request product data")
         self.link.sendPacket(self.link.Pid_Product_Rqst, None)
-        log.info("Expect Product_Data packet")
+        log.info("Expect product data")
         packet = self.link.expectPacket(self.link.Pid_Product_Data)
-        # The product description contains one or more null-terminated strings.
-        # Only the first string is used, and all subsequent strings are ignored.
-        fmt = '<Hhn'
-        product_id, software_version, product_description = rawutil.unpack(fmt, packet['data'])
+        datatype = Product_Data_Type()
+        datatype.unpack(packet['data'])
 
-        return {'id': product_id,
-                'version': software_version / 100,
-                'description': product_description}
+        return datatype
 
 
 class A001:
@@ -3856,6 +3852,16 @@ class D1051(External_Time_Sync_Data_Type):
     pass
 
 
+class Product_Data_Type(Data_Type):
+    # The product description contains one or more null-terminated strings.
+    # According to the specification, only the first string is used, and all
+    # subsequent strings should be ignored.
+    _fields = [('product_id', 'H'),           # product ID
+               ('software_version', 'h'),     # software version number multiplied by 100
+               ('product_description', 'n'),  # product description
+               ]
+
+
 # Garmin models ==============================================
 
 # For reference, here are some of the product ID numbers used by
@@ -4059,9 +4065,9 @@ class Garmin:
         self.link = L000(self.phys)
         self.product_data_protocol = A000(self.link)
         self.product_data = self.product_data_protocol.getProductData()
-        self.product_id = self.product_data['id']
-        self.software_version = self.product_data['version']
-        self.product_description = self.product_data['description']
+        self.product_id = self.product_data.product_id
+        self.software_version = self.product_data.software_version / 100
+        self.product_description = self.product_data.product_description
         self.protocol_capability = A001(self.link)
         self.supported_protocols = self.get_protocols(self.protocol_capability, self.product_id, self.software_version)
         self.registered_protocols = self.register_protocols(self.supported_protocols)

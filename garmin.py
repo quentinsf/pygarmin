@@ -93,6 +93,10 @@ class P000:
 class SerialLink(P000):
     """Protocol to communicate over a serial link.
 
+    Support for the Garmin USB-serial protocol needs a Linux kernel with the
+    garmin_gps kernel module which is part of the official kernels since version
+    2.6.11.
+
     """
     # Control characters
     DLE = 16  # Data Link Escape
@@ -350,7 +354,9 @@ class SerialLink(P000):
 class USBLink(P000):
     """Implementation of the Garmin USB protocol.
 
-    It will talk to the first Garmin GPS device it finds.
+    Support for the Garmin USB protocol needs libusb 1.0 and probably removing
+    and blacklisting the garmin_gps kernel module. It will talk to the first
+    Garmin GPS device it finds.
 
     """
     idVendor = 2334  # 0x091e
@@ -1500,6 +1506,16 @@ class A700(TransferProtocol):
 
 class A800(TransferProtocol):
     """PVT Data Protocol.
+
+    In PVT mode the device will transmit packets once per second with real-time
+    position, velocity, and time. This protocol is used as an alternative to
+    NMEA (https://www.nmea.org/content/STANDARDS/STANDARDS).
+
+    PVT mode can be switched on and off by sending the Cmnd_Start_Pvt_Data and
+    Cmnd_Stop_Pvt_Data command.
+
+    According to the specification the ACK and NAK packets are optional, but the
+    device will not retransmit a PVT packet in response to receiving a NAK.
 
     A800 PVT Protocol Packet Sequence
     | N | Direction                         | Packet ID    | Packet Data Type |

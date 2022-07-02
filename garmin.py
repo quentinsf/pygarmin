@@ -3431,6 +3431,65 @@ class D700(Radian_Position_Type):
 
 class Pvt_Data_Type(Data_Type):
 
+    def is_legacy(self, product_description):
+        """Return whether the device uses a legacy software version.
+
+        According to the specification some devices use different enumerated
+        values for fix in older software versions. However, this list of devices
+        is ambiguous (eTrex Summit is named twice) and doesn't include product
+        ID's. Therefore, we have no reliable way to ascertain whether the device
+        is legacy or not.
+
+        This method checks the device name and software version in the product
+        description. The list of devices and the last software version in which
+        these different values are used is:
+
+        | Device                | Last Version |
+        |-----------------------+--------------|
+        | eMap                  |         2.64 |
+        | GPSMAP 162            |         2.62 |
+        | GPSMAP 295            |         2.19 |
+        | eTrex                 |         2.10 |
+        | eTrex Summit          |         2.07 |
+        | StreetPilot III       |         2.10 |
+        | eTrex Japanese        |         2.10 |
+        | eTrex Venture/Mariner |         2.20 |
+        | eTrex Europe          |         2.03 |
+        | GPS 152               |         2.01 |
+        | eTrex Chinese         |         2.01 |
+        | eTrex Vista           |         2.12 |
+        | eTrex Summit Japanese |         2.01 |
+        | eTrex Summit          |         2.24 |
+        | eTrex GolfLogix       |         2.49 |
+
+        """
+        devices = {
+            "emap": 2.64,
+            "gpsmap 162": 2.62,
+            "gpsmap 295": 2.19,
+            "etrex": 2.10,
+            "streetpilot iii": 2.10,
+            "etrex japanese": 2.10,
+            "etrex venture": 2.20,
+            "etrex mariner": 2.20,
+            "etrex europe": 2.03,
+            "gps 152": 2.01,
+            "etrex chinese": 2.01,
+            "etrex vista": 2.12,
+            "etrex summit japanese": 2.01,
+            "etrex summit": 2.24,
+            "etrex golflogix": 2.49,
+        }
+        pattern = r'(?P<device>[\w ]+) Software Version (?P<version>\d+.\d+)'
+        m = re.search(pattern, product_description.decode('ascii'))
+        device = m.group('device').lower()
+        version = float(m.group('version'))
+        last_version = devices.get(device)
+        if last_version and version <= last_version:
+            return True
+        else:
+            return False
+
     def get_posn(self):
         return Radian_Position_Type(*self.posn)
 
@@ -3453,7 +3512,7 @@ class Pvt_Data_Type(Data_Type):
         delta = timedelta(days=days, seconds=seconds)
         return self.epoch + delta
 
-    def get_fix(self):
+    def get_fix(self, product_description=None):
         """Return the fix value.
 
         The default enumerated values for the “fix” member of the D800_Pvt_Data_Type
@@ -3462,8 +3521,15 @@ class Pvt_Data_Type(Data_Type):
         indication is given as to whether the device is in simulator mode versus
         having an actual position fix.
 
+        Some legacy devices use values for fix that are one more than the
+        default.
+
         """
-        self._fix.get(self.fix, 1)
+        fix = self.fix
+        if product_description and self.is_legacy(product_description):
+            fix += 1
+
+        return self._fix.get(fix)
 
 
 class D800(Pvt_Data_Type):

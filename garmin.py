@@ -234,7 +234,10 @@ class SerialLink(P000):
         while True:
             # Buffer two bytes, because all DLEs occur in pairs except at packet
             # boundaries
-            buffer += self.ser.read(2-len(buffer))
+            try:
+                buffer += self.ser.read(2-len(buffer))
+            except self.serial.SerialException as e:
+                raise LinkError(e)
             if len(buffer) != 2:
                 raise LinkError("Invalid packet: unexpected end")
             elif len(packet) == 0:
@@ -260,7 +263,10 @@ class SerialLink(P000):
         return bytes(packet)
 
     def write(self, buffer):
-        self.ser.write(buffer)
+        try:
+            self.ser.write(buffer)
+        except self.serial.SerialException as e:
+            raise LinkError(e)
 
     def readPacket(self, acknowledge=True):
         retries = 0
@@ -524,7 +530,11 @@ class USBLink(P000):
         size = self.max_buffer_size
         # The libusb timeout is specified in milliseconds
         timeout = self.timeout * 1000 if self.timeout else None
-        buffer = self.dev.read(endpoint, size, timeout=timeout)
+        try:
+            buffer = self.dev.read(endpoint, size, timeout=timeout)
+        except self.usb.core.USBError as e:
+            raise LinkError(e)
+
         # pyusb returns an array object, but we want a bytes object
         return buffer.tobytes()
 
@@ -533,7 +543,10 @@ class USBLink(P000):
         endpoint = self.Bulk_OUT
         # The libusb timeout is specified in milliseconds
         timeout = self.timeout * 1000 if self.timeout else None
-        self.dev.write(endpoint, buffer, timeout=timeout)
+        try:
+            self.dev.write(endpoint, buffer, timeout=timeout)
+        except self.usb.core.USBError as e:
+            raise LinkError(e)
 
     def readPacket(self):
         """Read a packet."""

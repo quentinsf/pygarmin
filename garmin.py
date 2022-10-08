@@ -1856,8 +1856,17 @@ class Time_Type(Data_Type):
         unsupported or unknown.
 
         """
-        delta = timedelta(seconds=self.time)
-        return self._epoch + delta
+        if self.is_valid():
+            delta = timedelta(seconds=self.time)
+            return self._epoch + delta
+
+    def is_valid(self):
+        """Return whether the time is valid.
+
+        A “time” value of 0xFFFFFFFF that this parameter is not supported or unknown.
+
+        """
+        return not self.time == 4294967295
 
 
 class Symbol_Type(Data_Type):

@@ -4200,7 +4200,6 @@ class Garmin:
                 raise Exception("Couldn't determine product capabilities")
         return protocols
 
-
     def register_protocols(self, supported_protocols):
         """Register the supported protocols."""
         protocols = {}

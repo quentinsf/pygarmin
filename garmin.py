@@ -177,7 +177,7 @@ class SerialLink(P000):
 
         return {'id': id, 'data': data}
 
-    def pack(self, packet_id, data):
+    def pack(self, pid, data):
         """
         All data is transferred in byte-oriented packets. A packet contains a
         three-byte header (DLE, ID, and Size), followed by a variable number of
@@ -210,12 +210,12 @@ class SerialLink(P000):
             raise ProtocolError(f"Invalid data type: should be 'bytes' or 'int', but is {datatype}")
         size = len(data)
         log.debug(f"size: {size}")
-        checksum = self.checksum(bytes([packet_id])
+        checksum = self.checksum(bytes([pid])
                                  + bytes([size])
                                  + data)
         log.debug(f"checksum: {checksum}")
         packet = bytes([self.DLE]) \
-            + bytes([packet_id]) \
+            + bytes([pid]) \
             + self.escape(bytes([size])) \
             + self.escape(data) \
             + self.escape(bytes([checksum])) \
@@ -288,16 +288,16 @@ class SerialLink(P000):
 
         return packet
 
-    def sendPacket(self, packet_id, data, acknowledge=True):
+    def sendPacket(self, pid, data, acknowledge=True):
         """Send a packet."""
-        buffer = self.pack(packet_id, data)
+        buffer = self.pack(pid, data)
         log.debug(f"< {bytes.hex(buffer)}")
         retries = 0
         while retries <= self.max_retries:
             try:
                 self.write(buffer)
                 if acknowledge:
-                    self.readACK(packet_id)
+                    self.readACK(pid)
                 break
             except LinkError as e:
                 log.info(e)
@@ -306,7 +306,7 @@ class SerialLink(P000):
         if retries > self.max_retries:
             raise LinkError("Maximum retries exceeded.")
 
-    def readACK(self, packet_id):
+    def readACK(self, pid):
         """Read a ACK/NAK packet.
 
         If an ACK packet is received the packet was received correctly and
@@ -316,7 +316,7 @@ class SerialLink(P000):
         """
         log.info("Read ACK/NAK")
         packet = self.readPacket(acknowledge=False)
-        expected_pid = packet_id
+        expected_pid = pid
         received_pid = int.from_bytes(packet['data'], byteorder='little')
 
         if packet['id'] == self.Pid_Ack_Byte:
@@ -329,10 +329,10 @@ class SerialLink(P000):
         else:
             raise GarminError("Received neither ACK nor NAK packet")
 
-    def sendACK(self, packet_id):
+    def sendACK(self, pid):
         """Send an ACK packet."""
         log.info("Send ACK packet")
-        data = packet_id.to_bytes(1, byteorder='little')
+        data = pid.to_bytes(1, byteorder='little')
         self.sendPacket(self.Pid_Ack_Byte, data, acknowledge=False)
 
     def sendNAK(self):
@@ -469,7 +469,7 @@ class USBLink(P000):
     def unpack(self, buffer):
         """Unpack a raw USB packet.
 
-        Return a tuple: (packet_id, data)"""
+        Return a tuple: (pid, data)"""
         # packet_type = buffer[0]  # unused
         # reserved_1 = buffer[1:4]  # unused
         id = buffer[4:6]
@@ -485,7 +485,7 @@ class USBLink(P000):
 
         return {'id': id, 'data': data}
 
-    def pack(self, layer, packet_id, data=None):
+    def pack(self, layer, pid, data=None):
         """Pack an USB packet.
 
         USB Packet Format:
@@ -517,7 +517,7 @@ class USBLink(P000):
 
         packet = bytes([layer]) \
             + bytes([0]) * 3 \
-            + packet_id.to_bytes(2, byteorder='little') \
+            + pid.to_bytes(2, byteorder='little') \
             + bytes([0]) * 2 \
             + size.to_bytes(4, byteorder='little') \
             + data
@@ -555,9 +555,9 @@ class USBLink(P000):
         packet = self.unpack(buffer)
         return packet
 
-    def sendPacket(self, packet_id, data):
+    def sendPacket(self, pid, data):
         """Send a packet."""
-        buffer = self.pack(self.Application_Layer, packet_id, data)
+        buffer = self.pack(self.Application_Layer, pid, data)
         log.debug(f"< {bytes.hex(buffer)}")
         self.write(buffer)
 
@@ -627,9 +627,9 @@ class L000:
     def __init__(self, physicalLayer):
         self.phys = physicalLayer
 
-    def sendPacket(self, packet_id, data):
+    def sendPacket(self, pid, data):
         """Send a packet."""
-        self.phys.sendPacket(packet_id, data)
+        self.phys.sendPacket(pid, data)
 
     def readPacket(self):
         """Read a packet."""
@@ -647,13 +647,13 @@ class L000:
 
         return packet
 
-    def expectPacket(self, packet_id):
+    def expectPacket(self, pid):
         """Expect and read a particular packet type. Return data.
 
         """
         packet = self.readPacket()
-        if packet['id'] != packet_id:
-            raise ProtocolError(f"Expected {packet_id:3}, got {packet['id']:3}")
+        if packet['id'] != pid:
+            raise ProtocolError(f"Expected {pid:3}, got {packet['id']:3}")
 
         return packet
 

@@ -152,8 +152,8 @@ class SerialLink(P000):
         sum = 0
         for i in data:
             sum = sum + i
-        sum %= 256
-        checksum = (256 - sum) % 256
+            sum %= 256
+            checksum = (256 - sum) % 256
         return checksum
 
     def unpack(self, buffer):
@@ -251,7 +251,7 @@ class SerialLink(P000):
                 if buffer == DLE + DLE:
                     packet += buffer
                     buffer.clear()
-                # Packet trailer
+                    # Packet trailer
                 elif buffer == DLE + ETX:
                     packet += buffer
                     break
@@ -676,12 +676,23 @@ class L001(L000):
     Pid_Almanac_Data = 31
     Pid_Trk_Data = 34
     Pid_Wpt_Data = 35
+    Pid_Mem_Write = 36  # undocumented
     Pid_Unit_Id = 38  # undocumented
+    Pid_Mem_Wrdi = 45  # Write Disable (WRDI) undocumented
     Pid_Baud_Rqst_Data = 48  # undocumented
     Pid_Baud_Acpt_Data = 49  # undocumented
     Pid_Pvt_Data = 51
+    Pid_Mem_Wel = 74  # Write Enable Latch (WEL) undocumented
+    Pid_Mem_Wren = 75  # Write Enable (WREN) undocumented
+    Pid_Mem_Read = 89  # undocumented
+    Pid_Mem_Chunk = 90  # undocumented
+    Pid_Mem_Records = 91  # undocumented
+    Pid_Mem_Data = 92  # undocumented
+    Pid_Capacity_Data = 95  # undocumented
     Pid_Rte_Link_Data = 98
     Pid_Trk_Hdr = 99
+    Pid_Tx_Unlock_Key = 108  # undocumented
+    Pid_Ack_Unlock_Key = 109  # undocumented
     Pid_FlightBook_Record = 134  # packet with FlightBook data
     Pid_Lap = 149  # part of Forerunner data
     Pid_Wpt_Cat = 152
@@ -816,7 +827,7 @@ class A001:
                 protocols[-1].append(protocol_datatype)
             else:
                 log.info(f"Got unknown protocol or datatype '{protocol_datatype}'. Ignoring...")
-        log.info(f"Supported protocols and data types: {protocols}")
+                log.info(f"Supported protocols and data types: {protocols}")
 
         return protocols
 
@@ -889,6 +900,7 @@ class A010(CommandProtocol):
     Cmnd_Stop_Pvt_Data = 50                   # stop transmitting PVT data
     Cmnd_Transfer_Baud = 57                   # transfer supported baudrates (undocumented)
     Cmnd_Ack_Ping = 58                        # ping device (undocumented)
+    Cmnd_Transfer_Mem = 63                    # transfer memory capacity (undocumented)
     Cmnd_FlightBook_Transfer = 92             # transfer flight records
     Cmnd_Transfer_Laps = 117                  # transfer fitness laps
     Cmnd_Transfer_Wpt_Cats = 121              # transfer waypoint categories
@@ -968,7 +980,7 @@ class T001:
             baudrate = self.desired_baudrate(baudrate)
             if baudrate:
                 baudrates.append(baudrate)
-        log.info(f"Supported baudrates: {*baudrates, }.")
+                log.info(f"Supported baudrates: {*baudrates, }.")
         return baudrates
 
     def set_baudrate(self, baudrate):
@@ -1074,7 +1086,7 @@ class SingleTransferProtocol(TransferProtocol):
             result.append(datatype)
             if callback:
                 callback(datatype, idx, packet_count, pid)
-        self.link.expectPacket(self.link.Pid_Xfer_Cmplt)
+                self.link.expectPacket(self.link.Pid_Xfer_Cmplt)
 
         return result
 
@@ -1143,7 +1155,7 @@ class MultiTransferProtocol(TransferProtocol):
                 raise ProtocolError(f"Expected one of {*pids,}, got {pid}")
             if callback:
                 callback(datatype, idx, packet_count, pid)
-        self.link.expectPacket(self.link.Pid_Xfer_Cmplt)
+                self.link.expectPacket(self.link.Pid_Xfer_Cmplt)
 
         return packets
 
@@ -1366,7 +1378,7 @@ class A301(MultiTransferProtocol):
                 datatype = self.datatypes[1](**point)
                 if point_idx == 0:
                     datatype.new_trk = True
-                packets.append({'pid': pid, 'datatype': datatype})
+                    packets.append({'pid': pid, 'datatype': datatype})
 
         return MultiTransferProtocol.putData(self,
                                              self.cmdproto.Cmnd_Transfer_Trk,
@@ -1571,15 +1583,232 @@ class A802:
 class A900:
     """A900 implementation.
 
-    Used by GPS III+, no documentation as of 2000-09-18.
+    This protocol is undocumented, but it appears to be a map transfer protocol.
+    The implementation is derived from the GarminDev drivers of the abandoned
+    QLandkarteGT application (https://sourceforge.net/projects/qlandkartegt/)
+    and the sendmap application included with the also abandoned cGPSmapper
+    application (https://sourceforge.net/projects/cgpsmapper/).
+
+    On devices without mass storage mode, maps are stored in the internal flash
+    memory of the device. Some of the memory regions are:
+
+    | Region |  Hex | Map Name                     | Filename     |
+    |--------+------+------------------------------+--------------|
+    |      3 | 0x03 | Device Base Map              | gmapbmap.img |
+    |     10 | 0x0a | Supplementary map            | gmapsupp.img |
+    |     14 | 0x0e | Firmware/System Software     | fw_all.bin   |
+    |     16 | 0x10 | Logo/Splash Screen           | logo.bin     |
+    |     49 | 0x31 | Primary or Pre Installed Map | gmapprom.img |
+    |     50 | 0x32 | OEM Installed Map            | gmapoem.img  |
+
+    These regions are derived from the Garmin RGN firmware update file format
+    (confusingly, the RGN subfiles within Garmin IMG files share the same name,
+    but have a completely different structure and purpose). The file format is
+    reverse engineered by Herbert Oppmann
+    (https://www.memotech.franken.de/FileFormats/Garmin_RGN_Format.pdf). This
+    protocol only seems to be able to access region 10 with the supplementary
+    map.
+
+    The terminology of the commands below is taken from SPI interfaces for
+    serial flash memory that are used elsewhere. Before any write operation, the
+    write enable command WREN must be issued. Sending the WREN sets the internal
+    write enable latch, which is indicated by the WEL response. The write
+    disable command WRDI clears it.
+
+    A900 Map Transfer Protocol Packet Sequence
+    | N   | Direction      | Packet ID     | Packet Data Type |
+    |-----+----------------+---------------+------------------|
+    | 0   | Host to Device | Pid_Mem_Wren  | Region           |
+    | 1   | Device to Host | Pid_Mem_Wel   |                  |
+    | 2   | Device to Host | Pid_Mem_Write | Mem_Chunk_Type   |
+    | …   | …              | …             | …                |
+    | n-2 | Device to Host | Pid_Mem_Write | Mem_Chunk_Type   |
+    | n-1 | Device to Host | Pid_Mem_Wrdi  | Region           |
+
     """
+
+    def __init__(self, link, cmdproto):
+        self.link = link
+        self.cmdproto = cmdproto
+        self.memory_properties = self.get_memory_properties()
+
+    def get_memory_properties(self):
+        log.info("Request capacity data")
+        self.link.sendPacket(self.link.Pid_Command_Data,
+                             self.cmdproto.Cmnd_Transfer_Mem)
+        log.info("Expect capacity data")
+        packet = self.link.expectPacket(self.link.Pid_Capacity_Data)
+        datatype = Mem_Properties_Type()
+        datatype.unpack(packet['data'])
+
+        return datatype
+
+    def get_memory_data(self, file='', callback=None):
+        log.info("Get memory data")
+        mem_region = self.memory_properties.mem_region
+        datatype = Mem_File_Type(mem_region=mem_region, subfile=file)
+        data = datatype.get_data()
+        self.link.sendPacket(self.link.Pid_Mem_Read, data)
+        packet = self.link.readPacket()
+        pid = packet['id']
+        if pid == self.link.Pid_Mem_Data:
+            datatype = Mem_Data_Type()
+            datatype.unpack(packet['data'])
+            if int.from_bytes(datatype.data, byteorder='little') == 0:
+                log.info("Data not found")
+            else:
+                log.info(f"Got unknown data {datatype.data}. Ignoring...")
+        elif pid == self.link.Pid_Mem_Records:
+            # The Records_Type contains a 32-bit integer that indicates the number
+            # of data packets to follow.
+            datatype = Records_Type()
+            datatype.unpack(packet['data'])
+            packet_count = datatype.records
+            log.info(f"{type(self).__name__}: Expecting {packet_count} records")
+            data = []
+            for idx in range(packet_count):
+                packet = self.link.expectPacket(Pid_Mem_Chunk)
+                datatype = Mem_Record_Type()
+                datatype.unpack(packet['data'])
+                data.append(datatype.chunk)
+                if callback:
+                    callback(datatype, idx, packet_count, Pid_Mem_Chunk)
+
+            return data
+
+    def get_map_properties(self):
+        log.info("Get map properties")
+        subfile = "MAPSOURC.MPS"
+        data = self.get_memory_data(file=subfile)
+        if data is not None:
+            result = []
+            struct = Mps_File_Type.get_struct()
+            for record_type, record_length, record_content in struct.unpack(data):
+                record_type = chr(record_type)
+                if record_type == Mps_File_Type.Map_Product_Id:
+                    log.debug(f"Record 'F': Product")
+                    datatype = Map_Product_Type()
+                elif record_type == Map_Product_Type.Map_Segment_Id:
+                    log.debug(f"Record 'L': Map segment")
+                    datatype = Map_Segment_Type()
+                elif record_type == Map_Product_Type.Map_Unknown_Id:
+                    log.debug(f"Record 'P': Unknown")
+                    datatype = Map_Unknown_Type()
+                elif record_type == Map_Product_Type.Map_Unlock_Id:
+                    log.debug(f"Record 'U': Unlock")
+                    datatype = Map_Unlock_Type()
+                elif record_type == Map_Product_Type.Map_Set_Id:
+                    log.debug(f"Record 'V': Mapset")
+                    datatype = Map_Set_Type()
+                    result.append(datatype.unpack(record_content))
+
+            return result
+
+    def download_map(self, callback=None):
+        log.info("Download map")
+        data = self.get_memory_data(file='', callback=callback)
+        if data is not None:
+            return data
+
+    def _upload_map_file(self, file, chunk_size=250, callback=None):
+        file_size = os.path.getsize(file)
+        chunk_count = math.ceil(file_size / chunk_size)
+        with open(file, 'rb') as f:
+            idx = 0
+            while True:
+                chunk = f.read(chunk_size)
+                if not chunk:  # EOF reached
+                    break
+                offset = f.tell()
+                datatype = Mem_Chunk_Type(offset, chunk)
+                data = datatype.get_data()
+                log.info(f"Upload chunk {idx+1} of {chunk_count}")
+                self.link.sendPacket(self.link.Pid_Mem_Write, data)
+                if callback:
+                    callback(datatype, idx, chunk_count, self.link.Pid_Mem_Chunk)
+                    idx += 1
+
+    def _upload_map_bytes(self, data, chunk_size=250, callback=None):
+        offsets = range(0, len(data), chunk_size)
+        chunk_count = len(offsets)
+        for idx, offset in enumerate(offsets):
+            chunk = data[offset:offset+chunk_size]
+            datatype = Mem_Chunk_Type(offset, chunk)
+            data = datatype.get_data()
+            log.info(f"Upload chunk {idx+1} of {chunk_count}")
+            self.link.sendPacket(self.link.Pid_Mem_Write, data)
+            if callback:
+                callback(datatype, idx, chunk_count, self.link.Pid_Mem_Chunk)
+
+    def upload_map(self, data, chunk_size=250, callback=None):
+        log.info("Upload map")
+        mem_region = self.memory_properties.mem_region
+        log.info("Enable write")
+        self.link.sendPacket(self.link.Pid_Mem_Wren, mem_region)
+        max_retries = 10
+        retries = 0
+        while retries <= max_retries:
+            try:
+                self.link.expectPacket(self.link.Pid_Mem_Wel)
+                log.info("Write enabled")
+                break
+            except LinkError as e:
+                log.info(e)
+                retries += 1
+        if retries > max_retries:
+            raise LinkError("Maximum retries exceeded.")
+
+        if isinstance(data, str):
+            self.upload_map_file(data, chunk_size, callback)
+        elif isinstance(data, bytes):
+            self.upload_map_bytes(data, chunk_size, callback)
+            log.info("Disable write")
+            self.link.sendPacket(self.link.Pid_Mem_Wrdi, mem_region)
+
+    def delete_map(self):
+        log.info("Delete map")
+        mem_region = self.memory_properties.mem_region
+        log.info("Enable write")
+        self.link.sendPacket(self.link.Pid_Mem_Wren, mem_region)
+        max_retries = 10
+        retries = 0
+        while retries <= max_retries:
+            try:
+                self.link.expectPacket(self.link.Pid_Mem_Wel)
+                log.info("Write enabled")
+                break
+            except LinkError as e:
+                log.info(e)
+                retries += 1
+        if retries > max_retries:
+            raise LinkError("Maximum retries exceeded.")
+        log.info("Disable write")
+        self.link.sendPacket(self.link.Pid_Mem_Wrdi, mem_region)
 
 
 class A902:
     """A902 implementation.
 
-    Used by etrex, no documentation as of 2001-05-30.
+    This protocol is undocumented, but it appears to be a map unlock protocol.
+    The implementation is derived from the GarminDev drivers of the abandoned
+    QLandkarteGT application (https://sourceforge.net/projects/qlandkartegt/)
+    and the also abandoned sendmap application included with the cGPSmapper
+    application (https://sourceforge.net/projects/cgpsmapper/).
+
     """
+
+    def __init__(self, link, cmdproto):
+        self.link = link
+        self.cmdproto = cmdproto
+
+    def send_unlock_key(self, key):
+        data = bytes(key)
+        log.info("Send unlock key")
+        self.link.sendPacket(self.link.Pid_Tx_Unlock_Key,
+                             data)
+        log.info("Acknowledge unlock key")
+        self.link.expectPacket(self.link.Pid_Ack_Unlock_Key)
+        # TODO: read data
 
 
 class A903:
@@ -1710,6 +1939,15 @@ class Data_Type():
 
     def __str__(self):
         return str(self.get_dict())
+
+
+class Records_Type(Data_Type):
+    """The Records_Type contains a 16-bit integer that indicates the number of data
+    packets to follow, excluding the Pid_Xfer_Cmplt packet.
+
+    """
+    _fields = [('records', 'H'),  # number of data packets to follow
+               ]
 
 
 class Position_Type(Data_Type):
@@ -3952,88 +4190,279 @@ class Product_Data_Type(Data_Type):
                ]
 
 
+class Mem_Properties_Type(Data_Type):
+    _fields = [('mem_region', 'H'),  # flash memory region for supplementary map
+               ('max_tiles', 'H'),   # maximum number of map tiles that can be stored
+               ('mem_size', 'I'),    # memory size
+               ('unknown', 'I'),
+               ]
+
+
+class Mem_File_Type(Data_Type):
+    _fields = [('unknown', 'I'),
+               ('mem_region', 'H'),  # flash memory region for supplementary map
+               ('subfile', 'n'),     # subfile in the IMG container file format,
+                                     # zero length string for whole file
+               ]
+
+    def __init__(self, unknown=0, mem_region=10, subfile=''):
+        self.unknown = unknown
+        self.mem_region = mem_region
+        self.subfile = subfile
+
+
+class Mem_Data_Type(Data_Type):
+    _fields = [('length', 'B'),
+               ('data', '/0s'),
+               ]
+
+
+class Mem_Record_Type(Data_Type):
+    _fields = [('index', 'B'),  # index of the record (starting with 0)
+               ('chunk', '$'),
+               ]
+
+
+class Mem_Chunk_Type(Data_Type):
+    _fields = [('offset', 'I'),
+               ('chunk', '$'),
+               ]
+
+    def __init__(self, offset, chunk):
+        self.offset = offset
+        self.chunk = chunk
+
+
+class Mps_File_Type(Data_Type):
+    """MPS file format.
+
+    The Mapsource (MPS) file format contains a list of maps and their
+    descriptions.
+
+    The MPS file is used as a subfile in the IMG container file format and by
+    MapSource software version 2.xx. Later versions of MapSource use a different
+    file format with the same filename extension.
+
+    The file format is reverse engineered by Herbert Oppmann
+    (https://www.memotech.franken.de/FileFormats/Garmin_IMG_Subfiles_Format.pdf).
+
+    The file consists of a sequence of variable sized records with the following
+    structure:
+
+    General record structure
+    | Byte Number | Byte Description |
+    |-------------+------------------|
+    |           0 | Record type      |
+    |           1 | Record length    |
+    |      2 to n | Record content   |
+
+    """
+    _fields = [('record_type', 'B'),
+               ('record_length', 'H'),
+               ('record_content', '/1s'),
+               ]
+    # Record types
+    Map_Product_Id = 'F'
+    Map_Segment_Id = 'L'
+    Map_Unknown_Id = 'P'
+    Map_Unlock_Id = 'U'
+    Map_Set_Id = 'V'
+
+
+class Map_Product_Type(Data_Type):
+    _fields = [('pid', 'H'),   # product ID
+               ('fid', 'H'),   # family ID
+               ('name', 'n'),  # product name
+               ]
+
+
+class Map_Segment_Type(Data_Type):
+    _fields = [('pid', 'H'),           # product ID
+               ('fid', 'H'),           # family ID
+               ('segment_id', 'I'),    # segment ID
+               ('name', 'n'),          # product name
+               ('segment_name', 'n'),  # segment name
+               ('area_name', 'n'),     # area name
+               ('segment_id2', 'I'),   # segment ID
+               ('end_token', 'I'),     # always 0x00000000
+               ]
+
+
+class Map_Unknown_Type(Data_Type):
+    _fields = [('pid', 'H'),       # product ID
+               ('fid', 'H'),       # family ID
+               ('unknown1', 'H'),
+               ('unknown2', 'I'),
+               ]
+
+
+class Map_Unlock_Type(Data_Type):
+    _fields = [('unlock_code', 'n'),  # Length is 25 characters. Characters are
+                                      # upper case letters or digits
+               ]
+
+
+class Map_Set_Type(Data_Type):
+    _fields = [('mapset_name', 'n'),
+               ('auto_name', '?'),
+               ]
+
+
 # Garmin models ==============================================
 
 # For reference, here are some of the product ID numbers used by
 # different Garmin models. Notice that this is not a one-to-one
 # mapping in either direction!
 
-ModelIDs = (
-    (52,  "GNC 250"),
-    (64,  "GNC 250 XL"),
-    (33,  "GNC 300"),
-    (98,  "GNC 300 XL"),
-    (77,  "GPS 12"),
-    (87,  "GPS 12"),
-    (96,  "GPS 12"),
-    (77,  "GPS 12 XL"),
-    (96,  "GPS 12 XL"),
-    (106, "GPS 12 XL Chinese"),
-    (105, "GPS 12 XL Japanese"),
-    (47,  "GPS 120"),
-    (55,  "GPS 120 Chinese"),
-    (74,  "GPS 120 XL"),
-    (61,  "GPS 125 Sounder"),
-    (95,  "GPS 126"),
-    (100, "GPS 126 Chinese"),
-    (95,  "GPS 128"),
-    (100, "GPS 128 Chinese"),
-    (20,  "GPS 150"),
-    (64,  "GPS 150 XL"),
-    (34,  "GPS 155"),
-    (98,  "GPS 155 XL"),
-    (34,  "GPS 165"),
-    (41,  "GPS 38"),
-    (56,  "GPS 38 Chinese"),
-    (62,  "GPS 38 Japanese"),
-    (31,  "GPS 40"),
-    (41,  "GPS 40"),
-    (56,  "GPS 40 Chinese"),
-    (62,  "GPS 40 Japanese"),
-    (31,  "GPS 45"),
-    (41,  "GPS 45"),
-    (56,  "GPS 45 Chinese"),
-    (41,  "GPS 45 XL"),
-    (96,  "GPS 48"),
-    (7,   "GPS 50"),
-    (14,  "GPS 55"),
-    (15,  "GPS 55 AVD"),
-    (18,  "GPS 65"),
-    (13,  "GPS 75"),
-    (23,  "GPS 75"),
-    (42,  "GPS 75"),
-    (25,  "GPS 85"),
-    (39,  "GPS 89"),
-    (45,  "GPS 90"),
-    (112, "GPS 92"),
-    (24,  "GPS 95"),
-    (35,  "GPS 95"),
-    (22,  "GPS 95 AVD"),
-    (36,  "GPS 95 AVD"),
-    (36,  "GPS 95 XL"),
-    (59,  "GPS II"),
-    (73,  "GPS II Plus"),
-    (97,  "GPS II Plus"),
-    (72,  "GPS III"),
-    (71,  "GPS III Pilot"),
-    (291, "GPSMAP 60cs"),
-    (50,  "GPSCOM 170"),
-    (53,  "GPSCOM 190"),
-    (49,  "GPSMAP 130"),
-    (76,  "GPSMAP 130 Chinese"),
-    (49,  "GPSMAP 135 Sounder"),
-    (49,  "GPSMAP 175"),
-    (48,  "GPSMAP 195"),
-    (29,  "GPSMAP 205"),
-    (44,  "GPSMAP 205"),
-    (29,  "GPSMAP 210"),
-    (88,  "GPSMAP 215"),
-    (29,  "GPSMAP 220"),
-    (88,  "GPSMAP 225"),
-    (49,  "GPSMAP 230"),
-    (76,  "GPSMAP 230 Chinese"),
-    (49,  "GPSMAP 235 Sounder"),
-)
+Product_IDs = {
+    7:    ("GPS 50"),
+    13:   ("GPS 75"),
+    14:   ("GPS 55"),
+    15:   ("GPS 55 AVD"),
+    18:   ("GPS 65"),
+    20:   ("GPS 150"),
+    22:   ("GPS 95 AVD"),
+    23:   ("GPS 75"),
+    24:   ("GPS 95"),
+    25:   ("GPS 85"),
+    29:   ("GPSMAP 205",
+           "GPSMAP 210",
+           "GPSMAP 220"),
+    31:   ("GPS 40",
+           "GPS 45"),
+    33:   ("GNC 300"),
+    34:   ("GPS 155",
+           "GPS 165"),
+    35:   ("GPS 95"),
+    36:   ("GPS 95 AVD",
+           "GPS 95 XL"),
+    39:   ("GPS 89"),
+    41:   ("GPS 38",
+           "GPS 40",
+           "GPS 45 XL",
+           "GPS 45"),
+    42:   ("GPS 75"),
+    44:   ("GPSMAP 205"),
+    45:   ("GPS 90"),
+    47:   ("GPS 120"),
+    48:   ("GPSMAP 195"),
+    49:   ("GPSMAP 130",
+           "GPSMAP 135 Sounder",
+           "GPSMAP 175",
+           "GPSMAP 230",
+           "GPSMAP 235 Sounder"),
+    50:   ("GPSCOM 170"),
+    52:   ("GNC 250"),
+    53:   ("GPSCOM 190"),
+    55:   ("GPS 120 Chinese"),
+    56:   ("GPS 38 Chinese",
+           "GPS 40 Chinese",
+           "GPS 45 Chinese"),
+    59:   ("GPS II"),
+    61:   ("GPS 125 Sounder"),
+    62:   ("GPS 38 Japanese",
+           "GPS 40 Japanese"),
+    64:   ("GNC 250 XL",
+           "GPS 150 XL"),
+    67:   ("StreetPilot I"),  # gpsman
+    71:   ("GPS III Pilot"),
+    72:   ("GPS III"),
+    73:   ("GPS II Plus"),
+    74:   ("GPS 120 XL"),
+    76:   ("GPSMAP 130 Chinese",
+           "GPSMAP 230 Chinese"),
+    77:   ("GPS 12 XL",
+           "GPS 12"),
+    87:   ("GPS 12"),
+    88:   ("GPSMAP 215",
+           "GPSMAP 225"),
+    89:   ("GPSMAP 180"),  # gpsman
+    95:   ("GPS 126",
+           "GPS 128"),
+    96:   ("GPS 12 XL",
+           "GPS 12",
+           "GPS 48"),
+    97:   ("GPS II Plus"),
+    98:   ("GNC 300 XL",
+           "GPS 155 XL"),
+    100:  ("GPS 126 Chinese",
+           "GPS 128 Chinese"),
+    103:  ("GPS 12 Arabic"),  # gpsman
+    105:  ("GPS 12 XL Japanese"),
+    106:  ("GPS 12 XL Chinese"),
+    119:  ("GPS III Plus"),  # gpsman
+    111:  ("eMap"),  # gpsman
+    112:  ("GPS 92"),
+    116:  ("GPS 12CX"),  # gpsman
+    126:  ("GPSMAP 162"),  # gpsman
+    128:  ("GPSMAP 295"),  # gpsman
+    129:  ("GPS 12 Map"),  # gpsman
+    130:  ("eTrex"),  # gpsman
+    136:  ("GPSMAP 176"),  # gpsman
+    138:  ("GPS 12"),  # gpsman
+    141:  ("eTrex Summit"),  # gpsman
+    145:  ("GPSMAP 196"),  # gpsman
+    151:  ("StreetPilot 3"),  # gpsman
+    154:  ("eTrex Venture",
+           "eTrex Mariner"),  # gpsman
+    155:  ("GPS 5"),  # gpsman
+    156:  ("eTrex Europe"),  # gpsman
+    169:  ("eTrex Vista"),  # gpsman
+    173:  ("GPS 76"),  # gpsman
+    177:  ("GPSMAP 76"),  # gpsman
+    179:  ("eTrex Legend"),  # gpsman
+    194:  ("GPSMAP 76S"),  # gpsman
+    197:  ("Rino 110"),  # gpsman
+    209:  ("Rino 120"),  # gpsman
+    219:  ("eTrex Legend Japanese"),  # gpsman
+    231:  ("Quest"),  # gpsman
+    247:  ("GPS 72"),  # gpsman
+    248:  ("Geko 201"),  # gpsman
+    256:  ("Geko 301"),  # gpsman
+    264:  ("Rino 130"),  # gpsman
+    273:  ("GPS 18USB"),  # gpsman
+    282:  ("Forerunner"),  # gpsman
+    283:  ("Forerunner 301"),  # gpsman
+    285:  ("GPSmap 276C"),  # gpsman
+    289:  ("GPS 60"),  # gpsman
+    291:  ("GPSMAP 60CS"),
+    292:  ("GPSMAP 60CSx",
+           "GPSMAP 76CSx"),  # gpsman
+    295:  ("eTrex Summit"),  # gpsman
+    308:  ("GPSMAP 60"),  # gpsman
+    314:  ("ForeTrex"),  # gpsman
+    315:  ("eTrex Legend C",
+           "eTrex Vista C"),  # gpsman
+    382:  ("StreetPilot c320"),  # gpsman
+    404:  ("StreetPilot 2720"),  # gpsman
+    411:  ("eTrex Legend"),  # gpsman
+    419:  ("eTrex Venture"),  # gpsman
+    420:  ("eTrex Vista"),  # gpsman
+    421:  ("eTrex Legend Cx"),  # gpsman
+    430:  ("GPS 72"),  # gpsman
+    439:  ("GPSMAP 76"),  # gpsman
+    450:  ("Edge 205",
+           "Edge 305"),  # gpsman
+    481:  ("StreetPilot c340"),  # gpsman
+    484:  ("Forerunner 205",
+           "Forerunner 305"),  # gpsman
+    497:  ("StreetPilot c320",
+           "StreetPilot c330"),  # gpsman
+    532:  ("StreetPilot i2"),  # gpsman
+    557:  ("GPSMAP 378"),  # gpsman
+    574:  ("Geko 201"),  # gpsman
+    577:  ("Rino 530HCx"),  # gpsman
+    694:  ("eTrex Legend HCx",
+           "eTrex Vista HCx"),  # gpsman
+    695:  ("eTrex Summit HC",
+           "eTrex Venture HC"),  # gpsman
+    696:  ("eTrex H"),  # gpsman
+    786:  ("eTrex Summit HC",
+           "eTrex Venture HC"),  # gpsman
+    811:  ("GPS 20x USB"),  # gpsman
+    957:  ("eTrex Legend H"),  # gpsman
+    1095: ("GPS 72H"),  # gpsman
+}
 
 # Make sure you've got a really wide window to view this one!
 # This describes the protocol capabilities of products that do not
@@ -4140,6 +4569,8 @@ class Garmin:
         'A650': 'flightbook_transfer_protocol',
         'A700': 'position_initialization_protocol',
         'A800': 'pvt_protocol',
+        'A900': 'map_transfer_protocol',
+        'A902': 'map_unlock_protocol',
         'A906': 'lap_transfer_protocol',
         'A1000': 'run_transfer_protocol',
         'A1002': 'workout_transfer_protocol',
@@ -4174,6 +4605,8 @@ class Garmin:
         self.flightbook_transfer = self.create_protocol('flightbook_transfer_protocol', self.link, self.device_command)
         # Sorry, no link for A700
         self.pvt = self.create_protocol('pvt_protocol', self.link, self.device_command)
+        self.map_transfer = self.create_protocol('map_transfer_protocol', self.link, self.device_command)
+        self.map_unlock = self.create_protocol('map_unlock_protocol', self.link, self.device_command)
         self.lap_transfer = self.create_protocol('lap_transfer_protocol', self.link, self.device_command)
         self.run_transfer = self.create_protocol('run_transfer_protocol', self.link, self.device_command)
 
@@ -4297,6 +4730,39 @@ class Garmin:
 
     def getPvt(self, callback=None):
         return self.pvt.getData(callback)
+
+    def deleteMap(self):
+        return self.map_transfer.delete_map()
+
+    def getMap(self, callback=None):
+        return self.map_transfer.download_map(callback)
+
+    def putMap(self, data, callback=None):
+        if isinstance(data, str):
+            map_size = os.path.getsize(data)
+        elif isinstance(data, bytes):
+            map_size = len(data)
+        mem_size = self.map_transfer.memory_properties.mem_size
+        if map_size > mem_size:
+            raise Exception("Insufficient memory to upload map")
+        else:
+            if key:
+                self.map_unlock.send_unlock_key(key)
+            # Maximize the baudrate if supported
+            if self.transmission:
+                current_baudrate = self.transmission.get_baudrate()
+                baudrates = self.transmission.get_supported_baudrates()
+                self.transmission.set_baudrate(baudrates[0])
+            # The maximum data size differs between the serial and USB protocol:
+            # 255 for serial (maximum value of 8-bit unsigned integer) and 4084
+            # for USB (maximum buffer size - header size = 4096 - 12). We chose
+            # 255 for both protocols, because large USB writes time out. The
+            # chunk size then is 251 (maximum data size - offset size = 255 - 4)
+            chunk_size = 251
+            self.map_transfer.upload_map(data, chunk_size, callback)
+            # Restore the baudrate to the original value
+            if self.transmission:
+                self.transmission.set_baudrate(current_baudrate)
 
     def abortTransfer(self):
         self.device_command.abortTransfer()

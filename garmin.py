@@ -1592,7 +1592,9 @@ class A903:
 class A904:
     """A904 implementation.
 
-    No documentation as of 2004-02-24.
+    This protocol is undocumented, but it appears to be a routable protocol. No
+    implementation as of yet.
+
     """
 
 
@@ -3923,16 +3925,12 @@ class External_Time_Sync_Data_Type(Data_Type):
                ]
 
     def get_datetime(self):
-        """Return timezone aware datetime object.
-
-        """
+        "Return timezone aware datetime object."
         datetime = Time_Type(self.current_utc).get_datetime()
         return datetime.replace(tzinfo=self.timezone_offset)
 
     def get_dst(self):
-        """Return Daylight Saving Time adjustment as timedelta.
-
-        """
+        "Return Daylight Saving Time adjustment as timedelta."
         if self.is_dst_info_included:
             if self.dst_start < self.current_utc < self.dest_end:
                 # convert DST adjustment value from quarters to minutes

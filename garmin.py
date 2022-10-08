@@ -60,24 +60,23 @@ log.addHandler(logging.NullHandler())
 # data type IDs are prefixed with D.
 
 
-class GarminException(Exception):
-
-    def __init__(self, data):
-        self.data = data
-
-
-class LinkException(GarminException):
-    """Link error."""
+class GarminError(Exception):
+    """Base class for exceptions."""
+    def __init__(self, value):
+        self.value = value
 
     def __str__(self):
-        return "Link Error"
+        return repr(self.value)
 
 
-class ProtocolException(GarminException):
-    """Protocol error."""
+class LinkError(GarminError):
+    """Exception raised for errors in the communications link."""
+    pass
 
-    def __str__(self):
-        return "Protocol Error"
+
+class ProtocolError(GarminError):
+    "Exception raised for errors in a higher-layer protocol."
+    pass
 
 
 class P000:
@@ -171,10 +170,10 @@ class SerialLink(P000):
         data = packet[3:-3]
         checksum = packet[-3]
         if size != len(data):
-            raise LinkException("Invalid packet: wrong size of packet data")
+            raise LinkError("Invalid packet: wrong size of packet data")
         # 2's complement of the sum of all bytes from byte 1 to byte n-3
         if checksum != self.checksum(packet[1:-3]):
-            raise LinkException("Invalid packet: checksum failed")
+            raise LinkError("Invalid packet: checksum failed")
 
         return {'id': id, 'data': data}
 
@@ -207,8 +206,8 @@ class SerialLink(P000):
             # The packet data is not used and may have a zero size
             data = bytes()
         else:
-            data_type = type(data).__name__
-            raise ProtocolException(f"Invalid data type: should be 'bytes' or 'int', but is {data_type}")
+            datatype = type(data).__name__
+            raise ProtocolError(f"Invalid data type: should be 'bytes' or 'int', but is {datatype}")
         size = len(data)
         log.debug(f"size: {size}")
         checksum = self.checksum(bytes([packet_id])
@@ -237,13 +236,13 @@ class SerialLink(P000):
             # boundaries
             buffer += self.ser.read(2-len(buffer))
             if len(buffer) != 2:
-                raise LinkException("Invalid packet: unexpected end")
+                raise LinkError("Invalid packet: unexpected end")
             elif len(packet) == 0:
                 # Packet header
                 if buffer.startswith(DLE):
                     packet += bytes([buffer.pop(0)])
                 else:
-                    raise LinkException("Invalid packet: doesn't start with DLE character")
+                    raise LinkError("Invalid packet: doesn't start with DLE character")
             elif buffer.startswith(DLE):
                 # Escape DLE
                 if buffer == DLE + DLE:
@@ -254,7 +253,7 @@ class SerialLink(P000):
                     packet += buffer
                     break
                 else:
-                    raise LinkException("Invalid packet: doesn't end with DLE and ETX character")
+                    raise LinkError("Invalid packet: doesn't end with DLE and ETX character")
             else:
                 packet += bytes([buffer.pop(0)])
 
@@ -273,13 +272,13 @@ class SerialLink(P000):
                 if acknowledge:
                     self.sendACK(packet['id'])
                 break
-            except LinkException as e:
+            except LinkError as e:
                 log.info(e)
                 self.sendNAK()
                 retries += 1
 
         if retries > self.max_retries:
-            raise LinkException("Maximum retries exceeded.")
+            raise LinkError("Maximum retries exceeded.")
 
         return packet
 
@@ -294,12 +293,12 @@ class SerialLink(P000):
                 if acknowledge:
                     self.readACK(packet_id)
                 break
-            except LinkException as e:
+            except LinkError as e:
                 log.info(e)
                 retries += 1
 
         if retries > self.max_retries:
-            raise LinkException("Maximum retries exceeded.")
+            raise LinkError("Maximum retries exceeded.")
 
     def readACK(self, packet_id):
         """Read a ACK/NAK packet.
@@ -317,12 +316,12 @@ class SerialLink(P000):
         if packet['id'] == self.Pid_Ack_Byte:
             log.info("Received ACK packet")
             if expected_pid != received_pid:
-                raise ProtocolException(f"Device expected {expected_pid}, got {received_pid}")
+                raise ProtocolError(f"Device expected {expected_pid}, got {received_pid}")
         elif packet['id'] == self.Pid_Nak_Byte:
             log.info("Received NAK packet")
-            raise LinkException("Packet was not received correctly.")
+            raise LinkError("Packet was not received correctly.")
         else:
-            raise GarminException("Received neither ACK nor NAK packet")
+            raise GarminError("Received neither ACK nor NAK packet")
 
     def sendACK(self, packet_id):
         """Send an ACK packet."""
@@ -476,7 +475,7 @@ class USBLink(P000):
         size = int.from_bytes(size, byteorder='little')
 
         if size != len(data):
-            raise ProtocolException("Invalid packet: wrong size of packet data")
+            raise ProtocolError("Invalid packet: wrong size of packet data")
 
         return {'id': id, 'data': data}
 
@@ -504,8 +503,8 @@ class USBLink(P000):
             # The packet data is not used and may have a zero size
             data = bytes()
         else:
-            data_type = type(data).__name__
-            raise ProtocolException(f"Invalid data type: should be 'bytes' or 'int', but is {data_type}")
+            datatype = type(data).__name__
+            raise ProtocolError(f"Invalid data type: should be 'bytes' or 'int', but is {datatype}")
 
         size = len(data)
         log.debug(f"Data size: {size}")
@@ -641,7 +640,7 @@ class L000:
         """
         packet = self.readPacket()
         if packet['id'] != packet_id:
-            raise ProtocolException(f"Expected {packet_id:3}, got {packet['id']:3}")
+            raise ProtocolError(f"Expected {packet_id:3}, got {packet['id']:3}")
 
         return packet
 
@@ -1128,7 +1127,7 @@ class MultiTransferProtocol(TransferProtocol):
             elif pid in data_pids:
                 packets[-1].append(datatype)
             else:
-                raise ProtocolException(f"Expected one of {*pids,}, got {pid}")
+                raise ProtocolError(f"Expected one of {*pids,}, got {pid}")
             if callback:
                 callback(datatype, idx, packet_count, pid)
         self.link.expectPacket(self.link.Pid_Xfer_Cmplt)
@@ -4180,7 +4179,7 @@ class Garmin:
         try:
             log.info("Get supported protocols")
             protocols = link.getProtocols()
-        except LinkException:
+        except LinkError:
             log.info("Protocol Capability Protocol not supported by the device")
             try:
                 protocols = link.getProtocolsNoPCP(product_id, software_version)

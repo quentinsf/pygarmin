@@ -636,13 +636,13 @@ class L000:
         while True:
             packet = self.phys.readPacket()
             if packet['id'] == self.Pid_Ext_Product_Data:
-                # The Ext_Product_Data_Type contains zero or more null-terminated
+                # The ExtProductDataType contains zero or more null-terminated
                 # strings that are used during manufacturing to identify other
                 # properties of the device and are not formatted for display to the
                 # end user. According to the specification the host should ignore
                 # it.
                 log.info(f"Got packet type {self.Pid_Ext_Product_Data}, ignoring...")
-                datatype = Ext_Product_Data_Type()
+                datatype = ExtProductDataType()
                 datatype.unpack(packet['data'])
                 for property in datatype.properties:
                     log.debug(f"Extra Product Data: {property[0].decode()}")
@@ -741,13 +741,13 @@ class A000:
     and data types supported by the device.
 
     Packet sequence
-    |   N | Direction      | Packet ID            | Packet Data Type      |
-    |-----+----------------+----------------------+-----------------------|
-    |   0 | Host to Device | Pid_Product_Rqst     | ignored               |
-    |   1 | Device to Host | Pid_Product_Data     | Product_Data_Type     |
-    |   2 | Device to Host | Pid_Ext_Product_Data | Ext_Product_Data_Type |
-    |   … | …              | …                    | …                     |
-    | N-1 | Device to Host | Pid_Ext_Product_Data | Ext_Product_Data_Type |
+    |   N | Direction      | Packet ID            | Packet Data Type   |
+    |-----+----------------+----------------------+--------------------|
+    |   0 | Host to Device | Pid_Product_Rqst     | ignored            |
+    |   1 | Device to Host | Pid_Product_Data     | ProductDataType    |
+    |   2 | Device to Host | Pid_Ext_Product_Data | ExtProductDataType |
+    |   … | …              | …                    | …                  |
+    | N-1 | Device to Host | Pid_Ext_Product_Data | ExtProductDataType |
 
     """
 
@@ -759,8 +759,11 @@ class A000:
         self.link.sendPacket(self.link.Pid_Product_Rqst, None)
         log.info("Expect product data")
         packet = self.link.expectPacket(self.link.Pid_Product_Data)
-        datatype = Product_Data_Type()
+        datatype = ProductDataType()
         datatype.unpack(packet['data'])
+        log.info(f"Product ID: {datatype.product_id}")
+        log.info(f"Software version: {datatype.software_version:.2f}")
+        log.info(f"Product description: {datatype.product_description.decode()}")
 
         return datatype
 
@@ -774,9 +777,9 @@ class A001:
     of the A000 Product Data Protocol.
 
     Packet sequence
-    | N | Direction      | Packet ID          | Packet Data Type    |
-    |---+----------------+--------------------+---------------------|
-    | 0 | Device to Host | Pid_Protocol_Array | Protocol_Array_Type |
+    | N | Direction      | Packet ID          | Packet Data Type  |
+    |---+----------------+--------------------+-------------------|
+    | 0 | Device to Host | Pid_Protocol_Array | ProtocolArrayType |
 
     """
 
@@ -793,7 +796,7 @@ class A001:
         # and <D1> is indicated by a tag-encoded protocol ID followed by two
         # tag-encoded data type IDs, where the first data type ID identifies
         # <D0> and the second data type ID identifies <D1>.
-        datatype = Protocol_Array_Type()
+        datatype = ProtocolArrayType()
         datatype.unpack(packet['data'])
         for protocol_data in datatype.get_protocol_data():
             # Format the record to a string consisting of the tag and 3-digit number
@@ -857,7 +860,7 @@ class CommandProtocol:
     Device Command Protocol Packet Sequence
     | N | Direction          | Packet ID        | Packet Data Type |
     |---+--------------------+------------------+------------------|
-    | 0 | Device1 to Device2 | Pid_Command_Data | Command_Id_Type  |
+    | 0 | Device1 to Device2 | Pid_Command_Data | CommandIdType    |
 
     """
     Cmnd_Abort_Transfer = None
@@ -890,7 +893,7 @@ class A010(CommandProtocol):
     Cmnd_Transfer_Trk = 6                     # transfer track log
     Cmnd_Transfer_Wpt = 7                     # transfer waypoints
     Cmnd_Turn_Off_Pwr = 8                     # turn off power
-    Cmnd_Transfer_Unit_Id = 14             # transfer product id (undocumented)
+    Cmnd_Transfer_Unit_Id = 14                # transfer product id (undocumented)
     Cmnd_Start_Pvt_Data = 49                  # start transmitting PVT data
     Cmnd_Stop_Pvt_Data = 50                   # stop transmitting PVT data
     Cmnd_Transfer_Baud = 57                   # transfer supported baudrates (undocumented)
@@ -1036,9 +1039,9 @@ class TransferProtocol:
 
     | N   | Direction          | Packet ID      | Packet Data Type |
     |-----+--------------------+----------------+------------------|
-    | 0   | Device1 to Device2 | Pid_Records    | Records_Type     |
+    | 0   | Device1 to Device2 | Pid_Records    | RecordsType      |
     | …   | …                  | …              | …                |
-    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt | Command_Id_Type  |
+    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt | CommandIdType    |
 
     """
 
@@ -1057,19 +1060,19 @@ class SingleTransferProtocol(TransferProtocol):
 
     | N   | Direction          | Packet ID      | Packet Data Type |
     |-----+--------------------+----------------+------------------|
-    | 0   | Device1 to Device2 | Pid_Records    | Records_Type     |
+    | 0   | Device1 to Device2 | Pid_Records    | RecordsType      |
     | 1   | Device1 to Device2 | <Data Pid>     | <D0>             |
     | 2   | Device1 to Device2 | <Data Pid>     | <D0>             |
     | …   | …                  | …              | …                |
     | n-2 | Device1 to Device2 | <Data Pid>     | <D0>             |
-    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt | Command_Id_Type  |
+    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt | CommandIdType    |
 
     """
 
     def getData(self, cmd, pid, callback=None):
         self.link.sendPacket(self.link.Pid_Command_Data, cmd)
         packet = self.link.expectPacket(self.link.Pid_Records)
-        datatype = Records_Type()
+        datatype = RecordsType()
         datatype.unpack(packet['data'])
         packet_count = datatype.records
         log.info(f"{type(self).__name__}: Expecting {packet_count} records")
@@ -1113,15 +1116,15 @@ class MultiTransferProtocol(TransferProtocol):
     More sets of data can be transferred by appending another set of packets
     with header information and data records (like packets 1 through n-2).
 
-    |   N | Direction          | Packet ID        | Packet Data Type |
-    |-----+--------------------+------------------+------------------|
-    |   0 | Device1 to Device2 | Pid_Records      | Records_Type     |
-    |   1 | Device1 to Device2 | <Header Pid>     | <D0>             |
-    |   2 | Device1 to Device2 | <Data Pid>       | <D1>             |
-    |   3 | Device1 to Device2 | <Data Pid>       | <D1>             |
-    |   … | …                  | …                | …                |
-    | n-2 | Device1 to Device2 | <Data Pid>       | <D1>             |
-    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt   | Command_Id_Type  |
+    |   N | Direction          | Packet ID      | Packet Data Type |
+    |-----+--------------------+----------------+------------------|
+    |   0 | Device1 to Device2 | Pid_Records    | RecordsType      |
+    |   1 | Device1 to Device2 | <Header Pid>   | <D0>             |
+    |   2 | Device1 to Device2 | <Data Pid>     | <D1>             |
+    |   3 | Device1 to Device2 | <Data Pid>     | <D1>             |
+    |   … | …                  | …              | …                |
+    | n-2 | Device1 to Device2 | <Data Pid>     | <D1>             |
+    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt | CommandIdType    |
 
 
     """
@@ -1161,12 +1164,12 @@ class A100(SingleTransferProtocol):
     Packet sequence
     | N   | Direction          | Packet ID      | Packet Data Type |
     |-----+--------------------+----------------+------------------|
-    | 0   | Device1 to Device2 | Pid_Records    | Records_Type     |
+    | 0   | Device1 to Device2 | Pid_Records    | RecordsType      |
     | 1   | Device1 to Device2 | Pid_Wpt_Data   | <D0>             |
     | 2   | Device1 to Device2 | Pid_Wpt_Data   | <D0>             |
     | …   | …                  | …              | …                |
     | n-2 | Device1 to Device2 | Pid_Wpt_Data   | <D0>             |
-    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt | Command_Id_Type  |
+    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt | CommandIdType    |
 
     """
 
@@ -1196,12 +1199,12 @@ class A101(SingleTransferProtocol):
     Packet sequence
     | N   | Direction          | Packet ID      | Packet Data Type |
     |-----+--------------------+----------------+------------------|
-    | 0   | Device1 to Device2 | Pid_Records    | Records_Type     |
+    | 0   | Device1 to Device2 | Pid_Records    | RecordsType      |
     | 1   | Device1 to Device2 | Pid_Wpt_Cat    | <D0>             |
     | 2   | Device1 to Device2 | Pid_Wpt_Cat    | <D0>             |
     | …   | …                  | …              | …                |
     | n-2 | Device1 to Device2 | Pid_Wpt_Cat    | <D0>             |
-    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt | Command_Id_Type  |
+    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt | CommandIdType    |
 
     """
 
@@ -1218,13 +1221,13 @@ class A200(MultiTransferProtocol):
     A200 Route Transfer Protocol Packet Sequence
     |   N | Direction          | Packet ID        | Packet Data Type |
     |-----+--------------------+------------------+------------------|
-    |   0 | Device1 to Device2 | Pid_Records      | Records_Type     |
+    |   0 | Device1 to Device2 | Pid_Records      | RecordsType      |
     |   1 | Device1 to Device2 | Pid_Rte_Hdr      | <D0>             |
     |   2 | Device1 to Device2 | Pid_Rte_Wpt_Data | <D1>             |
     |   3 | Device1 to Device2 | Pid_Rte_Wpt_Data | <D1>             |
     |   … | …                  | …                | …                |
     | n-2 | Device1 to Device2 | Pid_Rte_Wpt_Data | <D1>             |
-    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt   | Command_Id_Type  |
+    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt   | CommandIdType    |
 
     """
 
@@ -1260,7 +1263,7 @@ class A201(MultiTransferProtocol):
     Packet Sequence
     |   N | Direction          | Packet ID         | Packet Data Type |
     |-----+--------------------+-------------------+------------------|
-    |   0 | Device1 to Device2 | Pid_Records       | Records_Type     |
+    |   0 | Device1 to Device2 | Pid_Records       | RecordsType      |
     |   1 | Device1 to Device2 | Pid_Rte_Hdr       | <D0>             |
     |   2 | Device1 to Device2 | Pid_Rte_Wpt_Data  | <D1>             |
     |   3 | Device1 to Device2 | Pid_Rte_Link_Data | <D2>             |
@@ -1268,7 +1271,7 @@ class A201(MultiTransferProtocol):
     |   5 | Device1 to Device2 | Pid_Rte_Link_Data | <D2>             |
     |   … | …                  | …                 | …                |
     | n-2 | Device1 to Device2 | Pid_Rte_Wpt_Data  | <D1>             |
-    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt    | Command_Id_Type  |
+    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt    | CommandIdType    |
 
     """
 
@@ -1307,12 +1310,12 @@ class A300(SingleTransferProtocol):
     A300 Track Log Transfer Protocol Packet Sequence
     | N   | Direction          | Packet ID      | Packet Data Type |
     |-----+--------------------+----------------+------------------|
-    | 0   | Device1 to Device2 | Pid_Records    | Records_Type     |
+    | 0   | Device1 to Device2 | Pid_Records    | RecordsType     |
     | 1   | Device1 to Device2 | Pid_Trk_Data   | <D0>             |
     | 2   | Device1 to Device2 | Pid_Trk_Data   | <D0>             |
     | …   | …                  | …              | …                |
     | n-2 | Device1 to Device2 | Pid_Trk_Data   | <D0>             |
-    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt | Command_Id_Type  |
+    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt | CommandIdType  |
 
     """
 
@@ -1341,13 +1344,13 @@ class A301(MultiTransferProtocol):
     A301 Track Log Transfer Protocol Packet Sequence
     |   N | Direction          | Packet ID      | Packet Data Type |
     |-----+--------------------+----------------+------------------|
-    |   0 | Device1 to Device2 | Pid_Records    | Records_Type     |
+    |   0 | Device1 to Device2 | Pid_Records    | RecordsType      |
     |   1 | Device1 to Device2 | Pid_Trk_Hdr    | <D0>             |
     |   2 | Device1 to Device2 | Pid_Trk_Data   | <D1>             |
     |   3 | Device1 to Device2 | Pid_Trk_Data   | <D1>             |
     |   … | …                  | …              | …                |
     | n-2 | Device1 to Device2 | Pid_Trk_Data   | <D1>             |
-    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt | Command_Id_Type  |
+    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt | CommandIdType    |
 
     """
 
@@ -1401,12 +1404,12 @@ class A400(SingleTransferProtocol):
     A400 Proximity Waypoint Transfer Protocol Packet Sequence
     | N   | Direction          | Packet ID        | Packet Data Type |
     |-----+--------------------+------------------+------------------|
-    | 0   | Device1 to Device2 | Pid_Records      | Records_Type     |
+    | 0   | Device1 to Device2 | Pid_Records      | RecordsType      |
     | 1   | Device1 to Device2 | Pid_Prx_Wpt_Data | <D0>             |
     | 2   | Device1 to Device2 | Pid_Prx_Wpt_Data | <D0>             |
     | …   | …                  | …                | …                |
     | n-2 | Device1 to Device2 | Pid_Prx_Wpt_Data | <D0>             |
-    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt   | Command_Id_Type  |
+    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt   | CommandIdType    |
 
     """
 
@@ -1435,12 +1438,12 @@ class A500(SingleTransferProtocol):
     A500 Almanac Transfer Protocol Packet Sequence
     | N   | Direction          | Packet ID        | Packet Data Type |
     |-----+--------------------+------------------+------------------|
-    | 0   | Device1 to Device2 | Pid_Records      | Records_Type     |
+    | 0   | Device1 to Device2 | Pid_Records      | RecordsType      |
     | 1   | Device1 to Device2 | Pid_Almanac_Data | <D0>             |
     | 2   | Device1 to Device2 | Pid_Almanac_Data | <D0>             |
     | …   | …                  | …                | …                |
     | n-2 | Device1 to Device2 | Pid_Almanac_Data | <D0>             |
-    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt   | Command_Id_Type  |
+    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt   | CommandIdType    |
 
     """
 
@@ -1485,12 +1488,12 @@ class A650(SingleTransferProtocol):
     A650 FlightBook Transfer Protocol Packet Sequence
     | N   | Direction      | Packet ID             | Packet Data Type |
     |-----+----------------+-----------------------+------------------|
-    | 0   | Host to Device | Pid_Command_Data      | Command_Id_Type  |
-    | 1   | Device to Host | Pid_Records           | Records_Type     |
+    | 0   | Host to Device | Pid_Command_Data      | CommandIdType  |
+    | 1   | Device to Host | Pid_Records           | RecordsType     |
     | 2   | Device to Host | Pid_FlightBook_Record | <D0>             |
     | …   | …              | …                     | …              |
     | n-2 | Device to Host | Pid_FlightBook_Record | <D0>             |
-    | n-1 | Device to Host | Pid_Xfer_Cmplt        | Command_Id_Type  |
+    | n-1 | Device to Host | Pid_Xfer_Cmplt        | CommandIdType  |
 
     """
 
@@ -1615,9 +1618,9 @@ class A900:
     |-----+----------------+---------------+------------------|
     | 0   | Host to Device | Pid_Mem_Wren  | Region           |
     | 1   | Device to Host | Pid_Mem_Wel   |                  |
-    | 2   | Device to Host | Pid_Mem_Write | Mem_Chunk_Type   |
+    | 2   | Device to Host | Pid_Mem_Write | MemChunkType     |
     | …   | …              | …             | …                |
-    | n-2 | Device to Host | Pid_Mem_Write | Mem_Chunk_Type   |
+    | n-2 | Device to Host | Pid_Mem_Write | MemChunkType     |
     | n-1 | Device to Host | Pid_Mem_Wrdi  | Region           |
 
     """
@@ -1633,7 +1636,7 @@ class A900:
                              self.cmdproto.Cmnd_Transfer_Mem)
         log.info("Expect capacity data")
         packet = self.link.expectPacket(self.link.Pid_Capacity_Data)
-        datatype = Mem_Properties_Type()
+        datatype = MemPropertiesType()
         datatype.unpack(packet['data'])
 
         return datatype
@@ -1641,29 +1644,29 @@ class A900:
     def get_memory_data(self, file='', callback=None):
         log.info("Get memory data")
         mem_region = self.memory_properties.mem_region
-        datatype = Mem_File_Type(mem_region=mem_region, subfile=file)
+        datatype = MemFileType(mem_region=mem_region, subfile=file)
         data = datatype.get_data()
         self.link.sendPacket(self.link.Pid_Mem_Read, data)
         packet = self.link.readPacket()
         pid = packet['id']
         if pid == self.link.Pid_Mem_Data:
-            datatype = Mem_Data_Type()
+            datatype = MemDataType()
             datatype.unpack(packet['data'])
             if int.from_bytes(datatype.data, byteorder='little') == 0:
                 log.info("Data not found")
             else:
                 log.info(f"Got unknown data {datatype.data}. Ignoring...")
         elif pid == self.link.Pid_Mem_Records:
-            # The Records_Type contains a 32-bit integer that indicates the number
+            # The RecordsType contains a 32-bit integer that indicates the number
             # of data packets to follow.
-            datatype = Records_Type()
+            datatype = RecordsType()
             datatype.unpack(packet['data'])
             packet_count = datatype.records
             log.info(f"{type(self).__name__}: Expecting {packet_count} records")
             data = []
             for idx in range(packet_count):
                 packet = self.link.expectPacket(Pid_Mem_Chunk)
-                datatype = Mem_Record_Type()
+                datatype = MemRecordType()
                 datatype.unpack(packet['data'])
                 data.append(datatype.chunk)
                 if callback:
@@ -1677,24 +1680,24 @@ class A900:
         data = self.get_memory_data(file=subfile)
         if data is not None:
             result = []
-            struct = Mps_File_Type.get_struct()
+            struct = MPSFileType.get_struct()
             for record_type, record_length, record_content in struct.unpack(data):
                 record_type = chr(record_type)
-                if record_type == Mps_File_Type.Map_Product_Id:
+                if record_type == MPSFileType.Map_Product_Id:
                     log.debug(f"Record 'F': Product")
-                    datatype = Map_Product_Type()
-                elif record_type == Map_Product_Type.Map_Segment_Id:
+                    datatype = MapProductType()
+                elif record_type == MapProductType.Map_Segment_Id:
                     log.debug(f"Record 'L': Map segment")
-                    datatype = Map_Segment_Type()
-                elif record_type == Map_Product_Type.Map_Unknown_Id:
+                    datatype = MapSegmentType()
+                elif record_type == MapProductType.Map_Unknown_Id:
                     log.debug(f"Record 'P': Unknown")
-                    datatype = Map_Unknown_Type()
-                elif record_type == Map_Product_Type.Map_Unlock_Id:
+                    datatype = MapUnknownType()
+                elif record_type == MapProductType.Map_Unlock_Id:
                     log.debug(f"Record 'U': Unlock")
-                    datatype = Map_Unlock_Type()
-                elif record_type == Map_Product_Type.Map_Set_Id:
+                    datatype = MapUnlockType()
+                elif record_type == MapProductType.Map_Set_Id:
                     log.debug(f"Record 'V': Mapset")
-                    datatype = Map_Set_Type()
+                    datatype = MapSetType()
                     result.append(datatype.unpack(record_content))
 
             return result
@@ -1715,7 +1718,7 @@ class A900:
                 if not chunk:  # EOF reached
                     break
                 offset = f.tell()
-                datatype = Mem_Chunk_Type(offset, chunk)
+                datatype = MemChunkType(offset, chunk)
                 data = datatype.get_data()
                 log.info(f"Upload chunk {idx+1} of {chunk_count}")
                 self.link.sendPacket(self.link.Pid_Mem_Write, data)
@@ -1728,7 +1731,7 @@ class A900:
         chunk_count = len(offsets)
         for idx, offset in enumerate(offsets):
             chunk = data[offset:offset+chunk_size]
-            datatype = Mem_Chunk_Type(offset, chunk)
+            datatype = MemChunkType(offset, chunk)
             data = datatype.get_data()
             log.info(f"Upload chunk {idx+1} of {chunk_count}")
             self.link.sendPacket(self.link.Pid_Mem_Write, data)
@@ -1828,12 +1831,12 @@ class A906(SingleTransferProtocol):
     A906 Lap Transfer Protocol Packet Sequence
     | N   | Direction      | Packet ID      | Packet Data Type |
     |-----+----------------+----------------+------------------|
-    | 0   | Device to Host | Pid_Records    | Records_Type     |
+    | 0   | Device to Host | Pid_Records    | RecordsType     |
     | 1   | Device to Host | Pid_Lap        | <D0>             |
     | 2   | Device to Host | Pid_Lap        | <D0>             |
     | …   | …              | …              | …              |
     | n-2 | Device to Host | Pid_Lap        | <D0>             |
-    | n-1 | Device to Host | Pid_Xfer_Cmplt | Command_Id_Type  |
+    | n-1 | Device to Host | Pid_Xfer_Cmplt | CommandIdType  |
 
     """
 
@@ -1850,25 +1853,25 @@ class A1000(MultiTransferProtocol):
     A1000 Run Transfer Protocol Packet Sequence
     | N   | Direction      | Packet ID        | Packet Data Type |
     |-----+----------------+------------------+------------------|
-    | 0   | Host to Device | Pid_Command_Data | Command_Id_Type  |
-    | 1   | Device to Host | Pid_Records      | Records_Type     |
+    | 0   | Host to Device | Pid_Command_Data | CommandIdType    |
+    | 1   | Device to Host | Pid_Records      | RecordsType      |
     | 2   | Device to Host | Pid_Run          | <D0>             |
     | …   | …              | …                | …                |
     | k-2 | Device to Host | Pid_Run          | <D0>             |
-    | k-1 | Device to Host | Pid_Xfer_Cmplt   | Command_Id_Type  |
-    | k   | Host to Device | Pid_Command_Data | Command_Id_Type  |
-    | k+1 | Device to Host | Pid_Records      | Records_Type     |
-    | k+2 | Device to Host | Pid_Lap          | <Lap_Type>       |
+    | k-1 | Device to Host | Pid_Xfer_Cmplt   | CommandIdType    |
+    | k   | Host to Device | Pid_Command_Data | CommandIdType    |
+    | k+1 | Device to Host | Pid_Records      | RecordsType      |
+    | k+2 | Device to Host | Pid_Lap          | <LapType>        |
     | …   | …              | …                | …                |
-    | m-2 | Device to Host | Pid_Lap          | <Lap_Type>       |
-    | m-1 | Device to Host | Pid_Xfer_Cmplt   | Command_Id_Type  |
-    | m   | Host to Device | Pid_Command_Data | Command_Id_Type  |
-    | m+1 | Device to Host | Pid_Records      | Records_Type     |
-    | m+2 | Device to Host | Pid_Trk_Hdr      | <Trk_Hdr_Type>   |
-    | m+3 | Device to Host | Pid_Trk_Data     | <Trk_Data_Type>  |
+    | m-2 | Device to Host | Pid_Lap          | <LapType>        |
+    | m-1 | Device to Host | Pid_Xfer_Cmplt   | CommandIdType    |
+    | m   | Host to Device | Pid_Command_Data | CommandIdType    |
+    | m+1 | Device to Host | Pid_Records      | RecordsType      |
+    | m+2 | Device to Host | Pid_Trk_Hdr      | <TrkHdrType>     |
+    | m+3 | Device to Host | Pid_Trk_Data     | <TrkDataType>    |
     | …   | …              | …                | …                |
-    | n-2 | Device to Host | Pid_Trk_Data     | <Trk_Data_Type>  |
-    | n-1 | Device to Host | Pid_Xfer_Cmplt   | Command_Id_Type  |
+    | n-2 | Device to Host | Pid_Trk_Data     | <TrkDataType>    |
+    | n-1 | Device to Host | Pid_Xfer_Cmplt   | CommandIdType    |
 
     """
 
@@ -1879,7 +1882,7 @@ class A1000(MultiTransferProtocol):
                                              callback=callback)
 
 
-class Data_Type():
+class DataType():
     byteorder = 'little'
     data = bytes()
     epoch = datetime(1989, 12, 31, 12, 0)  # 12:00 am December 31, 1989 UTC
@@ -1936,8 +1939,8 @@ class Data_Type():
         return str(self.get_dict())
 
 
-class Records_Type(Data_Type):
-    """The Records_Type contains a 16-bit integer that indicates the number of data
+class RecordsType(DataType):
+    """The Records type contains a 16-bit integer that indicates the number of data
     packets to follow, excluding the Pid_Xfer_Cmplt packet.
 
     """
@@ -1945,8 +1948,8 @@ class Records_Type(Data_Type):
                ]
 
 
-class Protocol_Data_Type(Data_Type):
-    """The Protocol_Data_Type is comprised of a one-byte tag field and a two-byte data
+class ProtocolDataType(DataType):
+    """The ProtocolDataType is comprised of a one-byte tag field and a two-byte data
     field. The tag identifies which kind of ID is contained in the data field,
     and the data field contains the actual ID.
 
@@ -1984,20 +1987,20 @@ class Protocol_Data_Type(Data_Type):
         return self._tag.get(chr(self.tag))
 
 
-class Protocol_Array_Type(Data_Type):
-    """The Protocol_Array_Type is a list of Protocol_Data_Type structures.
+class ProtocolArrayType(DataType):
+    """The ProtocolArrayType is a list of ProtocolDataType structures.
 
     """
-    _protocol_data_fmt = Protocol_Data_Type.get_format()
+    _protocol_data_fmt = ProtocolDataType.get_format()
     _fields = [('protocol_array', f'{{{_protocol_data_fmt}}}'),
                ]
 
     def get_protocol_data(self):
-        return [ Protocol_Data_Type(*protocol_data) for protocol_data in self.protocol_array ]
+        return [ ProtocolDataType(*protocol_data) for protocol_data in self.protocol_array ]
 
 
-class Position_Type(Data_Type):
-    """The position_type is used to indicate latitude and longitude in semicircles,
+class PositionType(DataType):
+    """The Position type is used to indicate latitude and longitude in semicircles,
     where 2 31 semicircles equal 180 degrees. North latitudes and East
     longitudes are indicated with positive numbers; South latitudes and West
     longitudes are indicated with negative numbers.
@@ -2044,8 +2047,8 @@ class Position_Type(Data_Type):
         return not self.lat == -129 and self.lat == -129
 
 
-class Radian_Position_Type(Data_Type):
-    """The radian_position_type is used to indicate latitude and longitude in
+class RadianPositionType(DataType):
+    """The Radian Position type is used to indicate latitude and longitude in
     radians, where π radians equal 180 degrees. North latitudes and East
     longitudes are indicated with positive numbers; South latitudes and West
     longitudes are indicated with negative numbers.
@@ -2083,8 +2086,8 @@ class Radian_Position_Type(Data_Type):
                 self.to_semicircles(self.lon))
 
 
-class Degree_Position_Type(Data_Type):
-    """The degree_position_type is used to indicate latitude and longitude in
+class DegreePositionType(DataType):
+    """The Degree Position type is used to indicate latitude and longitude in
     degrees. North latitudes and East longitudes are indicated with positive
     numbers; South latitudes and West longitudes are indicated with negative
     numbers.
@@ -2118,7 +2121,7 @@ class Degree_Position_Type(Data_Type):
                 self.to_radians(self.lon))
 
 
-class Time_Type(Data_Type):
+class TimeType(DataType):
     _epoch = datetime(1989, 12, 31, 12, 0)  # 12:00 am December 31, 1989 UTC
     _fields = [('time', 'I'),  # timestamp, invalid if 0xFFFFFFFF
                ]
@@ -2153,7 +2156,7 @@ class Time_Type(Data_Type):
         return not self.time == 4294967295
 
 
-class Symbol_Type(Data_Type):
+class SymbolType(DataType):
     _fields = [('smbl', 'H'),    # symbol id
                ]
     _smbl = {
@@ -2585,7 +2588,7 @@ class Symbol_Type(Data_Type):
         return self._smbl.get(self.smbl)
 
 
-class Wpt_Type(Data_Type):
+class WptType(DataType):
 
     def is_valid_ident(self):
         return self.is_valid_charset(self.re_upcase_digit, self.ident)
@@ -2611,8 +2614,8 @@ class Wpt_Type(Data_Type):
         return self.is_valid_charset(pattern, self.cc)
 
 
-class D100(Wpt_Type):
-    _posn_fmt = Position_Type.get_format()
+class D100(WptType):
+    _posn_fmt = PositionType.get_format()
     _fields = [('ident', '6s'),             # identifier
                ('posn', f'({_posn_fmt})'),  # position
                ('unused', 'I'),             # should be set to zero
@@ -2626,11 +2629,11 @@ class D100(Wpt_Type):
         self.cmnt = cmnt
 
     def get_posn(self):
-        return Position_Type(*self.posn)
+        return PositionType(*self.posn)
 
 
 class D101(D100):
-    _posn_fmt = Position_Type.get_format()
+    _posn_fmt = PositionType.get_format()
     _fields = [('ident', '6s'),             # identifier
                ('posn', f'({_posn_fmt})'),  # position
                ('unused', 'I'),             # should be set to zero
@@ -2645,7 +2648,7 @@ class D101(D100):
         self.smbl = smbl
 
     def get_symbol(self):
-        return Symbol_Type(self.smbl)
+        return SymbolType(self.smbl)
 
     def get_smbl(self):
         symbol = self.get_symbol()
@@ -2653,8 +2656,8 @@ class D101(D100):
 
 
 class D102(D101):
-    _posn_fmt = Position_Type.get_format()
-    _smbl_fmt = Symbol_Type.get_format()
+    _posn_fmt = PositionType.get_format()
+    _smbl_fmt = SymbolType.get_format()
     _fields = [('ident', '6s'),             # identifier
                ('posn', f'({_posn_fmt})'),  # position
                ('unused', 'I'),             # should be set to zero
@@ -2665,7 +2668,7 @@ class D102(D101):
 
 
 class D103(D100):
-    _posn_fmt = Position_Type.get_format()
+    _posn_fmt = PositionType.get_format()
     _fields = [('ident', '6s'),             # identifier
                ('posn', f'({_posn_fmt})'),  # position
                ('unused', 'I'),             # should be set to zero
@@ -2714,8 +2717,8 @@ class D103(D100):
 
 
 class D104(D101):
-    _posn_fmt = Position_Type.get_format()
-    _smbl_fmt = Symbol_Type.get_format()
+    _posn_fmt = PositionType.get_format()
+    _smbl_fmt = SymbolType.get_format()
     _fields = [('ident', '6s'),             # identifier
                ('posn', f'({_posn_fmt})'),  # position
                ('unused', 'I'),             # should be set to zero
@@ -2742,8 +2745,8 @@ class D104(D101):
 
 
 class D105(D101):
-    _posn_fmt = Position_Type.get_format()
-    _smbl_fmt = Symbol_Type.get_format()
+    _posn_fmt = PositionType.get_format()
+    _smbl_fmt = SymbolType.get_format()
     _fields = [('posn', f'({_posn_fmt})'),  # position
                ('smbl', f'{_smbl_fmt}'),    # symbol id
                ('wpt_ident', 'n'),          # waypoint identifier
@@ -2755,8 +2758,8 @@ class D105(D101):
 
 
 class D106(D101):
-    _posn_fmt = Position_Type.get_format()
-    _smbl_fmt = Symbol_Type.get_format()
+    _posn_fmt = PositionType.get_format()
+    _smbl_fmt = SymbolType.get_format()
     _fields = [('wpt_class', 'B'),          # class
                ('subclass', '(13B)'),       # subclass
                ('posn', f'({_posn_fmt})'),  # position
@@ -2774,7 +2777,7 @@ class D106(D101):
 
 
 class D107(D103):
-    _posn_fmt = Position_Type.get_format()
+    _posn_fmt = PositionType.get_format()
     _fields = [('ident', '6s'),             # identifier
                ('posn', f'({_posn_fmt})'),  # position
                ('unused', 'I'),             # should be set to zero
@@ -2803,8 +2806,8 @@ class D107(D103):
 
 
 class D108(D103):
-    _posn_fmt = Position_Type.get_format()
-    _smbl_fmt = Symbol_Type.get_format()
+    _posn_fmt = PositionType.get_format()
+    _smbl_fmt = SymbolType.get_format()
     _fields = [('wpt_class', 'B'),          # class
                ('color', 'B'),              # waypoint color
                ('dspl', 'B'),               # display option
@@ -2890,7 +2893,7 @@ class D108(D103):
         return self._color.get(self.color, 255)
 
     def get_symbol(self):
-        return Symbol_Type(self.smbl)
+        return SymbolType(self.smbl)
 
     def get_smbl(self):
         symbol = self.get_symbol()
@@ -2914,8 +2917,8 @@ class D108(D103):
 
 
 class D109(D108):
-    _smbl_fmt = Symbol_Type.get_format()
-    _posn_fmt = Position_Type.get_format()
+    _smbl_fmt = SymbolType.get_format()
+    _posn_fmt = PositionType.get_format()
     _fields = [('dtyp', 'B'),               # data packet type (0x01 for d109)
                ('wpt_class', 'B'),          # class
                ('dspl_color', 'B'),         # display & color
@@ -2975,9 +2978,9 @@ class D109(D108):
 
 
 class D110(D109):
-    _smbl_fmt = Symbol_Type.get_format()
-    _posn_fmt = Position_Type.get_format()
-    _time_fmt = Time_Type.get_format()
+    _smbl_fmt = SymbolType.get_format()
+    _posn_fmt = PositionType.get_format()
+    _time_fmt = TimeType.get_format()
     _fields = [('dtyp', 'B'),               # data packet type (0x01 for D110)
                ('wpt_class', 'B'),          # class
                ('dspl_color', 'B'),         # display & color
@@ -3080,7 +3083,7 @@ class D110(D109):
         return self._dspl.get(dspl, 0)
 
     def get_datetime(self):
-        return Time_Type(self.time).get_datetime()
+        return TimeType(self.time).get_datetime()
 
     def get_wpt_cat(self):
         """Return a list of waypoint categories.
@@ -3123,7 +3126,7 @@ class D110(D109):
         return not self.time == 4294967295
 
 
-class Wpt_Cat_Type(Data_Type):
+class WptCatType(DataType):
 
     def is_valid(self):
         """Return whether the waypoint category is valid.
@@ -3135,7 +3138,7 @@ class Wpt_Cat_Type(Data_Type):
         self.name[0] != 0
 
 
-class D120(Wpt_Cat_Type):
+class D120(WptCatType):
     _fields = [('name', '17s'),  # category name
                ]
 
@@ -3143,8 +3146,8 @@ class D120(Wpt_Cat_Type):
         self.name = name
 
 
-class D150(Wpt_Type):
-    _posn_fmt = Position_Type.get_format()
+class D150(WptType):
+    _posn_fmt = PositionType.get_format()
     _fields = [('ident', '6s'),             # identifier
                ('cc', '2s'),                # country code
                ('wpt_class', 'B'),          # class
@@ -3178,7 +3181,7 @@ class D150(Wpt_Type):
         self.cmnt = cmnt
 
     def get_posn(self):
-        return Position_Type(*self.posn)
+        return PositionType(*self.posn)
 
     def get_wpt_class(self):
         """Return the waypoint class value.
@@ -3190,7 +3193,7 @@ class D150(Wpt_Type):
 
 
 class D151(D150):
-    _posn_fmt = Position_Type.get_format()
+    _posn_fmt = PositionType.get_format()
     _fields = [('ident', '6s'),             # identifier
                ('posn', f'({_posn_fmt})'),  # position
                ('unused', 'I'),             # should be set to zero
@@ -3229,7 +3232,7 @@ class D152(D150):
 
 
 class D154(D101, D150):
-    _smbl_fmt = Symbol_Type.get_format()
+    _smbl_fmt = SymbolType.get_format()
     _fields = D150._fields.copy()
     _fields.append(('smbl', f'{_smbl_fmt}'))  # symbol id
 
@@ -3251,7 +3254,7 @@ class D154(D101, D150):
 
 
 class D155(D101, D150):
-    _smbl_fmt = Symbol_Type.get_format()
+    _smbl_fmt = SymbolType.get_format()
     _fields = D150._fields.copy()
     _fields.extend([('smbl', f'{_smbl_fmt}'),    # symbol id
                     ('dspl', 'B'),               # display option
@@ -3280,7 +3283,7 @@ class D155(D101, D150):
         return self._dspl.get(self.dspl, 1)
 
 
-class Rte_Hdr_Type(Data_Type):
+class RteHdrType(DataType):
 
     def is_valid_ident(self):
         pattern = self.re_upcase_digit_space_hyphen
@@ -3291,7 +3294,7 @@ class Rte_Hdr_Type(Data_Type):
         return self.is_valid_charset(pattern, self.cmnt)
 
 
-class D200(Rte_Hdr_Type):
+class D200(RteHdrType):
     _fields = [('nmbr', 'B'),  # route number
                ]
 
@@ -3299,7 +3302,7 @@ class D200(Rte_Hdr_Type):
         self.nmbr = nmbr
 
 
-class D201(Rte_Hdr_Type):
+class D201(RteHdrType):
     _fields = [('nmbr', 'B'),    # route number
                ('cmnt', '20s'),  # comment
                ]
@@ -3309,7 +3312,7 @@ class D201(Rte_Hdr_Type):
         self.cmnt = cmnt
 
 
-class D202(Rte_Hdr_Type):
+class D202(RteHdrType):
     _fields = [('ident', 'n'),  # identifier
                ]
 
@@ -3317,14 +3320,14 @@ class D202(Rte_Hdr_Type):
         self.ident = ident
 
 
-class Rte_Link_Type(Data_Type):
+class RteLinkType(DataType):
 
     def is_valid_ident(self):
         pattern = self.re_upcase_digit_space_hyphen
         self.is_valid_charset(pattern, self.ident)
 
 
-class D210(Rte_Link_Type):
+class D210(RteLinkType):
     _fields = [('lnk_class', 'H'),     # link class
                ('subclass', '(18B)'),  # subclass
                ('ident', 'n'),         # identifier
@@ -3347,13 +3350,13 @@ class D210(Rte_Link_Type):
         return self._lnk_class.get(self.lnk_class, 0)
 
 
-class Trk_Point_Type(Data_Type):
+class TrkPointType(DataType):
 
     def get_posn(self):
-        return Position_Type(*self.posn)
+        return PositionType(*self.posn)
 
     def get_datetime(self):
-        return Time_Type(self.time).get_datetime()
+        return TimeType(self.time).get_datetime()
 
     def is_valid_time(self):
         """Return whether the time is valid.
@@ -3364,9 +3367,9 @@ class Trk_Point_Type(Data_Type):
         return not self.time == 4294967295
 
 
-class D300(Trk_Point_Type):
-    _posn_fmt = Position_Type.get_format()
-    _time_fmt = Time_Type.get_format()
+class D300(TrkPointType):
+    _posn_fmt = PositionType.get_format()
+    _time_fmt = TimeType.get_format()
     _fields = [('posn', f'({_posn_fmt})'),  # position
                ('time', f'{_time_fmt}'),    # time, invalid if 0xFFFFFFFF
                ('new_trk', '?'),            # new track segment?
@@ -3379,8 +3382,8 @@ class D300(Trk_Point_Type):
 
 
 class D301(D300):
-    _posn_fmt = Position_Type.get_format()
-    _time_fmt = Time_Type.get_format()
+    _posn_fmt = PositionType.get_format()
+    _time_fmt = TimeType.get_format()
     _fields = [('posn', f'({_posn_fmt})'),  # position
                ('time', f'{_time_fmt}'),    # time, invalid if 0xFFFFFFFF
                ('alt', 'f'),                # altitude in meters
@@ -3411,8 +3414,8 @@ class D301(D300):
 
 
 class D302(D300):
-    _posn_fmt = Position_Type.get_format()
-    _time_fmt = Time_Type.get_format()
+    _posn_fmt = PositionType.get_format()
+    _time_fmt = TimeType.get_format()
     _fields = [('posn', f'({_posn_fmt})'),  # position
                ('time', f'{_time_fmt}'),    # time, invalid if 0xFFFFFFFF
                ('alt', 'f'),                # altitude in meters, invalid if 1.0e25
@@ -3453,8 +3456,8 @@ class D302(D300):
 
 
 class D303(D301):
-    _posn_fmt = Position_Type.get_format()
-    _time_fmt = Time_Type.get_format()
+    _posn_fmt = PositionType.get_format()
+    _time_fmt = TimeType.get_format()
     _fields = [('posn', f'({_posn_fmt})'),  # position
                ('time', f'{_time_fmt}'),    # time, invalid if 0xFFFFFFFF
                ('alt', 'f'),                # altitude in meters, invalid if 1.0e25
@@ -3515,13 +3518,13 @@ class D304(D303):
         return not self.cadence == 255
 
 
-class Trk_Hdr_Type(Data_Type):
+class TrkHdrType(DataType):
 
     def is_valid_trk_ident(self):
         return self.is_valid_charset(self.re_upcase_digit_space_hyphen, self.trk_ident)
 
 
-class D310(Trk_Hdr_Type):
+class D310(TrkHdrType):
     _fields = [('dspl', '?'),       # display on the map?
                ('color', 'B'),      # color
                ('trk_ident', 'n'),  # track identifier
@@ -3557,7 +3560,7 @@ class D310(Trk_Hdr_Type):
         return self._color.get(self.color, 255)
 
 
-class D311(Trk_Hdr_Type):
+class D311(TrkHdrType):
     _fields = [('index', 'H'),  # unique among all tracks received from device
                ]
 
@@ -3587,11 +3590,11 @@ class D312(D310):
               }
 
 
-class Prx_Wpt_Type(Wpt_Type):
+class PrxWptType(WptType):
     pass
 
 
-class D400(Prx_Wpt_Type, D100):
+class D400(PrxWptType, D100):
     _fields = D100._fields.copy()
     _fields.append(('dst', 'f'))  # proximity distance (meters)
 
@@ -3600,7 +3603,7 @@ class D400(Prx_Wpt_Type, D100):
         self.dst = dst
 
 
-class D403(Prx_Wpt_Type, D103):
+class D403(PrxWptType, D103):
     _fields = D103._fields.copy()
     _fields.append(('dst', 'f'))  # proximity distance (meters)
 
@@ -3609,7 +3612,7 @@ class D403(Prx_Wpt_Type, D103):
         self.dst = dst
 
 
-class D450(Prx_Wpt_Type, D150):
+class D450(PrxWptType, D150):
     _fields = D150._fields.copy()
     _fields.insert(0, ('idx', 'i'))  # proximity index
     _fields.append(('dst', 'f'))     # proximity distance (meters)
@@ -3620,11 +3623,11 @@ class D450(Prx_Wpt_Type, D150):
         self.dst = dst
 
 
-class Almanac_Type(Data_Type):
+class AlmanacType(DataType):
     pass
 
 
-class D500(Almanac_Type):
+class D500(AlmanacType):
     _fields = [('wn', 'H'),     # week number (weeks)
                ('toa', 'f'),    # almanac data reference time (s)
                ('af0', 'f'),    # clock correction coefficient (s)
@@ -3674,7 +3677,7 @@ class D551(D501):
         return self.svid + 1
 
 
-class Date_Time_Type(Data_Type):
+class DateTimeType(DataType):
     def get_datetime(self):
         """Return a datetime object of the time.
 
@@ -3691,7 +3694,7 @@ class Date_Time_Type(Data_Type):
         return str(datetime)
 
 
-class D600(Date_Time_Type):
+class D600(DateTimeType):
     _fields = [('month', 'B'),   # month (1-12)
                ('day', 'B'),     # day (1-31)
                ('year', 'H'),    # year (1990 means 1990)
@@ -3701,24 +3704,24 @@ class D600(Date_Time_Type):
                ]
 
 
-class FlightBook_Record_Type(Data_Type):
+class FlightBookRecordType(DataType):
 
     def get_takeoff_datetime(self):
-        return Time_Type(self.takeoff_time).get_datetime()
+        return TimeType(self.takeoff_time).get_datetime()
 
     def get_landing_datetime(self):
-        return Time_Type(self.landing_time).get_datetime()
+        return TimeType(self.landing_time).get_datetime()
 
     def get_takeoff_posn(self):
-        return Position_Type(*self.takeoff_posn)
+        return PositionType(*self.takeoff_posn)
 
     def get_landing_posn(self):
-        return Position_Type(*self.landing_posn)
+        return PositionType(*self.landing_posn)
 
 
-class D650(FlightBook_Record_Type):
-    _time_fmt = Time_Type.get_format()
-    _posn_fmt = Position_Type.get_format()
+class D650(FlightBookRecordType):
+    _time_fmt = TimeType.get_format()
+    _posn_fmt = PositionType.get_format()
     _fields = [('takeoff_time', f'{_time_fmt}'),    # Time flight started
                ('landing_time', f'{_time_fmt}'),    # Time flight ended
                ('takeoff_posn', f'({_posn_fmt})'),  # Takeoff lat/lon
@@ -3737,11 +3740,11 @@ class D650(FlightBook_Record_Type):
                ]
 
 
-class D700(Radian_Position_Type):
-    _fields = Radian_Position_Type._fields.copy()
+class D700(RadianPositionType):
+    _fields = RadianPositionType._fields.copy()
 
 
-class Pvt_Data_Type(Data_Type):
+class PVTDataType(DataType):
 
     def is_legacy(self, product_description):
         """Return whether the device uses a legacy software version.
@@ -3803,7 +3806,7 @@ class Pvt_Data_Type(Data_Type):
             return False
 
     def get_posn(self):
-        return Radian_Position_Type(*self.posn)
+        return RadianPositionType(*self.posn)
 
     def get_msl_alt(self):
         """Return the altitude above mean sea level.
@@ -3827,11 +3830,11 @@ class Pvt_Data_Type(Data_Type):
     def get_fix(self, product_description=None):
         """Return the fix value.
 
-        The default enumerated values for the “fix” member of the D800_Pvt_Data_Type
-        are shown below. It is important for the host to inspect this value to
-        ensure that other data members in the D800_Pvt_Data_Type are valid. No
-        indication is given as to whether the device is in simulator mode versus
-        having an actual position fix.
+        The default enumerated values for the “fix” member of the D800
+        PVTDataType are shown below. It is important for the host to inspect
+        this value to ensure that other data members in the D800 PVTDataType are
+        valid. No indication is given as to whether the device is in simulator
+        mode versus having an actual position fix.
 
         Some legacy devices use values for fix that are one more than the
         default.
@@ -3844,8 +3847,8 @@ class Pvt_Data_Type(Data_Type):
         return self._fix.get(fix)
 
 
-class D800(Pvt_Data_Type):
-    _posn_fmt = Radian_Position_Type.get_format()
+class D800(PVTDataType):
+    _posn_fmt = RadianPositionType.get_format()
     _fields = [('alt', 'f'),                # altitude above WGS 84 ellipsoid (meters)
                ('epe', 'f'),                # estimated position error, 2 sigma (meters)
                ('eph', 'f'),                # epe, but horizontal only (meters)
@@ -3869,21 +3872,21 @@ class D800(Pvt_Data_Type):
             }
 
 
-class Lap_Type(Data_Type):
+class LapType(DataType):
 
     def get_start_datetime(self):
-        return Time_Type(self.start_time).get_datetime()
+        return TimeType(self.start_time).get_datetime()
 
     def get_begin(self):
-        return Position_Type(*self.begin)
+        return PositionType(*self.begin)
 
     def get_end(self):
-        return Position_Type(*self.end)
+        return PositionType(*self.end)
 
 
-class D906(Lap_Type):
-    _time_fmt = Time_Type.get_format()
-    _posn_fmt = Position_Type.get_format()
+class D906(LapType):
+    _time_fmt = TimeType.get_format()
+    _posn_fmt = PositionType.get_format()
     _fields = [('start_time', f'{_time_fmt}'),
                ('total_time', 'I'),          # In hundredths of a second
                ('total_dist', 'f'),          # In meters
@@ -3895,7 +3898,7 @@ class D906(Lap_Type):
                ]
 
 
-class Step_Type(Data_Type):
+class StepType(DataType):
     _fields = [('custom_name', '16s'),            # Null-terminated step name
                ('target_custom_zone_low', 'f'),   # See below
                ('target_custom_zone_high', 'f'),  # See below
@@ -3908,7 +3911,7 @@ class Step_Type(Data_Type):
                ]
 
 
-class Run_Type(Data_Type):
+class RunType(DataType):
     _fields = [('track_index', 'I'),      # Index of associated track
                ('first_lap_index', 'I'),  # Index of first associated lap
                ('last_lap_index', 'I'),   # Index of last associated lap
@@ -3925,13 +3928,13 @@ class Run_Type(Data_Type):
                      }
 
 
-class Virtual_Partner(Data_Type):
+class VirtualPartner(DataType):
     _fields = ([('time', 'I'),      # Time result of virtual partner
                 ('distance', 'f'),  # Distance result of virtual partner
                 ])
 
 
-class Workout_Type(Data_Type):
+class WorkoutType(DataType):
     _fields = [('num_valid_steps', 'I'),  # Number of valid steps (1-20)
                ('steps', '/0[32c]'),      # Steps
                ('name', '16s'),           # Null-terminated workout name
@@ -3945,22 +3948,22 @@ class Workout_Type(Data_Type):
     def get_steps(self):
         steps = []
         for data in self.steps:
-            step = Step_Type()
+            step = StepType()
             step.unpack(data)
             steps.append(step)
         return steps
 
 
-class D1000(Run_Type):
-    _fields = Run_Type._fields.copy()
+class D1000(RunType):
+    _fields = RunType._fields.copy()
     _fields.append(('unused', 'H'))          # Unused. Set to 0.
-    _fields.extend(Virtual_Partner._fields)  # Virtual partner
-    _fields.extend(Workout_Type._fields)     # Workout
+    _fields.extend(VirtualPartner._fields)  # Virtual partner
+    _fields.extend(WorkoutType._fields)     # Workout
 
 
-class D1001(Lap_Type):
-    _time_fmt = Time_Type.get_format()
-    _posn_fmt = Position_Type.get_format()
+class D1001(LapType):
+    _time_fmt = TimeType.get_format()
+    _posn_fmt = PositionType.get_format()
     _fields = [('index', 'I'),                  # Unique among all laps received from device
                ('start_time', f'{_time_fmt}'),  # Start of lap time
                ('total_time', 'I'),             # Duration of lap, in hundredths of a second
@@ -3978,35 +3981,35 @@ class D1001(Lap_Type):
                   }
 
 
-class D1002(Workout_Type):
+class D1002(WorkoutType):
     pass
 
 
-class Workout_Occurrence_Type(Data_Type):
+class WorkoutOccurrenceType(DataType):
     _fields = [('workout_name', '16s'),  # Null-terminated workout name
                ('day', 'I'),             # Day on which the workout falls
                ]
 
 
-class D1003(Workout_Occurrence_Type):
-    _fields = Workout_Occurrence_Type._fields.copy()
+class D1003(WorkoutOccurrenceType):
+    _fields = WorkoutOccurrenceType._fields.copy()
 
 
-class Heart_Rate_Zones(Data_Type):
+class HeartRateZones(DataType):
     _fields = [('low_heart_rate', 'B'),   # In beats-per-minute, must be > 0
                ('high_heart_rate', 'B'),  # In beats-per-minute, must be > 0
                ('unused', 'H'),           # Unused. Set to 0.
                ]
 
 
-class Speed_Zones(Data_Type):
+class SpeedZones(DataType):
     _fields = [('low_speed', 'f'),   # In meters-per-second
                ('high_speed', 'f'),  # In meters-per-second
                ('name', '16s'),      # Null-terminated speed-zone name
                ]
 
 
-class Activities(Data_Type):
+class Activities(DataType):
     _fields = [('gear_weight', 'f'),     # Weight of equipment in kilograms
                ('max_heart_rate', 'B'),  # In beats-per-minute, must be > 0
                ('unused1', 'B'),         # Unused. Set to 0.
@@ -4014,7 +4017,7 @@ class Activities(Data_Type):
                ]
 
 
-class Fitness_User_Profile_Type(Data_Type):
+class FitnessUserProfileType(DataType):
     _fields = [('weight', 'f'),       # User’s weight, in kilograms
                ('birth_year', 'H'),   # No base value (i.e. 1990 means 1990)
                ('birth_month', 'B'),  # 1 = January, etc.
@@ -4029,26 +4032,26 @@ class Fitness_User_Profile_Type(Data_Type):
         return self._gender.get(self.gender)
 
 
-class D1004(Fitness_User_Profile_Type):
+class D1004(FitnessUserProfileType):
     pass
 
 
-class Workout_Limits(Data_Type):
+class WorkoutLimits(DataType):
     _fields = [('max_workouts', 'L'),              # Maximum workouts
                ('max_unscheduled_workouts', 'L'),  # Maximum unscheduled workouts
                ('max_occurrences', 'L'),           # Maximum workout occurrences
                ]
 
 
-class D1005(Workout_Limits):
+class D1005(WorkoutLimits):
     pass
 
 
-class Course_Type(Data_Type):
+class CourseType(DataType):
     pass
 
 
-class D1006(Course_Type):
+class D1006(CourseType):
     _fields = [('index', 'H'),          # Unique among courses on device
                ('unused', 'H'),         # Unused. Set to 0.
                ('course_name', '16s'),  # Null-terminated, unique course name
@@ -4056,17 +4059,17 @@ class D1006(Course_Type):
                ]
 
 
-class Course_Lap_Type(Data_Type):
+class CourseLapType(DataType):
 
     def get_begin(self):
-        return Position_Type(*self.begin)
+        return PositionType(*self.begin)
 
     def get_end(self):
-        return Position_Type(*self.end)
+        return PositionType(*self.end)
 
 
-class D1007(Course_Lap_Type):
-    _posn_fmt = Position_Type.get_format()
+class D1007(CourseLapType):
+    _posn_fmt = PositionType.get_format()
     _fields = [('course_index', 'H'),        # Index of associated course
                ('lap_index', 'H'),           # This lap’s index in the course
                ('total_time', 'L'),          # In hundredths of a second
@@ -4080,12 +4083,12 @@ class D1007(Course_Lap_Type):
                ]
 
 
-class D1008(Workout_Type):
+class D1008(WorkoutType):
     pass
 
 
-class D1009(Run_Type):
-    _fields = Run_Type._fields.copy()
+class D1009(RunType):
+    _fields = RunType._fields.copy()
     _fields.extend([('multisport', 'B'),
                     ('unused1', 'B'),
                     ('unused2', 'H'),
@@ -4094,9 +4097,9 @@ class D1009(Run_Type):
                     ])
 
 
-class D1011(Lap_Type):
-    _time_fmt = Time_Type.get_format()
-    _posn_fmt = Position_Type.get_format()
+class D1011(LapType):
+    _time_fmt = TimeType.get_format()
+    _posn_fmt = PositionType.get_format()
     _fields = [('index', 'H'),                  # Unique among all laps received from device
                ('unused', 'H'),                 # Unused. Set to 0.
                ('start_time', f'{_time_fmt}'),  # Start of lap time
@@ -4123,8 +4126,8 @@ class D1011(Lap_Type):
         return self._trigger_method.get(self.trigger_method)
 
 
-class D1010(Run_Type):
-    _time_fmt = Time_Type.get_format()
+class D1010(RunType):
+    _time_fmt = TimeType.get_format()
     _fields = [('track_index', 'I'),      # Index of associated track
                ('first_lap_index', 'I'),  # Index of first associated lap
                ('last_lap_index', 'I'),   # Index of last associated lap
@@ -4135,7 +4138,7 @@ class D1010(Run_Type):
                ('time', f'{_time_fmt}'),  # Time result of virtual partner
                ('distance', 'f'),         # Distance result of virtual partner
                ]
-    _fields.extend(Workout_Type._fields)  # Workout
+    _fields.extend(WorkoutType._fields)  # Workout
     _program_type = {0: 'none',
                      1: 'virtual_partner',  # Completed with Virtual Partner
                      2: 'workout',          # Completed as part of a workout
@@ -4143,11 +4146,11 @@ class D1010(Run_Type):
                      }
 
     def get_datetime(self):
-        return Time_Type(self.time).get_datetime()
+        return TimeType(self.time).get_datetime()
 
 
-class Course_Point_Type(Data_Type):
-    _time_fmt = Time_Type.get_format()
+class CoursePointType(DataType):
+    _time_fmt = TimeType.get_format()
     _fields = [('name', '11s'),                       # Null-terminated name
                ('unused1', 'B'),                      # Unused. Set to 0.
                ('course_index', 'H'),                 # Index of associated course
@@ -4174,17 +4177,17 @@ class Course_Point_Type(Data_Type):
                    }
 
     def get_track_point_datetime(self):
-        return Time_Type(self.track_point_time).get_datetime()
+        return TimeType(self.track_point_time).get_datetime()
 
     def get_point_type(self):
         return self._point_type.get(self.point_type)
 
 
-class D1012(Course_Point_Type):
+class D1012(CoursePointType):
     pass
 
 
-class Course_Limits_Type(Data_Type):
+class CourseLimitsType(DataType):
     _fields = [('max_courses', 'I'),         # Maximum courses
                ('max_course_laps', 'I'),     # Maximum course laps
                ('max_course_pnt', 'I'),      # Maximum course points
@@ -4192,12 +4195,12 @@ class Course_Limits_Type(Data_Type):
                ]
 
 
-class D1013(Course_Limits_Type):
+class D1013(CourseLimitsType):
     pass
 
 
-class External_Time_Sync_Data_Type(Data_Type):
-    _time_fmt = Time_Type.get_format()
+class ExternalTimeSyncDataType(DataType):
+    _time_fmt = TimeType.get_format()
     _fields = [('current_utc', f'{_time_fmt}'),  # Current UTC
                ('timezone_offset', 'i'),         # Local timezone in seconds from UTC
                ('is_dst_info_included', '?'),    # Is DST information valid?
@@ -4208,7 +4211,7 @@ class External_Time_Sync_Data_Type(Data_Type):
 
     def get_datetime(self):
         "Return timezone aware datetime object."
-        datetime = Time_Type(self.current_utc).get_datetime()
+        datetime = TimeType(self.current_utc).get_datetime()
         return datetime.replace(tzinfo=self.timezone_offset)
 
     def get_dst(self):
@@ -4222,11 +4225,11 @@ class External_Time_Sync_Data_Type(Data_Type):
                 return timedelta(0)
 
 
-class D1051(External_Time_Sync_Data_Type):
+class D1051(ExternalTimeSyncDataType):
     pass
 
 
-class Product_Data_Type(Data_Type):
+class ProductDataType(DataType):
     # The product description contains one or more null-terminated strings.
     # According to the specification, only the first string is used, and all
     # subsequent strings should be ignored.
@@ -4236,8 +4239,8 @@ class Product_Data_Type(Data_Type):
                ]
 
 
-class Ext_Product_Data_Type(Data_Type):
-    """The Ext_Product_Data_Type contains zero or more null-terminated strings. The
+class ExtProductDataType(DataType):
+    """The ExtProductDataType contains zero or more null-terminated strings. The
     host should ignore all these strings; they are used during manufacturing to
     identify other properties of the device and are not formatted for display to
     the end user.
@@ -4247,7 +4250,7 @@ class Ext_Product_Data_Type(Data_Type):
                ]
 
 
-class Mem_Properties_Type(Data_Type):
+class MemPropertiesType(DataType):
     _fields = [('mem_region', 'H'),  # flash memory region for supplementary map
                ('max_tiles', 'H'),   # maximum number of map tiles that can be stored
                ('mem_size', 'I'),    # memory size
@@ -4255,7 +4258,7 @@ class Mem_Properties_Type(Data_Type):
                ]
 
 
-class Mem_File_Type(Data_Type):
+class MemFileType(DataType):
     _fields = [('unknown', 'I'),
                ('mem_region', 'H'),  # flash memory region for supplementary map
                ('subfile', 'n'),     # subfile in the IMG container file format,
@@ -4268,19 +4271,19 @@ class Mem_File_Type(Data_Type):
         self.subfile = subfile
 
 
-class Mem_Data_Type(Data_Type):
+class MemDataType(DataType):
     _fields = [('length', 'B'),
                ('data', '/0s'),
                ]
 
 
-class Mem_Record_Type(Data_Type):
+class MemRecordType(DataType):
     _fields = [('index', 'B'),  # index of the record (starting with 0)
                ('chunk', '$'),
                ]
 
 
-class Mem_Chunk_Type(Data_Type):
+class MemChunkType(DataType):
     _fields = [('offset', 'I'),
                ('chunk', '$'),
                ]
@@ -4290,7 +4293,7 @@ class Mem_Chunk_Type(Data_Type):
         self.chunk = chunk
 
 
-class Mps_File_Type(Data_Type):
+class MPSFileType(DataType):
     """MPS file format.
 
     The Mapsource (MPS) file format contains a list of maps and their
@@ -4326,14 +4329,14 @@ class Mps_File_Type(Data_Type):
     Map_Set_Id = 'V'
 
 
-class Map_Product_Type(Data_Type):
+class MapProductType(DataType):
     _fields = [('pid', 'H'),   # product ID
                ('fid', 'H'),   # family ID
                ('name', 'n'),  # product name
                ]
 
 
-class Map_Segment_Type(Data_Type):
+class MapSegmentType(DataType):
     _fields = [('pid', 'H'),           # product ID
                ('fid', 'H'),           # family ID
                ('segment_id', 'I'),    # segment ID
@@ -4345,7 +4348,7 @@ class Map_Segment_Type(Data_Type):
                ]
 
 
-class Map_Unknown_Type(Data_Type):
+class MapUnknownType(DataType):
     _fields = [('pid', 'H'),       # product ID
                ('fid', 'H'),       # family ID
                ('unknown1', 'H'),
@@ -4353,13 +4356,13 @@ class Map_Unknown_Type(Data_Type):
                ]
 
 
-class Map_Unlock_Type(Data_Type):
+class MapUnlockType(DataType):
     _fields = [('unlock_code', 'n'),  # Length is 25 characters. Characters are
                                       # upper case letters or digits
                ]
 
 
-class Map_Set_Type(Data_Type):
+class MapSetType(DataType):
     _fields = [('mapset_name', 'n'),
                ('auto_name', '?'),
                ]
@@ -4794,7 +4797,7 @@ class Garmin:
     def getMap(self, callback=None):
         return self.map_transfer.download_map(callback)
 
-    def putMap(self, data, callback=None):
+    def putMap(self, data, key=None, callback=None):
         if isinstance(data, str):
             map_size = os.path.getsize(data)
         elif isinstance(data, bytes):

@@ -779,11 +779,6 @@ class A001:
     | 0 | Device to Host | Pid_Protocol_Array | Protocol_Array_Type |
 
     """
-    Tag_Phys_Prot_Id = 'P'  # Physical protocol ID
-    Tag_Tx_Prot_Id = 'T'  # Transmission protocol ID
-    Tag_Link_Prot_Id = 'L'  # Link protocol ID
-    Tag_Appl_Prot_Id = 'A'  # Application protocol ID
-    Tag_Data_Type_Id = 'D'  # Data Type ID
 
     def __init__(self, linkLayer):
         self.link = linkLayer
@@ -791,12 +786,6 @@ class A001:
     def getProtocols(self):
         log.info("Read protocols using Protocol Capability Protocol")
         packet = self.link.expectPacket(self.link.Pid_Protocol_Array)
-        # The packet data contains an array of Protocol_Data_Type structures,
-        # each of which contains tag-encoded protocol information. The
-        # Protocol_Data_Type is comprised of a one-byte tag field and a two-byte
-        # data field. The tag identifies which kind of ID is contained in the
-        # data field, and the data field contains the actual ID.
-        fmt = '<BH'
         protocols = []
         log.info("Parse supported protocols and datatypes...")
         # The order of array elements is used to associate data types with
@@ -804,28 +793,30 @@ class A001:
         # and <D1> is indicated by a tag-encoded protocol ID followed by two
         # tag-encoded data type IDs, where the first data type ID identifies
         # <D0> and the second data type ID identifies <D1>.
-        for tag, number in rawutil.iter_unpack(fmt, packet['data']):
-            tag = chr(tag)
+        datatype = Protocol_Array_Type()
+        datatype.unpack(packet['data'])
+        for protocol_data in datatype.get_protocol_data():
             # Format the record to a string consisting of the tag and 3-digit number
-            protocol_datatype = f"{tag}{number:03}"
+            protocol_datatype = str(protocol_data)
+            tag = protocol_data.get_tag()
             # Create a list of lists with supported protocols and associated datatypes
-            if tag == self.Tag_Phys_Prot_Id:
+            if tag == 'tag_phys_prot_id':
                 # We ignore the physical protocol, because it is initialized
                 # already
                 log.info(f"Got physical protocol '{protocol_datatype}'. Ignoring...")
-            elif tag == self.Tag_Tx_Prot_Id:
+            elif tag == 'tag_tx_prot_id':
                 # Append new list with protocol.
                 log.info(f"Got transmission protocol '{protocol_datatype}'. Adding...")
                 protocols.append([protocol_datatype])
-            elif tag == self.Tag_Link_Prot_Id:
+            elif tag == 'tag_link_prot_id':
                 # Append new list with protocol.
                 log.info(f"Got link protocol '{protocol_datatype}'. Adding...")
                 protocols.append([protocol_datatype])
-            elif tag == self.Tag_Appl_Prot_Id:
+            elif tag == 'tag_appl_prot_id':
                 # Append new list with protocol.
                 log.info(f"Got application protocol '{protocol_datatype}'. Adding...")
                 protocols.append([protocol_datatype])
-            elif tag == self.Tag_Data_Type_Id:
+            elif tag == 'tag_data_type_id':
                 # Append datatype to list of previous protocol
                 log.info(f"Got datatype '{protocol_datatype}'. Adding...")
                 protocols[-1].append(protocol_datatype)
@@ -1952,6 +1943,57 @@ class Records_Type(Data_Type):
     """
     _fields = [('records', 'H'),  # number of data packets to follow
                ]
+
+
+class Protocol_Data_Type(Data_Type):
+    """The Protocol_Data_Type is comprised of a one-byte tag field and a two-byte data
+    field. The tag identifies which kind of ID is contained in the data field,
+    and the data field contains the actual ID.
+
+    The combination of tag value and data value must correspond to one of the
+    protocols or data types specified.
+
+    """
+    _fields = [('tag', 'B'),
+               ('data', 'H'),
+               ]
+    _tag = {'P': 'tag_phys_prot_id',  # Physical protocol ID
+            'T': 'tag_tx_prot_id',    # Transmission protocol ID
+            'L': 'tag_link_prot_id',  # Link protocol ID
+            'A': 'tag_appl_prot_id',  # Application protocol ID
+            'D': 'tag_data_type_id',  # Data Type ID
+            }
+
+    def __init__(self, tag, data):
+        self.tag = tag
+        self.data = data
+
+    def __str__(self):
+        """Format the record to a string consisting of the tag and 3-digit number.
+
+        """
+        return f'{chr(self.tag)}{self.data:03}'
+
+    def get_tag(self):
+        """Return the tag value.
+
+        The characters shown are translated to numeric values using the ASCII
+        character set.
+
+        """
+        return self._tag.get(chr(self.tag))
+
+
+class Protocol_Array_Type(Data_Type):
+    """The Protocol_Array_Type is a list of Protocol_Data_Type structures.
+
+    """
+    _protocol_data_fmt = Protocol_Data_Type.get_format()
+    _fields = [('protocol_array', f'{{{_protocol_data_fmt}}}'),
+               ]
+
+    def get_protocol_data(self):
+        return [ Protocol_Data_Type(*protocol_data) for protocol_data in self.protocol_array ]
 
 
 class Position_Type(Data_Type):

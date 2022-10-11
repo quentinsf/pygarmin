@@ -642,6 +642,10 @@ class L000:
                 # end user. According to the specification the host should ignore
                 # it.
                 log.info(f"Got packet type {self.Pid_Ext_Product_Data}, ignoring...")
+                datatype = Ext_Product_Data_Type()
+                datatype.unpack(packet['data'])
+                for property in datatype.properties:
+                    log.debug(f"Extra Product Data: {property[0].decode()}")
             else:
                 break
 
@@ -4187,6 +4191,17 @@ class Product_Data_Type(Data_Type):
     _fields = [('product_id', 'H'),           # product ID
                ('software_version', 'h'),     # software version number multiplied by 100
                ('product_description', 'n'),  # product description
+               ]
+
+
+class Ext_Product_Data_Type(Data_Type):
+    """The Ext_Product_Data_Type contains zero or more null-terminated strings. The
+    host should ignore all these strings; they are used during manufacturing to
+    identify other properties of the device and are not formatted for display to
+    the end user.
+
+    """
+    _fields = [('properties', '{n}'),  # zero or more additional null-terminated strings
                ]
 
 

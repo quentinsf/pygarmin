@@ -1948,6 +1948,27 @@ class RecordsType(DataType):
                ]
 
 
+class ProductDataType(DataType):
+    # The product description contains one or more null-terminated strings.
+    # According to the specification, only the first string is used, and all
+    # subsequent strings should be ignored.
+    _fields = [('product_id', 'H'),           # product ID
+               ('software_version', 'h'),     # software version number multiplied by 100
+               ('product_description', 'n'),  # product description
+               ]
+
+
+class ExtProductDataType(DataType):
+    """The ExtProductDataType contains zero or more null-terminated strings. The
+    host should ignore all these strings; they are used during manufacturing to
+    identify other properties of the device and are not formatted for display to
+    the end user.
+
+    """
+    _fields = [('properties', '{n}'),  # zero or more additional null-terminated strings
+               ]
+
+
 class ProtocolDataType(DataType):
     """The ProtocolDataType is comprised of a one-byte tag field and a two-byte data
     field. The tag identifies which kind of ID is contained in the data field,
@@ -4227,27 +4248,6 @@ class ExternalTimeSyncDataType(DataType):
 
 class D1051(ExternalTimeSyncDataType):
     pass
-
-
-class ProductDataType(DataType):
-    # The product description contains one or more null-terminated strings.
-    # According to the specification, only the first string is used, and all
-    # subsequent strings should be ignored.
-    _fields = [('product_id', 'H'),           # product ID
-               ('software_version', 'h'),     # software version number multiplied by 100
-               ('product_description', 'n'),  # product description
-               ]
-
-
-class ExtProductDataType(DataType):
-    """The ExtProductDataType contains zero or more null-terminated strings. The
-    host should ignore all these strings; they are used during manufacturing to
-    identify other properties of the device and are not formatted for display to
-    the end user.
-
-    """
-    _fields = [('properties', '{n}'),  # zero or more additional null-terminated strings
-               ]
 
 
 class MemPropertiesType(DataType):

@@ -1494,7 +1494,7 @@ class A700(TransferProtocol):
 
     def get_data(self, callback=None):
         self.link.send_packet(self.link.Pid_Command_Data,
-                              self.command.Cmnd_Transfer_Posn)
+                              self.cmdproto.Cmnd_Transfer_Posn)
         packet = self.link.expectPacket(self.link.Pid_Position_Data)
         datatype = PositionType()
         datatype.unpack(packet['data'])
@@ -4628,7 +4628,7 @@ class Garmin:
         self.almanac_transfer = self.create_protocol('almanac_transfer_protocol', self.link, self.device_command)
         self.date_and_time_initialization = self.create_protocol('date_and_time_initialization_protocol', self.link, self.device_command)
         self.flightbook_transfer = self.create_protocol('flightbook_transfer_protocol', self.link, self.device_command)
-        # Sorry, no link for A700
+        self.position_initialization = self.create_protocol('position_initialization_protocol', self.link, self.device_command)
         self.pvt = self.create_protocol('pvt_protocol', self.link, self.device_command)
         self.map_transfer = self.create_protocol('map_transfer_protocol', self.link, self.device_command)
         self.map_unlock = self.create_protocol('map_unlock_protocol', self.link, self.device_command)
@@ -4769,6 +4769,9 @@ class Garmin:
 
     def get_flightbook(self, callback=None):
         return self.flightbook_transfer.get_data(callback)
+
+    def get_position(self, callback=None):
+        return self.position_initialization.get_data(callback)
 
     def pvt_on(self):
         return self.pvt.data_on()

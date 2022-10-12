@@ -4374,7 +4374,7 @@ class MapSetType(DataType):
 # different Garmin models. Notice that this is not a one-to-one
 # mapping in either direction!
 
-Product_IDs = {
+product_ids = {
     7:    ("GPS 50"),
     13:   ("GPS 75"),
     14:   ("GPS 55"),
@@ -4540,7 +4540,7 @@ Product_IDs = {
 
 MaxVer = 999.99
 
-ModelProtocols = {
+device_protocol_capabilities = {
     # Use a wide window for best viewing!
     #
     # ID   minver maxver    Link      Command   Waypoint          Route                     Track             Proximity         Almanac

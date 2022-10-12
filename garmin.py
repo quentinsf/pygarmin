@@ -825,28 +825,6 @@ class A001:
                 protocols[-1].append(protocol_datatype)
             else:
                 log.info(f"Got unknown protocol or datatype '{protocol_datatype}'. Ignoring...")
-                log.info(f"Supported protocols and data types: {protocols}")
-
-        return protocols
-
-    def get_protocols_no_pcp(self, product_id, software_version):
-        try:
-            model = ModelProtocols[product_id]
-            log.info(f"Got product ID number {product_id}")
-        except:
-            raise ValueError(f"Unknown product ID number {product_id}")
-
-        for capabilities in model:
-            version = capabilities[0]
-            if version is None:
-                break
-            elif (software_version >= version[0] and software_version < version[1]):
-                break
-
-        protocols = [protocol for protocol in capabilities[1:] if protocol]
-        protocols.append(("A600", "D600"))
-        protocols.append(("A700", "D700"))
-        log.info(f"Supported protocols and data types: {protocols}")
 
         return protocols
 
@@ -4524,80 +4502,67 @@ product_ids = {
     1095: ("GPS 72H"),  # gpsman
 }
 
-# Make sure you've got a really wide window to view this one!
-# This describes the protocol capabilities of products that do not
-# support the Protocol Capabilities Protocol (most of them).  Some
-# models differ in capabilities depending on the software version
-# installed. So for each ID there is a tuple of entries. Each entry
-# begins with either None, if it applies to all versions with that ID,
-# or (minv, maxv), meaning that it applies if the software version
-# >= minv and < maxv.
-
-# The table below provides the supported protocols of the devices that do not
-# implement the Protocol Capability Protocol. The A000 Product Data Protocol,
-# A600 Date and Time Initialization Protocol, and A700 Position Initialization
-# Protocol are omitted from the table because all devices implement support them.
-
-MaxVer = 999.99
-
+# The table below provides the supported protocols of the devices that do
+# not implement the Protocol Capability Protocol. The A000 Product Data
+# Protocol, A600 Date and Time Initialization Protocol, and A700 Position
+# Initialization Protocol are omitted from the table because all devices
+# implement support them.
 device_protocol_capabilities = {
-    # Use a wide window for best viewing!
-    #
-    # ID   minver maxver    Link      Command   Waypoint          Route                     Track             Proximity         Almanac
-    7:   ((None,            ("L001"), ("A010"), ("A100", "D100"), ("A200", "D200", "D100"), None,             None,             ("A500", "D500")),),
-    13:  ((None,            ("L001"), ("A010"), ("A100", "D100"), ("A200", "D200", "D100"), ("A300", "D300"), ("A400", "D400"), ("A500", "D500")),),
-    14:  ((None,            ("L001"), ("A010"), ("A100", "D100"), ("A200", "D200", "D100"), None,             ("A400", "D400"), ("A500", "D500")),),
-    15:  ((None,            ("L001"), ("A010"), ("A100", "D151"), ("A200", "D200", "D151"), None,             ("A400", "D151"), ("A500", "D500")),),
-    18:  ((None,            ("L001"), ("A010"), ("A100", "D100"), ("A200", "D200", "D100"), ("A300", "D300"), ("A400", "D400"), ("A500", "D500")),),
-    20:  ((None,            ("L002"), ("A011"), ("A100", "D150"), ("A200", "D201", "D150"), None,             ("A400", "D450"), ("A500", "D550")),),
-    22:  ((None,            ("L001"), ("A010"), ("A100", "D152"), ("A200", "D200", "D152"), ("A300", "D300"), ("A400", "D152"), ("A500", "D500")),),
-    23:  ((None,            ("L001"), ("A010"), ("A100", "D100"), ("A200", "D200", "D100"), ("A300", "D300"), ("A400", "D400"), ("A500", "D500")),),
-    24:  ((None,            ("L001"), ("A010"), ("A100", "D100"), ("A200", "D200", "D100"), ("A300", "D300"), ("A400", "D400"), ("A500", "D500")),),
-    25:  ((None,            ("L001"), ("A010"), ("A100", "D100"), ("A200", "D200", "D100"), ("A300", "D300"), ("A400", "D400"), ("A500", "D500")),),
-    29:  (((0.00, 4.00),    ("L001"), ("A010"), ("A100", "D101"), ("A200", "D201", "D101"), ("A300", "D300"), ("A400", "D101"), ("A500", "D500")),
-          ((4.00, MaxVer),  ("L001"), ("A010"), ("A100", "D102"), ("A200", "D201", "D102"), ("A300", "D300"), ("A400", "D102"), ("A500", "D500")),),
-    31:  ((None,            ("L001"), ("A010"), ("A100", "D100"), ("A200", "D201", "D100"), ("A300", "D300"), None,             ("A500", "D500")),),
-    33:  ((None,            ("L002"), ("A011"), ("A100", "D150"), ("A200", "D201", "D150"), None,             ("A400", "D450"), ("A500", "D550")),),
-    34:  ((None,            ("L002"), ("A011"), ("A100", "D150"), ("A200", "D201", "D150"), None,             ("A400", "D450"), ("A500", "D550")),),
-    35:  ((None,            ("L001"), ("A010"), ("A100", "D100"), ("A200", "D200", "D100"), ("A300", "D300"), ("A400", "D400"), ("A500", "D500")),),
-    36:  (((0.00, 3.00),    ("L001"), ("A010"), ("A100", "D152"), ("A200", "D200", "D152"), ("A300", "D300"), ("A400", "D152"), ("A500", "D500")),
-          ((3.00, MaxVer),  ("L001"), ("A010"), ("A100", "D152"), ("A200", "D200", "D152"), ("A300", "D300"), None,             ("A500", "D500")),),
-    39:  ((None,            ("L001"), ("A010"), ("A100", "D151"), ("A200", "D201", "D151"), ("A300", "D300"), None,             ("A500", "D500")),),
-    41:  ((None,            ("L001"), ("A010"), ("A100", "D100"), ("A200", "D201", "D100"), ("A300", "D300"), None,             ("A500", "D500")),),
-    42:  ((None,            ("L001"), ("A010"), ("A100", "D100"), ("A200", "D200", "D100"), ("A300", "D300"), ("A400", "D400"), ("A500", "D500")),),
-    44:  ((None,            ("L001"), ("A010"), ("A100", "D101"), ("A200", "D201", "D101"), ("A300", "D300"), ("A400", "D101"), ("A500", "D500")),),
-    45:  ((None,            ("L001"), ("A010"), ("A100", "D152"), ("A200", "D201", "D152"), ("A300", "D300"), None,             ("A500", "D500")),),
-    47:  ((None,            ("L001"), ("A010"), ("A100", "D100"), ("A200", "D201", "D100"), ("A300", "D300"), None,             ("A500", "D500")),),
-    48:  ((None,            ("L001"), ("A010"), ("A100", "D154"), ("A200", "D201", "D154"), ("A300", "D300"), None,             ("A500", "D501")),),
-    49:  ((None,            ("L001"), ("A010"), ("A100", "D102"), ("A200", "D201", "D102"), ("A300", "D300"), ("A400", "D102"), ("A500", "D501")),),
-    50:  ((None,            ("L001"), ("A010"), ("A100", "D152"), ("A200", "D201", "D152"), ("A300", "D300"), None,             ("A500", "D501")),),
-    52:  ((None,            ("L002"), ("A011"), ("A100", "D150"), ("A200", "D201", "D150"), None,             ("A400", "D450"), ("A500", "D550")),),
-    53:  ((None,            ("L001"), ("A010"), ("A100", "D152"), ("A200", "D201", "D152"), ("A300", "D300"), None,             ("A500", "D501")),),
-    55:  ((None,            ("L001"), ("A010"), ("A100", "D100"), ("A200", "D201", "D100"), ("A300", "D300"), None,             ("A500", "D500")),),
-    56:  ((None,            ("L001"), ("A010"), ("A100", "D100"), ("A200", "D201", "D100"), ("A300", "D300"), None,             ("A500", "D500")),),
-    59:  ((None,            ("L001"), ("A010"), ("A100", "D100"), ("A200", "D201", "D100"), ("A300", "D300"), None,             ("A500", "D500")),),
-    61:  ((None,            ("L001"), ("A010"), ("A100", "D100"), ("A200", "D201", "D100"), ("A300", "D300"), None,             ("A500", "D500")),),
-    62:  ((None,            ("L001"), ("A010"), ("A100", "D100"), ("A200", "D201", "D100"), ("A300", "D300"), None,             ("A500", "D500")),),
-    64:  ((None,            ("L002"), ("A011"), ("A100", "D150"), ("A200", "D201", "D150"), None,             ("A400", "D450"), ("A500", "D551")),),
-    71:  ((None,            ("L001"), ("A010"), ("A100", "D155"), ("A200", "D201", "D155"), ("A300", "D300"), None,             ("A500", "D501")),),
-    72:  ((None,            ("L001"), ("A010"), ("A100", "D104"), ("A200", "D201", "D104"), ("A300", "D300"), None,             ("A500", "D501")),),
-    73:  ((None,            ("L001"), ("A010"), ("A100", "D103"), ("A200", "D201", "D103"), ("A300", "D300"), None,             ("A500", "D501")),),
-    74:  ((None,            ("L001"), ("A010"), ("A100", "D100"), ("A200", "D201", "D100"), ("A300", "D300"), None,             ("A500", "D500")),),
-    76:  ((None,            ("L001"), ("A010"), ("A100", "D102"), ("A200", "D201", "D102"), ("A300", "D300"), ("A400", "D102"), ("A500", "D501")),),
-    77:  (((0.00, 3.01),    ("L001"), ("A010"), ("A100", "D100"), ("A200", "D201", "D100"), ("A300", "D300"), ("A400", "D400"), ("A500", "D501")),
-          ((3.01, 3.50),    ("L001"), ("A010"), ("A100", "D103"), ("A200", "D201", "D103"), ("A300", "D300"), ("A400", "D403"), ("A500", "D501")),
-          ((3.50, 3.61),    ("L001"), ("A010"), ("A100", "D103"), ("A200", "D201", "D103"), ("A300", "D300"), None,             ("A500", "D501")),
-          ((3.61, MaxVer),  ("L001"), ("A010"), ("A100", "D103"), ("A200", "D201", "D103"), ("A300", "D300"), ("A400", "D403"), ("A500", "D501")),),
-    87:  ((None,            ("L001"), ("A010"), ("A100", "D103"), ("A200", "D201", "D103"), ("A300", "D300"), ("A400", "D403"), ("A500", "D501")),),
-    88:  ((None,            ("L001"), ("A010"), ("A100", "D102"), ("A200", "D201", "D102"), ("A300", "D300"), ("A400", "D102"), ("A500", "D501")),),
-    95:  ((None,            ("L001"), ("A010"), ("A100", "D103"), ("A200", "D201", "D103"), ("A300", "D300"), ("A400", "D403"), ("A500", "D501")),),
-    96:  ((None,            ("L001"), ("A010"), ("A100", "D103"), ("A200", "D201", "D103"), ("A300", "D300"), ("A400", "D403"), ("A500", "D501")),),
-    97:  ((None,            ("L001"), ("A010"), ("A100", "D103"), ("A200", "D201", "D103"), ("A300", "D300"), None,             ("A500", "D501")),),
-    98:  ((None,            ("L002"), ("A011"), ("A100", "D150"), ("A200", "D201", "D150"), None,             ("A400", "D450"), ("A500", "D551")),),
-    100: ((None,            ("L001"), ("A010"), ("A100", "D103"), ("A200", "D201", "D103"), ("A300", "D300"), ("A400", "D403"), ("A500", "D501")),),
-    105: ((None,            ("L001"), ("A010"), ("A100", "D103"), ("A200", "D201", "D103"), ("A300", "D300"), ("A400", "D403"), ("A500", "D501")),),
-    106: ((None,            ("L001"), ("A010"), ("A100", "D103"), ("A200", "D201", "D103"), ("A300", "D300"), ("A400", "D403"), ("A500", "D501")),),
-    112: ((None,            ("L001"), ("A010"), ("A100", "D152"), ("A200", "D201", "D152"), ("A300", "D300"), None,             ("A500", "D501")),)
+    # ID   Version             Link      Command   Waypoint          Route                     Track             Proximity         Almanac
+    7:   ((None,               ("L001"), ("A010"), ("A100", "D100"), ("A200", "D200", "D100"), None,             None,             ("A500", "D500")),),
+    13:  ((None,               ("L001"), ("A010"), ("A100", "D100"), ("A200", "D200", "D100"), ("A300", "D300"), ("A400", "D400"), ("A500", "D500")),),
+    14:  ((None,               ("L001"), ("A010"), ("A100", "D100"), ("A200", "D200", "D100"), None,             ("A400", "D400"), ("A500", "D500")),),
+    15:  ((None,               ("L001"), ("A010"), ("A100", "D151"), ("A200", "D200", "D151"), None,             ("A400", "D151"), ("A500", "D500")),),
+    18:  ((None,               ("L001"), ("A010"), ("A100", "D100"), ("A200", "D200", "D100"), ("A300", "D300"), ("A400", "D400"), ("A500", "D500")),),
+    20:  ((None,               ("L002"), ("A011"), ("A100", "D150"), ("A200", "D201", "D150"), None,             ("A400", "D450"), ("A500", "D550")),),
+    22:  ((None,               ("L001"), ("A010"), ("A100", "D152"), ("A200", "D200", "D152"), ("A300", "D300"), ("A400", "D152"), ("A500", "D500")),),
+    23:  ((None,               ("L001"), ("A010"), ("A100", "D100"), ("A200", "D200", "D100"), ("A300", "D300"), ("A400", "D400"), ("A500", "D500")),),
+    24:  ((None,               ("L001"), ("A010"), ("A100", "D100"), ("A200", "D200", "D100"), ("A300", "D300"), ("A400", "D400"), ("A500", "D500")),),
+    25:  ((None,               ("L001"), ("A010"), ("A100", "D100"), ("A200", "D200", "D100"), ("A300", "D300"), ("A400", "D400"), ("A500", "D500")),),
+    29:  (('x < 4.00',         ("L001"), ("A010"), ("A100", "D101"), ("A200", "D201", "D101"), ("A300", "D300"), ("A400", "D101"), ("A500", "D500")),
+          ('x >= 4.00',        ("L001"), ("A010"), ("A100", "D102"), ("A200", "D201", "D102"), ("A300", "D300"), ("A400", "D102"), ("A500", "D500")),),
+    31:  ((None,               ("L001"), ("A010"), ("A100", "D100"), ("A200", "D201", "D100"), ("A300", "D300"), None,             ("A500", "D500")),),
+    33:  ((None,               ("L002"), ("A011"), ("A100", "D150"), ("A200", "D201", "D150"), None,             ("A400", "D450"), ("A500", "D550")),),
+    34:  ((None,               ("L002"), ("A011"), ("A100", "D150"), ("A200", "D201", "D150"), None,             ("A400", "D450"), ("A500", "D550")),),
+    35:  ((None,               ("L001"), ("A010"), ("A100", "D100"), ("A200", "D200", "D100"), ("A300", "D300"), ("A400", "D400"), ("A500", "D500")),),
+    36:  (('x < 3.00',         ("L001"), ("A010"), ("A100", "D152"), ("A200", "D200", "D152"), ("A300", "D300"), ("A400", "D152"), ("A500", "D500")),
+          ('x >= 3.00',        ("L001"), ("A010"), ("A100", "D152"), ("A200", "D200", "D152"), ("A300", "D300"), None,             ("A500", "D500")),),
+    39:  ((None,               ("L001"), ("A010"), ("A100", "D151"), ("A200", "D201", "D151"), ("A300", "D300"), None,             ("A500", "D500")),),
+    41:  ((None,               ("L001"), ("A010"), ("A100", "D100"), ("A200", "D201", "D100"), ("A300", "D300"), None,             ("A500", "D500")),),
+    42:  ((None,               ("L001"), ("A010"), ("A100", "D100"), ("A200", "D200", "D100"), ("A300", "D300"), ("A400", "D400"), ("A500", "D500")),),
+    44:  ((None,               ("L001"), ("A010"), ("A100", "D101"), ("A200", "D201", "D101"), ("A300", "D300"), ("A400", "D101"), ("A500", "D500")),),
+    45:  ((None,               ("L001"), ("A010"), ("A100", "D152"), ("A200", "D201", "D152"), ("A300", "D300"), None,             ("A500", "D500")),),
+    47:  ((None,               ("L001"), ("A010"), ("A100", "D100"), ("A200", "D201", "D100"), ("A300", "D300"), None,             ("A500", "D500")),),
+    48:  ((None,               ("L001"), ("A010"), ("A100", "D154"), ("A200", "D201", "D154"), ("A300", "D300"), None,             ("A500", "D501")),),
+    49:  ((None,               ("L001"), ("A010"), ("A100", "D102"), ("A200", "D201", "D102"), ("A300", "D300"), ("A400", "D102"), ("A500", "D501")),),
+    50:  ((None,               ("L001"), ("A010"), ("A100", "D152"), ("A200", "D201", "D152"), ("A300", "D300"), None,             ("A500", "D501")),),
+    52:  ((None,               ("L002"), ("A011"), ("A100", "D150"), ("A200", "D201", "D150"), None,             ("A400", "D450"), ("A500", "D550")),),
+    53:  ((None,               ("L001"), ("A010"), ("A100", "D152"), ("A200", "D201", "D152"), ("A300", "D300"), None,             ("A500", "D501")),),
+    55:  ((None,               ("L001"), ("A010"), ("A100", "D100"), ("A200", "D201", "D100"), ("A300", "D300"), None,             ("A500", "D500")),),
+    56:  ((None,               ("L001"), ("A010"), ("A100", "D100"), ("A200", "D201", "D100"), ("A300", "D300"), None,             ("A500", "D500")),),
+    59:  ((None,               ("L001"), ("A010"), ("A100", "D100"), ("A200", "D201", "D100"), ("A300", "D300"), None,             ("A500", "D500")),),
+    61:  ((None,               ("L001"), ("A010"), ("A100", "D100"), ("A200", "D201", "D100"), ("A300", "D300"), None,             ("A500", "D500")),),
+    62:  ((None,               ("L001"), ("A010"), ("A100", "D100"), ("A200", "D201", "D100"), ("A300", "D300"), None,             ("A500", "D500")),),
+    64:  ((None,               ("L002"), ("A011"), ("A100", "D150"), ("A200", "D201", "D150"), None,             ("A400", "D450"), ("A500", "D551")),),
+    71:  ((None,               ("L001"), ("A010"), ("A100", "D155"), ("A200", "D201", "D155"), ("A300", "D300"), None,             ("A500", "D501")),),
+    72:  ((None,               ("L001"), ("A010"), ("A100", "D104"), ("A200", "D201", "D104"), ("A300", "D300"), None,             ("A500", "D501")),),
+    73:  ((None,               ("L001"), ("A010"), ("A100", "D103"), ("A200", "D201", "D103"), ("A300", "D300"), None,             ("A500", "D501")),),
+    74:  ((None,               ("L001"), ("A010"), ("A100", "D100"), ("A200", "D201", "D100"), ("A300", "D300"), None,             ("A500", "D500")),),
+    76:  ((None,               ("L001"), ("A010"), ("A100", "D102"), ("A200", "D201", "D102"), ("A300", "D300"), ("A400", "D102"), ("A500", "D501")),),
+    77:  (('x < 3.01',         ("L001"), ("A010"), ("A100", "D100"), ("A200", "D201", "D100"), ("A300", "D300"), ("A400", "D400"), ("A500", "D501")),
+          ('3.01 <= x < 3.50', ("L001"), ("A010"), ("A100", "D103"), ("A200", "D201", "D103"), ("A300", "D300"), ("A400", "D403"), ("A500", "D501")),
+          ('3.50 <= x < 3.61', ("L001"), ("A010"), ("A100", "D103"), ("A200", "D201", "D103"), ("A300", "D300"), None,             ("A500", "D501")),
+          ('x >= 3.61',        ("L001"), ("A010"), ("A100", "D103"), ("A200", "D201", "D103"), ("A300", "D300"), ("A400", "D403"), ("A500", "D501")),),
+    87:  ((None,               ("L001"), ("A010"), ("A100", "D103"), ("A200", "D201", "D103"), ("A300", "D300"), ("A400", "D403"), ("A500", "D501")),),
+    88:  ((None,               ("L001"), ("A010"), ("A100", "D102"), ("A200", "D201", "D102"), ("A300", "D300"), ("A400", "D102"), ("A500", "D501")),),
+    95:  ((None,               ("L001"), ("A010"), ("A100", "D103"), ("A200", "D201", "D103"), ("A300", "D300"), ("A400", "D403"), ("A500", "D501")),),
+    96:  ((None,               ("L001"), ("A010"), ("A100", "D103"), ("A200", "D201", "D103"), ("A300", "D300"), ("A400", "D403"), ("A500", "D501")),),
+    97:  ((None,               ("L001"), ("A010"), ("A100", "D103"), ("A200", "D201", "D103"), ("A300", "D300"), None,             ("A500", "D501")),),
+    98:  ((None,               ("L002"), ("A011"), ("A100", "D150"), ("A200", "D201", "D150"), None,             ("A400", "D450"), ("A500", "D551")),),
+    100: ((None,               ("L001"), ("A010"), ("A100", "D103"), ("A200", "D201", "D103"), ("A300", "D300"), ("A400", "D403"), ("A500", "D501")),),
+    105: ((None,               ("L001"), ("A010"), ("A100", "D103"), ("A200", "D201", "D103"), ("A300", "D300"), ("A400", "D403"), ("A500", "D501")),),
+    106: ((None,               ("L001"), ("A010"), ("A100", "D103"), ("A200", "D201", "D103"), ("A300", "D300"), ("A400", "D403"), ("A500", "D501")),),
+    112: ((None,               ("L001"), ("A010"), ("A100", "D152"), ("A200", "D201", "D152"), ("A300", "D300"), None,             ("A500", "D501")),)
 }
 
 
@@ -4650,7 +4615,7 @@ class Garmin:
         self.software_version = self.product_data.software_version / 100
         self.product_description = self.product_data.product_description
         self.protocol_capability = A001(self.link)
-        self.supported_protocols = self.get_protocols(self.protocol_capability, self.product_id, self.software_version)
+        self.supported_protocols = self.get_protocols()
         self.registered_protocols = self.register_protocols(self.supported_protocols)
         self.link = self.create_protocol('link_protocol', self.phys)
         self.device_command = self.create_protocol('device_command_protocol', self.link)
@@ -4674,19 +4639,42 @@ class Garmin:
     def class_by_name(name):
         return globals()[name]
 
-    def get_protocols(self, link, product_id, software_version):
-        # Wait for the unit to announce its capabilities using A001.  If
-        # that doesn't happen, try reading the protocols supported by the
-        # unit from the Big Table.
+    def lookup_protocols(self, product_id, software_version):
+        log.info("Look up protocols by Product ID and software version")
+        model = device_protocol_capabilities.get(product_id)
+        if model is None:
+            raise ValueError(f"Unknown Product ID: {product_id}")
+        for capabilities in model:
+            version = capabilities[0]
+            if version is None:
+                break
+            elif eval(version, {'x': software_version}):
+                break
+        protocols = [protocol for protocol in capabilities[1:] if protocol]
+        protocols.append(("A600", "D600"))
+        protocols.append(("A700", "D700"))
+
+        return protocols
+
+    def get_protocols(self):
+        """Return the protocol capabilities and device-specific data types.
+
+        First wait for the device to report Protocol Capabilities Protocol data.
+        If this protocol is not supported, the capabilities are looked up in the
+        dictionary device_protocol_capabilities.
+
+        """
         try:
-            log.info("Get supported protocols")
-            protocols = link.get_protocols()
+            log.info("Get supported protocols and data types")
+            protocols = self.protocol_capability.get_protocols()
         except LinkError:
             log.info("Protocol Capability Protocol not supported by the device")
             try:
-                protocols = link.get_protocols_no_pcp(product_id, software_version)
+                protocols = self.lookup_protocols(self.product_id, self.software_version)
             except KeyError:
-                raise Exception("Couldn't determine product capabilities")
+                raise Exception("Couldn't determine protocol capabilities")
+        log.info(f"Supported protocols and data types: {protocols}")
+
         return protocols
 
     def register_protocols(self, supported_protocols):

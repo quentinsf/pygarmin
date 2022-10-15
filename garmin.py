@@ -4704,7 +4704,7 @@ class Garmin:
             try:
                 protocols = self.lookup_protocols(self.product_id, self.software_version)
             except KeyError:
-                raise Exception("Couldn't determine protocol capabilities")
+                raise ProtocolError("Couldn't determine protocol capabilities")
         log.info(f"Supported protocols and data types: {protocols}")
 
         return protocols
@@ -4772,19 +4772,23 @@ class Garmin:
         return self.route_transfer.put_data(data, callback)
 
     def get_tracks(self, callback=None):
+        if self.track_log_transfer is None:
+            raise GarminError("Protocol track_log_transfer_protocol is not supported")
         return self.track_log_transfer.get_data(callback)
 
     def put_tracks(self, data, callback=None):
+        if self.track_log_transfer is None:
+            raise GarminError("Protocol track_log_transfer_protocol is not supported")
         return self.track_log_transfer.put_data(data, callback)
 
     def get_laps(self, callback=None):
-        assert self.lap_transfer is not None, (
-            "No lap protocol specified for this GPS.")
+        if self.lap_transfer is None:
+            raise GarminError("Protocol lap_transfer_protocol is not supported")
         return self.lap_transfer.get_data(callback)
 
     def get_runs(self, callback=None):
-        assert self.run_transfer is not None, (
-            "No run protocol supported for this GPS.")
+        if self.run_transfer is None:
+            raise GarminError("Protocol run_transfer_protocol is not supported")
         return self.run_transfer.get_data(callback)
 
     def get_prox_points(self, callback=None):
@@ -4800,6 +4804,8 @@ class Garmin:
         return self.date_and_time_initialization.get_data(callback)
 
     def get_flightbook(self, callback=None):
+        if self.flightbook_transfer is None:
+            raise GarminError("Protocol flightbook_transfer_protocol is not supported")
         return self.flightbook_transfer.get_data(callback)
 
     def get_position(self, callback=None):
@@ -4815,19 +4821,25 @@ class Garmin:
         return self.pvt.get_data(callback)
 
     def delete_map(self):
+        if self.map_transfer is None:
+            raise GarminError("Protocol map_transfer_protocol is not supported")
         return self.map_transfer.delete_map()
 
     def get_map(self, callback=None):
+        if self.map_transfer is None:
+            raise GarminError("Protocol map_transfer_protocol is not supported")
         return self.map_transfer.download_map(callback)
 
     def put_map(self, data, key=None, callback=None):
+        if self.map_transfer is None:
+            raise GarminError("Protocol map_transfer_protocol is not supported")
         if isinstance(data, str):
             map_size = os.path.getsize(data)
         elif isinstance(data, bytes):
             map_size = len(data)
         mem_size = self.map_transfer.memory_properties.mem_size
         if map_size > mem_size:
-            raise Exception("Insufficient memory to upload map")
+            raise GarminError("Insufficient memory to upload map")
         else:
             if key:
                 self.map_unlock.send_unlock_key(key)

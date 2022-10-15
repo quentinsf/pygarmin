@@ -678,6 +678,7 @@ class L001(L000):
     Pid_Rqst_Data = 18
     Pid_Prx_Wpt_Data = 19
     Pid_Records = 27
+    Pid_Enable_Async_Events = 28
     Pid_Rte_Hdr = 29
     Pid_Rte_Wpt_Data = 30
     Pid_Almanac_Data = 31
@@ -1708,6 +1709,8 @@ class A900:
 
     def write_memory(self, data, chunk_size=250, callback=None):
         mem_region = self.memory_properties.mem_region
+        log.info("Turn off async mode")
+        self.link.send_packet(self.link.Pid_Enable_Async_Events, b'\x00\x00')
         log.info("Enable write")
         self.link.send_packet(self.link.Pid_Mem_Wren, mem_region)
         max_retries = 10

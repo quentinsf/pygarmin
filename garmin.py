@@ -1644,12 +1644,12 @@ class A900:
             log.info(f"{type(self).__name__}: Expecting {packet_count} records")
             data = []
             for idx in range(packet_count):
-                packet = self.link.expectPacket(Pid_Mem_Chunk)
+                packet = self.link.expectPacket(self.link.Pid_Mem_Chunk)
                 datatype = MemRecordType()
                 datatype.unpack(packet['data'])
                 data.append(datatype.chunk)
                 if callback:
-                    callback(datatype, idx, packet_count, Pid_Mem_Chunk)
+                    callback(datatype, idx, packet_count, self.link.Pid_Mem_Chunk)
 
             return data
 

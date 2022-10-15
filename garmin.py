@@ -390,6 +390,9 @@ class USBLink(P000):
         self.timeout = 1
         self.start_session()
 
+    def __del__(self):
+        self.usb.util.dispose_resources(self.dev)
+
     def set_timeout(self, seconds):
         self.timeout = seconds
 

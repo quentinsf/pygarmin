@@ -1668,13 +1668,14 @@ class A900:
             result = [ record.get_content() for record in records ]
             return result
 
-    def download_map(self, callback=None):
+    def read_memory(self, callback=None):
         log.info("Download map")
         data = self.get_memory_data(file='', callback=callback)
         if data is not None:
             return data
 
-    def _upload_map_file(self, file, chunk_size=250, callback=None):
+    def _write_file(self, file, chunk_size=250, callback=None):
+        log.info(f"Upload map {file}")
         file_size = os.path.getsize(file)
         chunk_count = math.ceil(file_size / chunk_size)
         with open(file, 'rb') as f:
@@ -1691,7 +1692,7 @@ class A900:
                 if callback:
                     callback(datatype, offset+len(chunk), file_size, self.link.Pid_Mem_Chunk)
 
-    def _upload_map_bytes(self, bytes, chunk_size=250, callback=None):
+    def _write_bytes(self, bytes, chunk_size=250, callback=None):
         file_size = len(bytes)
         offsets = range(0, file_size, chunk_size)
         chunk_count = len(offsets)
@@ -1705,8 +1706,7 @@ class A900:
             if callback:
                 callback(datatype, offset+len(chunk), file_size, self.link.Pid_Mem_Chunk)
 
-    def upload_map(self, data, chunk_size=250, callback=None):
-        log.info("Upload map")
+    def write_memory(self, data, chunk_size=250, callback=None):
         mem_region = self.memory_properties.mem_region
         log.info("Enable write")
         self.link.send_packet(self.link.Pid_Mem_Wren, mem_region)
@@ -1723,30 +1723,15 @@ class A900:
         if retries > max_retries:
             raise LinkError("Maximum retries exceeded.")
 
-        if isinstance(data, str):
-            self._upload_map_file(data, chunk_size, callback)
+        if data is None:
+            log.info("Delete map")
+            pass
+        elif isinstance(data, str):
+            log.info("Upload map")
+            self._write_file(data, chunk_size, callback)
         elif isinstance(data, bytes):
-            self._upload_map_bytes(data, chunk_size, callback)
-        log.info("Disable write")
-        self.link.send_packet(self.link.Pid_Mem_Wrdi, mem_region)
-
-    def delete_map(self):
-        log.info("Delete map")
-        mem_region = self.memory_properties.mem_region
-        log.info("Enable write")
-        self.link.send_packet(self.link.Pid_Mem_Wren, mem_region)
-        max_retries = 10
-        retries = 0
-        while retries <= max_retries:
-            try:
-                self.link.expectPacket(self.link.Pid_Mem_Wel)
-                log.info("Write enabled")
-                break
-            except LinkError as e:
-                log.info(e)
-                retries += 1
-        if retries > max_retries:
-            raise LinkError("Maximum retries exceeded.")
+            log.info("Upload map")
+            self._write_bytes(data, chunk_size, callback)
         log.info("Disable write")
         self.link.send_packet(self.link.Pid_Mem_Wrdi, mem_region)
 
@@ -4833,12 +4818,12 @@ class Garmin:
     def delete_map(self):
         if self.map_transfer is None:
             raise GarminError("Protocol map_transfer_protocol is not supported")
-        return self.map_transfer.delete_map()
+        return self.map_transfer.write_memory(None)
 
     def get_map(self, callback=None):
         if self.map_transfer is None:
             raise GarminError("Protocol map_transfer_protocol is not supported")
-        return self.map_transfer.download_map(callback)
+        return self.map_transfer.read_memory(callback)
 
     def put_map(self, data, key=None, callback=None):
         if self.map_transfer is None:
@@ -4864,7 +4849,7 @@ class Garmin:
             # 255 for both protocols, because large USB writes time out. The
             # chunk size then is 251 (maximum data size - offset size = 255 - 4)
             chunk_size = 251
-            self.map_transfer.upload_map(data, chunk_size, callback)
+            self.map_transfer.write_memory(data, chunk_size, callback)
             # Restore the baudrate to the original value
             if isinstance(self.phys, SerialLink) and self.transmission:
                 self.transmission.set_baudrate(current_baudrate)

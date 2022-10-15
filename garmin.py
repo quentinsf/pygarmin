@@ -4854,7 +4854,7 @@ class Garmin:
             if key:
                 self.map_unlock.send_unlock_key(key)
             # Maximize the baudrate if supported
-            if self.transmission:
+            if isinstance(self.phys, SerialLink) and self.transmission:
                 current_baudrate = self.transmission.get_baudrate()
                 baudrates = self.transmission.get_supported_baudrates()
                 self.transmission.set_baudrate(baudrates[0])
@@ -4866,7 +4866,7 @@ class Garmin:
             chunk_size = 251
             self.map_transfer.upload_map(data, chunk_size, callback)
             # Restore the baudrate to the original value
-            if self.transmission:
+            if isinstance(self.phys, SerialLink) and self.transmission:
                 self.transmission.set_baudrate(current_baudrate)
 
     def abort_transfer(self):

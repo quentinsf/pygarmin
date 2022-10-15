@@ -98,10 +98,10 @@ class SerialLink(P000):
 
     """
     # Control characters
-    DLE = 16  # Data Link Escape
-    ETX = 3  # End of Text
-    Pid_Ack_Byte = 6  # Acknowledge
-    Pid_Nak_Byte = 21  # Negative Acknowledge
+    dle = 16  # Data Link Escape
+    etx = 3  # End of Text
+    pid_ack_byte = 6  # Acknowledge
+    pid_nak_byte = 21  # Negative Acknowledge
 
     def __init__(self, port):
         # Import serial here, so that you don't have to have that module
@@ -136,11 +136,11 @@ class SerialLink(P000):
         extra DLE is not included in the size or checksum calculation. This
         procedure allows the DLE character to be used to delimit the boundaries
         of a packet."""
-        return data.replace(bytes([self.DLE]), bytes([self.DLE, self.DLE]))
+        return data.replace(bytes([self.dle]), bytes([self.dle, self.dle]))
 
     def unescape(self, data):
         """Unescape any DLE characters, aka "DLE unstuffing"."""
-        return data.replace(bytes([self.DLE, self.DLE]), bytes([self.DLE]))
+        return data.replace(bytes([self.dle, self.dle]), bytes([self.dle]))
 
     def checksum(self, data):
         """The checksum value contains the two's complement of the modulo 256 sum of
@@ -215,20 +215,20 @@ class SerialLink(P000):
                                  + bytes([size])
                                  + data)
         log.debug(f"Packet data checksum: {checksum}")
-        packet = bytes([self.DLE]) \
+        packet = bytes([self.dle]) \
             + bytes([pid]) \
             + self.escape(bytes([size])) \
             + self.escape(data) \
             + self.escape(bytes([checksum])) \
-            + bytes([self.DLE]) \
-            + bytes([self.ETX])
+            + bytes([self.dle]) \
+            + bytes([self.etx])
 
         return packet
 
     def read(self):
         """Read one packet from the buffer."""
-        DLE = bytes([self.DLE])
-        ETX = bytes([self.ETX])
+        dle = bytes([self.dle])
+        etx = bytes([self.etx])
         buffer = bytearray()
         packet = bytearray()
 
@@ -243,17 +243,17 @@ class SerialLink(P000):
                 raise LinkError("Invalid packet: unexpected end")
             elif len(packet) == 0:
                 # Packet header
-                if buffer.startswith(DLE):
+                if buffer.startswith(dle):
                     packet += bytes([buffer.pop(0)])
                 else:
                     raise LinkError("Invalid packet: doesn't start with DLE character")
-            elif buffer.startswith(DLE):
+            elif buffer.startswith(dle):
                 # Escape DLE
-                if buffer == DLE + DLE:
+                if buffer == dle + dle:
                     packet += buffer
                     buffer.clear()
                     # Packet trailer
-                elif buffer == DLE + ETX:
+                elif buffer == dle + etx:
                     packet += buffer
                     break
                 else:
@@ -320,11 +320,11 @@ class SerialLink(P000):
         expected_pid = pid
         received_pid = int.from_bytes(packet['data'], byteorder='little')
 
-        if packet['id'] == self.Pid_Ack_Byte:
+        if packet['id'] == self.pid_ack_byte:
             log.info("Received ACK packet")
             if expected_pid != received_pid:
                 raise ProtocolError(f"Device expected {expected_pid}, got {received_pid}")
-        elif packet['id'] == self.Pid_Nak_Byte:
+        elif packet['id'] == self.pid_nak_byte:
             log.info("Received NAK packet")
             raise LinkError("Packet was not received correctly.")
         else:
@@ -334,7 +334,7 @@ class SerialLink(P000):
         """Send an ACK packet."""
         log.info("Send ACK packet")
         data = pid.to_bytes(1, byteorder='little')
-        self.send_packet(self.Pid_Ack_Byte, data, acknowledge=False)
+        self.send_packet(self.pid_ack_byte, data, acknowledge=False)
 
     def send_nak(self):
         """Send a NAK packet.
@@ -345,7 +345,7 @@ class SerialLink(P000):
         """
         log.info("Send NAK packet")
         data = bytes()  # we cannot determine the packet id because it was corrupted
-        self.send_packet(self.Pid_Nak_Byte, data, acknowledge=False)
+        self.send_packet(self.pid_nak_byte, data, acknowledge=False)
 
     def __del__(self):
         """Should close down any opened resources."""
@@ -379,9 +379,9 @@ class USBLink(P000):
     Bulk_IN = 131       # 0x83  # unused
 
     # USB Protocol Layer Packet Ids
-    Pid_Data_Available = 2  # unused
-    Pid_Start_Session = 5
-    Pid_Session_Started = 6
+    pid_data_available = 2  # unused
+    pid_start_session = 5
+    pid_session_started = 6
 
     def __init__(self):
         # Import usb here, so that you don't have to have that module
@@ -576,12 +576,12 @@ class USBLink(P000):
         Start Session Packet
         | N | Direction      | Packet ID         | Packet Data Type |
         |---+----------------+-------------------+------------------|
-        | 0 | Host to Device | Pid_Start_Session | n/a              |
+        | 0 | Host to Device | pid_start_session | n/a              |
 
         """
         log.info("Send Start Session packet")
-        buffer = self.pack(self.USB_Protocol_Layer, self.Pid_Start_Session)
-        log.debug(f"< packet {self.Pid_Start_Session}: {bytes.hex(b'')}")
+        buffer = self.pack(self.USB_Protocol_Layer, self.pid_start_session)
+        log.debug(f"< packet {self.pid_start_session}: {bytes.hex(b'')}")
         self.write(buffer)
 
     def read_session_started_packet(self):
@@ -596,13 +596,13 @@ class USBLink(P000):
         Session Started Packet
         | N | Direction      | Packet ID           | Packet Data Type |
         |---+----------------+---------------------+------------------|
-        | 0 | Device to Host | Pid_Session_Started | uint32           |
+        | 0 | Device to Host | pid_session_started | uint32           |
 
         """
         log.info("Read Session Started packet")
         while True:
             packet = self.read_packet()
-            if packet['id'] == self.Pid_Session_Started:
+            if packet['id'] == self.pid_session_started:
                 log.info("Received Session Started packet")
                 break
 
@@ -623,10 +623,10 @@ class L000:
     Product Data Protocol to determine the product data of the connected device.
 
     """
-    Pid_Ext_Product_Data = 248  # may not be implemented in all devices
-    Pid_Protocol_Array = 253    # may not be implemented in all devices
-    Pid_Product_Rqst = 254
-    Pid_Product_Data = 255
+    pid_ext_product_data = 248  # may not be implemented in all devices
+    pid_protocol_array = 253    # may not be implemented in all devices
+    pid_product_rqst = 254
+    pid_product_data = 255
 
     def __init__(self, physicalLayer):
         self.phys = physicalLayer
@@ -639,13 +639,13 @@ class L000:
         """Read a packet."""
         while True:
             packet = self.phys.read_packet()
-            if packet['id'] == self.Pid_Ext_Product_Data:
+            if packet['id'] == self.pid_ext_product_data:
                 # The ExtProductDataType contains zero or more null-terminated
                 # strings that are used during manufacturing to identify other
                 # properties of the device and are not formatted for display to the
                 # end user. According to the specification the host should ignore
                 # it.
-                log.info(f"Got packet type {self.Pid_Ext_Product_Data}, ignoring...")
+                log.info(f"Got packet type {self.pid_ext_product_data}, ignoring...")
                 datatype = ExtProductDataType()
                 datatype.unpack(packet['data'])
                 for property in datatype.properties:
@@ -672,52 +672,52 @@ class L001(L000):
     This Link Protocol used by most devices.
 
     """
-    Pid_Command_Data = 10
-    Pid_Xfer_Cmplt = 12
-    Pid_Date_Time_Data = 14
-    Pid_Position_Data = 17
-    Pid_Rqst_Data = 18
-    Pid_Prx_Wpt_Data = 19
-    Pid_Records = 27
-    Pid_Enable_Async_Events = 28
-    Pid_Rte_Hdr = 29
-    Pid_Rte_Wpt_Data = 30
-    Pid_Almanac_Data = 31
-    Pid_Trk_Data = 34
-    Pid_Wpt_Data = 35
-    Pid_Mem_Write = 36  # undocumented
-    Pid_Unit_Id = 38  # undocumented
-    Pid_Mem_Wrdi = 45  # Write Disable (WRDI) undocumented
-    Pid_Baud_Rqst_Data = 48  # undocumented
-    Pid_Baud_Acpt_Data = 49  # undocumented
-    Pid_Pvt_Data = 51
-    Pid_Mem_Wel = 74  # Write Enable Latch (WEL) undocumented
-    Pid_Mem_Wren = 75  # Write Enable (WREN) undocumented
-    Pid_Mem_Read = 89  # undocumented
-    Pid_Mem_Chunk = 90  # undocumented
-    Pid_Mem_Records = 91  # undocumented
-    Pid_Mem_Data = 92  # undocumented
-    Pid_Capacity_Data = 95  # undocumented
-    Pid_Rte_Link_Data = 98
-    Pid_Trk_Hdr = 99
-    Pid_Tx_Unlock_Key = 108  # undocumented
-    Pid_Ack_Unlock_Key = 109  # undocumented
-    Pid_FlightBook_Record = 134  # packet with FlightBook data
-    Pid_Lap = 149  # part of Forerunner data
-    Pid_Wpt_Cat = 152
-    Pid_Baud_Data = 252  # undocumented
-    Pid_Run = 990
-    Pid_Workout = 991
-    Pid_Workout_Occurrence = 992
-    Pid_Fitness_User_Profile = 993
-    Pid_Workout_Limits = 994
-    Pid_Course = 1061
-    Pid_Course_Lap = 1062
-    Pid_Course_Point = 1063
-    Pid_Course_Trk_Hdr = 1064
-    Pid_Course_Trk_Data = 1065
-    Pid_Course_Limits = 1066
-    Pid_External_Time_Sync_Data = 6724
+    pid_command_data = 10
+    pid_xfer_cmplt = 12
+    pid_date_time_data = 14
+    pid_position_data = 17
+    pid_rqst_data = 18
+    pid_prx_wpt_data = 19
+    pid_records = 27
+    pid_enable_async_events = 28
+    pid_rte_hdr = 29
+    pid_rte_wpt_data = 30
+    pid_almanac_data = 31
+    pid_trk_data = 34
+    pid_wpt_data = 35
+    pid_mem_write = 36  # undocumented
+    pid_unit_id = 38  # undocumented
+    pid_mem_wrdi = 45  # Write Disable (WRDI) undocumented
+    pid_baud_rqst_data = 48  # undocumented
+    pid_baud_acpt_data = 49  # undocumented
+    pid_pvt_data = 51
+    pid_mem_wel = 74  # Write Enable Latch (WEL) undocumented
+    pid_mem_wren = 75  # Write Enable (WREN) undocumented
+    pid_mem_read = 89  # undocumented
+    pid_mem_chunk = 90  # undocumented
+    pid_mem_records = 91  # undocumented
+    pid_mem_data = 92  # undocumented
+    pid_capacity_data = 95  # undocumented
+    pid_rte_link_data = 98
+    pid_trk_hdr = 99
+    pid_tx_unlock_key = 108  # undocumented
+    pid_ack_unlock_key = 109  # undocumented
+    pid_flightbook_record = 134  # packet with FlightBook data
+    pid_lap = 149  # part of Forerunner data
+    pid_wpt_cat = 152
+    pid_baud_data = 252  # undocumented
+    pid_run = 990
+    pid_workout = 991
+    pid_workout_occurrence = 992
+    pid_fitness_user_profile = 993
+    pid_workout_limits = 994
+    pid_course = 1061
+    pid_course_lap = 1062
+    pid_course_point = 1063
+    pid_course_trk_hdr = 1064
+    pid_course_trk_data = 1065
+    pid_course_limits = 1066
+    pid_external_time_sync_data = 6724
 
 
 class L002(L000):
@@ -726,16 +726,16 @@ class L002(L000):
     This Link Protocol used by panel-mounted aviation devices.
 
     """
-    Pid_Almanac_Data = 4
-    Pid_Command_Data = 11
-    Pid_Xfer_Cmplt = 12
-    Pid_Date_Time_Data = 20
-    Pid_Position_Data = 24
-    Pid_Prx_Wpt_Data = 27
-    Pid_Records = 35
-    Pid_Rte_Hdr = 37
-    Pid_Rte_Wpt_Data = 39
-    Pid_Wpt_Data = 43
+    pid_almanac_data = 4
+    pid_command_data = 11
+    pid_xfer_cmplt = 12
+    pid_date_time_data = 20
+    pid_position_data = 24
+    pid_prx_wpt_data = 27
+    pid_records = 35
+    pid_rte_hdr = 37
+    pid_rte_wpt_data = 39
+    pid_wpt_data = 43
 
 
 class A000:
@@ -748,11 +748,11 @@ class A000:
     Packet sequence
     |   N | Direction      | Packet ID            | Packet Data Type   |
     |-----+----------------+----------------------+--------------------|
-    |   0 | Host to Device | Pid_Product_Rqst     | ignored            |
-    |   1 | Device to Host | Pid_Product_Data     | ProductDataType    |
-    |   2 | Device to Host | Pid_Ext_Product_Data | ExtProductDataType |
+    |   0 | Host to Device | pid_product_rqst     | ignored            |
+    |   1 | Device to Host | pid_product_data     | ProductDataType    |
+    |   2 | Device to Host | pid_ext_product_data | ExtProductDataType |
     |   … | …              | …                    | …                  |
-    | N-1 | Device to Host | Pid_Ext_Product_Data | ExtProductDataType |
+    | N-1 | Device to Host | pid_ext_product_data | ExtProductDataType |
 
     """
 
@@ -761,9 +761,9 @@ class A000:
 
     def get_product_data(self):
         log.info("Request product data...")
-        self.link.send_packet(self.link.Pid_Product_Rqst, None)
+        self.link.send_packet(self.link.pid_product_rqst, None)
         log.info("Expect product data")
-        packet = self.link.expectPacket(self.link.Pid_Product_Data)
+        packet = self.link.expectPacket(self.link.pid_product_data)
         datatype = ProductDataType()
         datatype.unpack(packet['data'])
         log.info(f"Product ID: {datatype.product_id}")
@@ -784,7 +784,7 @@ class A001:
     Packet sequence
     | N | Direction      | Packet ID          | Packet Data Type  |
     |---+----------------+--------------------+-------------------|
-    | 0 | Device to Host | Pid_Protocol_Array | ProtocolArrayType |
+    | 0 | Device to Host | pid_protocol_array | ProtocolArrayType |
 
     """
 
@@ -793,7 +793,7 @@ class A001:
 
     def get_protocols(self):
         log.info("Read protocols using Protocol Capability Protocol")
-        packet = self.link.expectPacket(self.link.Pid_Protocol_Array)
+        packet = self.link.expectPacket(self.link.pid_protocol_array)
         protocols = []
         log.info("Parse supported protocols and datatypes...")
         # The order of array elements is used to associate data types with
@@ -843,22 +843,22 @@ class CommandProtocol:
     Device Command Protocol Packet Sequence
     | N | Direction          | Packet ID        | Packet Data Type |
     |---+--------------------+------------------+------------------|
-    | 0 | Device1 to Device2 | Pid_Command_Data | Command          |
+    | 0 | Device1 to Device2 | pid_command_data | Command          |
 
     """
-    Cmnd_Abort_Transfer = None
-    Cmnd_Turn_Off_Pwr = None
+    cmnd_abort_transfer = None
+    cmnd_turn_off_pwr = None
 
     def __init__(self, link):
         self.link = link
 
     def abort_transfer(self):
-        self.link.send_packet(self.link.Pid_Command_Data,
-                              self.Cmnd_Abort_Transfer)
+        self.link.send_packet(self.link.pid_command_data,
+                              self.cmnd_abort_transfer)
 
     def turn_power_off(self):
-        self.link.send_packet(self.link.Pid_Command_Data,
-                              self.Cmnd_Turn_Off_Pwr)
+        self.link.send_packet(self.link.pid_command_data,
+                              self.cmnd_turn_off_pwr)
 
 
 class A010(CommandProtocol):
@@ -867,34 +867,34 @@ class A010(CommandProtocol):
     This Device Command Protocol is used by most devices.
 
     """
-    Cmnd_Abort_Transfer = 0                   # abort current transfer
-    Cmnd_Transfer_Alm = 1                     # transfer almanac
-    Cmnd_Transfer_Posn = 2                    # transfer position
-    Cmnd_Transfer_Prx = 3                     # transfer proximity waypoints
-    Cmnd_Transfer_Rte = 4                     # transfer routes
-    Cmnd_Transfer_Time = 5                    # transfer time
-    Cmnd_Transfer_Trk = 6                     # transfer track log
-    Cmnd_Transfer_Wpt = 7                     # transfer waypoints
-    Cmnd_Turn_Off_Pwr = 8                     # turn off power
-    Cmnd_Transfer_Unit_Id = 14                # transfer product id (undocumented)
-    Cmnd_Start_Pvt_Data = 49                  # start transmitting PVT data
-    Cmnd_Stop_Pvt_Data = 50                   # stop transmitting PVT data
-    Cmnd_Transfer_Baud = 57                   # transfer supported baudrates (undocumented)
-    Cmnd_Ack_Ping = 58                        # ping device (undocumented)
-    Cmnd_Transfer_Mem = 63                    # transfer memory capacity (undocumented)
-    Cmnd_FlightBook_Transfer = 92             # transfer flight records
-    Cmnd_Transfer_Laps = 117                  # transfer fitness laps
-    Cmnd_Transfer_Wpt_Cats = 121              # transfer waypoint categories
-    Cmnd_Transfer_Runs = 450                  # transfer fitness runs
-    Cmnd_Transfer_Workouts = 451              # transfer workouts
-    Cmnd_Transfer_Workout_Occurrences = 452   # transfer workout occurrences
-    Cmnd_Transfer_Fitness_User_Profile = 453  # transfer fitness user profile
-    Cmnd_Transfer_Workout_Limits = 454        # transfer workout limits
-    Cmnd_Transfer_Courses = 561               # transfer fitness courses
-    Cmnd_Transfer_Course_Laps = 562           # transfer fitness course laps
-    Cmnd_Transfer_Course_Points = 563         # transfer fitness course points
-    Cmnd_Transfer_Course_Tracks = 564         # transfer fitness course tracks
-    Cmnd_Transfer_Course_Limits = 565         # transfer fitness course limits
+    cmnd_abort_transfer = 0                   # abort current transfer
+    cmnd_transfer_alm = 1                     # transfer almanac
+    cmnd_transfer_posn = 2                    # transfer position
+    cmnd_transfer_prx = 3                     # transfer proximity waypoints
+    cmnd_transfer_rte = 4                     # transfer routes
+    cmnd_transfer_time = 5                    # transfer time
+    cmnd_transfer_trk = 6                     # transfer track log
+    cmnd_transfer_wpt = 7                     # transfer waypoints
+    cmnd_turn_off_pwr = 8                     # turn off power
+    cmnd_transfer_unit_id = 14                # transfer product id (undocumented)
+    cmnd_start_pvt_data = 49                  # start transmitting PVT data
+    cmnd_stop_pvt_data = 50                   # stop transmitting PVT data
+    cmnd_transfer_baud = 57                   # transfer supported baudrates (undocumented)
+    cmnd_ack_ping = 58                        # ping device (undocumented)
+    cmnd_transfer_mem = 63                    # transfer memory capacity (undocumented)
+    cmnd_flightbook_transfer = 92             # transfer flight records
+    cmnd_transfer_laps = 117                  # transfer fitness laps
+    cmnd_transfer_wpt_cats = 121              # transfer waypoint categories
+    cmnd_transfer_runs = 450                  # transfer fitness runs
+    cmnd_transfer_workouts = 451              # transfer workouts
+    cmnd_transfer_workout_occurrences = 452   # transfer workout occurrences
+    cmnd_transfer_fitness_user_profile = 453  # transfer fitness user profile
+    cmnd_transfer_workout_limits = 454        # transfer workout limits
+    cmnd_transfer_courses = 561               # transfer fitness courses
+    cmnd_transfer_course_laps = 562           # transfer fitness course laps
+    cmnd_transfer_course_points = 563         # transfer fitness course points
+    cmnd_transfer_course_tracks = 564         # transfer fitness course tracks
+    cmnd_transfer_course_limits = 565         # transfer fitness course limits
 
 
 class A011(CommandProtocol):
@@ -903,13 +903,13 @@ class A011(CommandProtocol):
     This Device Command Protocol is used by panel-mounted aviation devices.
 
     """
-    Cmnd_Abort_Transfer = 0   # abort current transfer
-    Cmnd_Transfer_Alm = 4     # transfer almanac
-    Cmnd_Transfer_Rte = 8     # transfer routes
-    Cmnd_Transfer_Prx = 17    # transfer proximity waypoints
-    Cmnd_Transfer_Time = 20   # transfer time
-    Cmnd_Transfer_Wpt = 21    # transfer waypoints
-    Cmnd_Turn_Off_Pwr = 26    # turn off power
+    cmnd_abort_transfer = 0   # abort current transfer
+    cmnd_transfer_alm = 4     # transfer almanac
+    cmnd_transfer_rte = 8     # transfer routes
+    cmnd_transfer_prx = 17    # transfer proximity waypoints
+    cmnd_transfer_time = 20   # transfer time
+    cmnd_transfer_wpt = 21    # transfer waypoints
+    cmnd_turn_off_pwr = 26    # turn off power
 
 
 class T001:
@@ -953,9 +953,9 @@ class T001:
 
     def get_supported_baudrates(self):
         log.info("Get supported baudrates...")
-        self.link.send_packet(self.link.Pid_Command_Data,
-                              self.command.Cmnd_Transfer_Baud)
-        packet = self.link.expectPacket(self.link.Pid_Baud_Data)
+        self.link.send_packet(self.link.pid_command_data,
+                              self.command.cmnd_transfer_baud)
+        packet = self.link.expectPacket(self.link.pid_baud_data)
         baudrates = []
         for baudrate, in rawutil.iter_unpack('<I', packet['data']):
             baudrate = self.desired_baudrate(baudrate)
@@ -970,15 +970,15 @@ class T001:
         """
         log.info(f"Change baudrate to {baudrate}...")
         log.info("Turn off all requests")
-        self.link.send_packet(self.link.Pid_Rqst_Data,
+        self.link.send_packet(self.link.pid_rqst_data,
                               None)
         log.info("Request baudrate change")
         data = baudrate.to_bytes(4, byteorder='little')
-        self.link.send_packet(self.link.Pid_Baud_Rqst_Data,
+        self.link.send_packet(self.link.pid_baud_rqst_data,
                               data)
         # The device will respond by sending a packet with the highest
         # acceptable baudrate closest to what was requested
-        packet = self.link.expectPacket(self.link.Pid_Baud_Acpt_Data)
+        packet = self.link.expectPacket(self.link.pid_baud_acpt_data)
         baudrate = int.from_bytes(packet['data'], byteorder='little')
         log.info(f"Accepted baudrate: {baudrate}")
         # Determine the desired baudrate value from accepted baudrate
@@ -990,11 +990,11 @@ class T001:
             self.phys.set_baudrate(desired_baudrate)
             try:
                 # Immediately after setting the baudrate, transmit an Ack ping packet
-                self.link.send_packet(self.link.Pid_Command_Data,
-                                      self.command.Cmnd_Ack_Ping)
+                self.link.send_packet(self.link.pid_command_data,
+                                      self.command.cmnd_ack_ping)
                 # Transmit the same packet again
-                self.link.send_packet(self.link.Pid_Command_Data,
-                                      self.command.Cmnd_Ack_Ping)
+                self.link.send_packet(self.link.pid_command_data,
+                                      self.command.cmnd_ack_ping)
                 # The baudrate has been successfully changed upon acknowledging the
                 # above two ping packets. If the device does not receive these two
                 # packets within two seconds, it will reset its baudrate to the default
@@ -1016,16 +1016,16 @@ class TransferProtocol:
     the device.
 
     Many Application protocols use standard beginning and ending packets called
-    Pid_Records and Pid_Xfer_Cmplt, respectively. The first packet indicates the
+    pid_records and pid_xfer_cmplt, respectively. The first packet indicates the
     number of data packets to follow, excluding the last packet. The last packet
     indicates that the transfer is complete. It also indicates the command ID
     used to initiate the data transfer transfer.
 
     | N   | Direction          | Packet ID      | Packet Data Type |
     |-----+--------------------+----------------+------------------|
-    | 0   | Device1 to Device2 | Pid_Records    | RecordsType      |
+    | 0   | Device1 to Device2 | pid_records    | RecordsType      |
     | …   | …                  | …              | …                |
-    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt | Command          |
+    | n-1 | Device1 to Device2 | pid_xfer_cmplt | Command          |
 
     """
 
@@ -1037,7 +1037,7 @@ class TransferProtocol:
     def put_data(self, cmd, packets, callback=None):
         packet_count = len(packets)
         log.info(f"{type(self).__name__}: Sending {packet_count} records")
-        self.link.send_packet(self.link.Pid_Records, packet_count)
+        self.link.send_packet(self.link.pid_records, packet_count)
         for idx, packet in enumerate(packets):
             pid = packet['pid']
             datatype = packet['datatype']
@@ -1048,7 +1048,7 @@ class TransferProtocol:
             if callback:
                 callback(datatype, idx+1, packet_count, pid)
 
-        self.link.send_packet(self.link.Pid_Xfer_Cmplt, cmd)
+        self.link.send_packet(self.link.pid_xfer_cmplt, cmd)
 
 
 class SingleTransferProtocol(TransferProtocol):
@@ -1060,18 +1060,18 @@ class SingleTransferProtocol(TransferProtocol):
 
     | N   | Direction          | Packet ID      | Packet Data Type |
     |-----+--------------------+----------------+------------------|
-    | 0   | Device1 to Device2 | Pid_Records    | RecordsType      |
+    | 0   | Device1 to Device2 | pid_records    | RecordsType      |
     | 1   | Device1 to Device2 | <Data Pid>     | <D0>             |
     | 2   | Device1 to Device2 | <Data Pid>     | <D0>             |
     | …   | …                  | …              | …                |
     | n-2 | Device1 to Device2 | <Data Pid>     | <D0>             |
-    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt | Command          |
+    | n-1 | Device1 to Device2 | pid_xfer_cmplt | Command          |
 
     """
 
     def get_data(self, cmd, pid, callback=None):
-        self.link.send_packet(self.link.Pid_Command_Data, cmd)
-        packet = self.link.expectPacket(self.link.Pid_Records)
+        self.link.send_packet(self.link.pid_command_data, cmd)
+        packet = self.link.expectPacket(self.link.pid_records)
         datatype = RecordsType()
         datatype.unpack(packet['data'])
         packet_count = datatype.records
@@ -1084,7 +1084,7 @@ class SingleTransferProtocol(TransferProtocol):
             result.append(datatype)
             if callback:
                 callback(datatype, idx+1, packet_count, pid)
-        self.link.expectPacket(self.link.Pid_Xfer_Cmplt)
+        self.link.expectPacket(self.link.pid_xfer_cmplt)
 
         return result
 
@@ -1103,20 +1103,20 @@ class MultiTransferProtocol(TransferProtocol):
 
     |   N | Direction          | Packet ID      | Packet Data Type |
     |-----+--------------------+----------------+------------------|
-    |   0 | Device1 to Device2 | Pid_Records    | RecordsType      |
+    |   0 | Device1 to Device2 | pid_records    | RecordsType      |
     |   1 | Device1 to Device2 | <Header Pid>   | <D0>             |
     |   2 | Device1 to Device2 | <Data Pid>     | <D1>             |
     |   3 | Device1 to Device2 | <Data Pid>     | <D1>             |
     |   … | …                  | …              | …                |
     | n-2 | Device1 to Device2 | <Data Pid>     | <D1>             |
-    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt | Command          |
+    | n-1 | Device1 to Device2 | pid_xfer_cmplt | Command          |
 
 
     """
 
     def get_data(self, cmd, *pids, callback=None):
-        self.link.send_packet(self.link.Pid_Command_Data, cmd)
-        packet = self.link.expectPacket(self.link.Pid_Records)
+        self.link.send_packet(self.link.pid_command_data, cmd)
+        packet = self.link.expectPacket(self.link.pid_records)
         packet_count = int.from_bytes(packet['data'], byteorder='little')
         log.info(f"Protocol {type(self).__name__}: Expecting {packet_count} records")
         hdr_pid = pids[0]
@@ -1138,7 +1138,7 @@ class MultiTransferProtocol(TransferProtocol):
                 raise ProtocolError(f"Expected one of {*pids,}, got {pid}")
             if callback:
                 callback(datatype, idx+1, packet_count, pid)
-        self.link.expectPacket(self.link.Pid_Xfer_Cmplt)
+        self.link.expectPacket(self.link.pid_xfer_cmplt)
 
         return packets
 
@@ -1149,31 +1149,31 @@ class A100(SingleTransferProtocol):
     Packet sequence
     | N   | Direction          | Packet ID      | Packet Data Type |
     |-----+--------------------+----------------+------------------|
-    | 0   | Device1 to Device2 | Pid_Records    | RecordsType      |
-    | 1   | Device1 to Device2 | Pid_Wpt_Data   | <D0>             |
-    | 2   | Device1 to Device2 | Pid_Wpt_Data   | <D0>             |
+    | 0   | Device1 to Device2 | pid_records    | RecordsType      |
+    | 1   | Device1 to Device2 | pid_wpt_data   | <D0>             |
+    | 2   | Device1 to Device2 | pid_wpt_data   | <D0>             |
     | …   | …                  | …              | …                |
-    | n-2 | Device1 to Device2 | Pid_Wpt_Data   | <D0>             |
-    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt | Command          |
+    | n-2 | Device1 to Device2 | pid_wpt_data   | <D0>             |
+    | n-1 | Device1 to Device2 | pid_xfer_cmplt | Command          |
 
     """
 
     def get_data(self, callback=None):
         return SingleTransferProtocol.get_data(self,
-                                               self.command.Cmnd_Transfer_Wpt,
-                                               self.link.Pid_Wpt_Data,
+                                               self.command.cmnd_transfer_wpt,
+                                               self.link.pid_wpt_data,
                                                callback=callback)
 
     def put_data(self, waypoints, callback=None):
         packets = []
         log.info(f"Datatypes: {*[datatype.__name__ for datatype in self.datatypes],}")
         for waypoint in waypoints:
-            pid = self.link.Pid_Wpt_Data
+            pid = self.link.pid_wpt_data
             datatype = self.datatypes[0](**waypoint)
             packets.append({'pid': pid, 'datatype': datatype})
 
         return SingleTransferProtocol.put_data(self,
-                                               self.command.Cmnd_Transfer_Wpt,
+                                               self.command.cmnd_transfer_wpt,
                                                packets,
                                                callback=callback)
 
@@ -1184,19 +1184,19 @@ class A101(SingleTransferProtocol):
     Packet sequence
     | N   | Direction          | Packet ID      | Packet Data Type |
     |-----+--------------------+----------------+------------------|
-    | 0   | Device1 to Device2 | Pid_Records    | RecordsType      |
-    | 1   | Device1 to Device2 | Pid_Wpt_Cat    | <D0>             |
-    | 2   | Device1 to Device2 | Pid_Wpt_Cat    | <D0>             |
+    | 0   | Device1 to Device2 | pid_records    | RecordsType      |
+    | 1   | Device1 to Device2 | pid_wpt_cat    | <D0>             |
+    | 2   | Device1 to Device2 | pid_wpt_cat    | <D0>             |
     | …   | …                  | …              | …                |
-    | n-2 | Device1 to Device2 | Pid_Wpt_Cat    | <D0>             |
-    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt | Command          |
+    | n-2 | Device1 to Device2 | pid_wpt_cat    | <D0>             |
+    | n-1 | Device1 to Device2 | pid_xfer_cmplt | Command          |
 
     """
 
     def get_data(self, callback=None):
         return SingleTransferProtocol.get_data(self,
-                                               self.command.Cmnd_Transfer_Wpt_Cats,
-                                               self.link.Pid_Wpt_Cat,
+                                               self.command.cmnd_transfer_wpt_cats,
+                                               self.link.pid_wpt_cat,
                                                callback=callback)
 
 
@@ -1206,21 +1206,21 @@ class A200(MultiTransferProtocol):
     A200 Route Transfer Protocol Packet Sequence
     |   N | Direction          | Packet ID        | Packet Data Type |
     |-----+--------------------+------------------+------------------|
-    |   0 | Device1 to Device2 | Pid_Records      | RecordsType      |
-    |   1 | Device1 to Device2 | Pid_Rte_Hdr      | <D0>             |
-    |   2 | Device1 to Device2 | Pid_Rte_Wpt_Data | <D1>             |
-    |   3 | Device1 to Device2 | Pid_Rte_Wpt_Data | <D1>             |
+    |   0 | Device1 to Device2 | pid_records      | RecordsType      |
+    |   1 | Device1 to Device2 | pid_rte_hdr      | <D0>             |
+    |   2 | Device1 to Device2 | pid_rte_wpt_data | <D1>             |
+    |   3 | Device1 to Device2 | pid_rte_wpt_data | <D1>             |
     |   … | …                  | …                | …                |
-    | n-2 | Device1 to Device2 | Pid_Rte_Wpt_Data | <D1>             |
-    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt   | Command          |
+    | n-2 | Device1 to Device2 | pid_rte_wpt_data | <D1>             |
+    | n-1 | Device1 to Device2 | pid_xfer_cmplt   | Command          |
 
     """
 
     def get_data(self, callback=None):
         return MultiTransferProtocol.get_data(self,
-                                              self.command.Cmnd_Transfer_Rte,
-                                              self.link.Pid_Rte_Hdr,
-                                              self.link.Pid_Rte_Wpt_Data,
+                                              self.command.cmnd_transfer_rte,
+                                              self.link.pid_rte_hdr,
+                                              self.link.pid_rte_wpt_data,
                                               callback=callback)
 
     def put_data(self, routes, callback=None):
@@ -1228,16 +1228,16 @@ class A200(MultiTransferProtocol):
         for route in routes:
             header = route[0]
             waypoints = route[1:]
-            pid = self.link.Pid_Rte_Hdr
+            pid = self.link.pid_rte_hdr
             datatype = self.datatypes[0](**header)
             packets.append({'pid': pid, 'datatype': datatype})
             for waypoint in waypoints:
-                pid = self.link.Pid_Rte_Wpt_Data
+                pid = self.link.pid_rte_wpt_data
                 datatype = self.datatypes[1](**waypoint)
                 packets.append({'pid': pid, 'datatype': datatype})
 
         return MultiTransferProtocol.put_data(self,
-                                              self.command.Cmnd_Transfer_Rte,
+                                              self.command.cmnd_transfer_rte,
                                               packets,
                                               callback=callback)
 
@@ -1248,24 +1248,24 @@ class A201(MultiTransferProtocol):
     Packet Sequence
     |   N | Direction          | Packet ID         | Packet Data Type |
     |-----+--------------------+-------------------+------------------|
-    |   0 | Device1 to Device2 | Pid_Records       | RecordsType      |
-    |   1 | Device1 to Device2 | Pid_Rte_Hdr       | <D0>             |
-    |   2 | Device1 to Device2 | Pid_Rte_Wpt_Data  | <D1>             |
-    |   3 | Device1 to Device2 | Pid_Rte_Link_Data | <D2>             |
-    |   4 | Device1 to Device2 | Pid_Rte_Wpt_Data  | <D1>             |
-    |   5 | Device1 to Device2 | Pid_Rte_Link_Data | <D2>             |
+    |   0 | Device1 to Device2 | pid_records       | RecordsType      |
+    |   1 | Device1 to Device2 | pid_rte_hdr       | <D0>             |
+    |   2 | Device1 to Device2 | pid_rte_wpt_data  | <D1>             |
+    |   3 | Device1 to Device2 | pid_rte_link_data | <D2>             |
+    |   4 | Device1 to Device2 | pid_rte_wpt_data  | <D1>             |
+    |   5 | Device1 to Device2 | pid_rte_link_data | <D2>             |
     |   … | …                  | …                 | …                |
-    | n-2 | Device1 to Device2 | Pid_Rte_Wpt_Data  | <D1>             |
-    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt    | Command          |
+    | n-2 | Device1 to Device2 | pid_rte_wpt_data  | <D1>             |
+    | n-1 | Device1 to Device2 | pid_xfer_cmplt    | Command          |
 
     """
 
     def get_data(self, callback=None):
         return MultiTransferProtocol.get_data(self,
-                                              self.command.Cmnd_Transfer_Rte,
-                                              self.link.Pid_Rte_Hdr,
-                                              self.link.Pid_Rte_Wpt_Data,
-                                              self.link.Pid_Rte_Link_Data,
+                                              self.command.cmnd_transfer_rte,
+                                              self.link.pid_rte_hdr,
+                                              self.link.pid_rte_wpt_data,
+                                              self.link.pid_rte_link_data,
                                               callback=callback)
 
     def put_data(self, routes, callback=None):
@@ -1273,18 +1273,18 @@ class A201(MultiTransferProtocol):
         for route in routes:
             header = route[0]
             waypoints = route[1:]
-            pid = self.link.Pid_Rte_Hdr
+            pid = self.link.pid_rte_hdr
             datatype = self.datatypes[0](**header)
             packets.append({'pid': pid, 'datatype': datatype})
             for waypoint in waypoints:
                 datatype = self.datatypes[1](**waypoint)
                 # REVIEW: append linkInstance?
                 # linkInstance = self.datatypes[2]()
-                packets.append((self.link.Pid_Rte_Wpt_Data, datatype))
-                # packets.append((self.link.Pid_Rte_Link_Data, linkInstance))
+                packets.append((self.link.pid_rte_wpt_data, datatype))
+                # packets.append((self.link.pid_rte_link_data, linkInstance))
 
         return MultiTransferProtocol.put_data(self,
-                                              self.command.Cmnd_Transfer_Rte,
+                                              self.command.cmnd_transfer_rte,
                                               packets,
                                               callback=callback)
 
@@ -1295,30 +1295,30 @@ class A300(SingleTransferProtocol):
     A300 Track Log Transfer Protocol Packet Sequence
     | N   | Direction          | Packet ID      | Packet Data Type |
     |-----+--------------------+----------------+------------------|
-    | 0   | Device1 to Device2 | Pid_Records    | RecordsType     |
-    | 1   | Device1 to Device2 | Pid_Trk_Data   | <D0>             |
-    | 2   | Device1 to Device2 | Pid_Trk_Data   | <D0>             |
+    | 0   | Device1 to Device2 | pid_records    | RecordsType      |
+    | 1   | Device1 to Device2 | pid_trk_data   | <D0>             |
+    | 2   | Device1 to Device2 | pid_trk_data   | <D0>             |
     | …   | …                  | …              | …                |
-    | n-2 | Device1 to Device2 | Pid_Trk_Data   | <D0>             |
-    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt | Command        |
+    | n-2 | Device1 to Device2 | pid_trk_data   | <D0>             |
+    | n-1 | Device1 to Device2 | pid_xfer_cmplt | Command          |
 
     """
 
     def get_data(self, callback=None):
         return SingleTransferProtocol.get_data(self,
-                                               self.command.Cmnd_Transfer_Trk,
-                                               self.link.Pid_Trk_Data,
+                                               self.command.cmnd_transfer_trk,
+                                               self.link.pid_trk_data,
                                                callback=callback)
 
     def put_data(self, tracks, callback=None):
         packets = []
         for track in tracks:
-            pid = self.link.Pid_Trk_Data
+            pid = self.link.pid_trk_data
             datatype = self.datatypes[0](track)
             packets.append({'pid': pid, 'datatype': datatype})
 
         return SingleTransferProtocol.put_data(self,
-                                               self.command.Cmnd_Transfer_Trk,
+                                               self.command.cmnd_transfer_trk,
                                                packets,
                                                callback=callback)
 
@@ -1329,21 +1329,21 @@ class A301(MultiTransferProtocol):
     A301 Track Log Transfer Protocol Packet Sequence
     |   N | Direction          | Packet ID      | Packet Data Type |
     |-----+--------------------+----------------+------------------|
-    |   0 | Device1 to Device2 | Pid_Records    | RecordsType      |
-    |   1 | Device1 to Device2 | Pid_Trk_Hdr    | <D0>             |
-    |   2 | Device1 to Device2 | Pid_Trk_Data   | <D1>             |
-    |   3 | Device1 to Device2 | Pid_Trk_Data   | <D1>             |
+    |   0 | Device1 to Device2 | pid_records    | RecordsType      |
+    |   1 | Device1 to Device2 | pid_trk_hdr    | <D0>             |
+    |   2 | Device1 to Device2 | pid_trk_data   | <D1>             |
+    |   3 | Device1 to Device2 | pid_trk_data   | <D1>             |
     |   … | …                  | …              | …                |
-    | n-2 | Device1 to Device2 | Pid_Trk_Data   | <D1>             |
-    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt | Command          |
+    | n-2 | Device1 to Device2 | pid_trk_data   | <D1>             |
+    | n-1 | Device1 to Device2 | pid_xfer_cmplt | Command          |
 
     """
 
     def get_data(self, callback=None):
         return MultiTransferProtocol.get_data(self,
-                                              self.command.Cmnd_Transfer_Trk,
-                                              self.link.Pid_Trk_Hdr,
-                                              self.link.Pid_Trk_Data,
+                                              self.command.cmnd_transfer_trk,
+                                              self.link.pid_trk_hdr,
+                                              self.link.pid_trk_data,
                                               callback=callback)
 
     def put_data(self, tracks, callback=None):
@@ -1351,20 +1351,20 @@ class A301(MultiTransferProtocol):
         for track_idx, track in enumerate(tracks):
             header = track[0]
             points = track[1:]
-            pid = self.link.Pid_Trk_Hdr
+            pid = self.link.pid_trk_hdr
             datatype = self.datatypes[0](**header)
             if not datatype.trk_ident:
                 datatype.trk_ident = f"TRACK{track_idx+1}"
             packets.append({'pid': pid, 'datatype': datatype})
             for point_idx, point in enumerate(points):
-                pid = self.link.Pid_Trk_Data
+                pid = self.link.pid_trk_data
                 datatype = self.datatypes[1](**point)
                 if point_idx == 0:
                     datatype.new_trk = True
                     packets.append({'pid': pid, 'datatype': datatype})
 
         return MultiTransferProtocol.put_data(self,
-                                              self.command.Cmnd_Transfer_Trk,
+                                              self.command.cmnd_transfer_trk,
                                               packets,
                                               callback=callback)
 
@@ -1389,30 +1389,30 @@ class A400(SingleTransferProtocol):
     A400 Proximity Waypoint Transfer Protocol Packet Sequence
     | N   | Direction          | Packet ID        | Packet Data Type |
     |-----+--------------------+------------------+------------------|
-    | 0   | Device1 to Device2 | Pid_Records      | RecordsType      |
-    | 1   | Device1 to Device2 | Pid_Prx_Wpt_Data | <D0>             |
-    | 2   | Device1 to Device2 | Pid_Prx_Wpt_Data | <D0>             |
+    | 0   | Device1 to Device2 | pid_records      | RecordsType      |
+    | 1   | Device1 to Device2 | pid_prx_wpt_data | <D0>             |
+    | 2   | Device1 to Device2 | pid_prx_wpt_data | <D0>             |
     | …   | …                  | …                | …                |
-    | n-2 | Device1 to Device2 | Pid_Prx_Wpt_Data | <D0>             |
-    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt   | Command          |
+    | n-2 | Device1 to Device2 | pid_prx_wpt_data | <D0>             |
+    | n-1 | Device1 to Device2 | pid_xfer_cmplt   | Command          |
 
     """
 
     def get_data(self, callback=None):
         return SingleTransferProtocol.get_data(self,
-                                               self.command.Cmnd_Transfer_Prx,
-                                               self.link.Pid_Prx_Wpt_Data,
+                                               self.command.cmnd_transfer_prx,
+                                               self.link.pid_prx_wpt_data,
                                                callback=callback)
 
     def put_data(self, waypoints, callback=None):
         packets = []
         for waypoint in waypoints:
-            pid = self.link.Pid_Prx_Wpt_Data
+            pid = self.link.pid_prx_wpt_data
             datatype = self.datatypes[0](waypoint)
             packets.append({'pid': pid, 'datatype': datatype})
 
         return SingleTransferProtocol.put_data(self,
-                                               self.command.Cmnd_Transfer_Prx,
+                                               self.command.cmnd_transfer_prx,
                                                packets,
                                                callback=callback)
 
@@ -1423,19 +1423,19 @@ class A500(SingleTransferProtocol):
     A500 Almanac Transfer Protocol Packet Sequence
     | N   | Direction          | Packet ID        | Packet Data Type |
     |-----+--------------------+------------------+------------------|
-    | 0   | Device1 to Device2 | Pid_Records      | RecordsType      |
-    | 1   | Device1 to Device2 | Pid_Almanac_Data | <D0>             |
-    | 2   | Device1 to Device2 | Pid_Almanac_Data | <D0>             |
+    | 0   | Device1 to Device2 | pid_records      | RecordsType      |
+    | 1   | Device1 to Device2 | pid_almanac_data | <D0>             |
+    | 2   | Device1 to Device2 | pid_almanac_data | <D0>             |
     | …   | …                  | …                | …                |
-    | n-2 | Device1 to Device2 | Pid_Almanac_Data | <D0>             |
-    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt   | Command          |
+    | n-2 | Device1 to Device2 | pid_almanac_data | <D0>             |
+    | n-1 | Device1 to Device2 | pid_xfer_cmplt   | Command          |
 
     """
 
     def get_data(self, callback=None):
         return SingleTransferProtocol.get_data(self,
-                                               self.command.Cmnd_Transfer_Alm,
-                                               self.link.Pid_Almanac_Data,
+                                               self.command.cmnd_transfer_alm,
+                                               self.link.pid_almanac_data,
                                                callback=callback)
 
 
@@ -1445,18 +1445,18 @@ class A600(TransferProtocol):
     A600 Date and Time Initialization Protocol Packet Sequence
     | N | Direction          | Packet ID          | Packet Data Type |
     |---+--------------------+--------------------+------------------|
-    | 0 | Device1 to Device2 | Pid_Date_Time_Data | <D0>             |
+    | 0 | Device1 to Device2 | pid_date_time_data | <D0>             |
 
     """
 
     def get_data(self, callback=None):
-        self.link.send_packet(self.link.Pid_Command_Data,
-                              self.command.Cmnd_Transfer_Time)
-        packet = self.link.expectPacket(self.link.Pid_Date_Time_Data)
+        self.link.send_packet(self.link.pid_command_data,
+                              self.command.cmnd_transfer_time)
+        packet = self.link.expectPacket(self.link.pid_date_time_data)
         datatype = self.datatypes[0]()
         datatype.unpack(packet['data'])
         if callback:
-            callback(datatype, 1, 1, self.link.Pid_Date_Time_Data)
+            callback(datatype, 1, 1, self.link.pid_date_time_data)
 
         return datatype
 
@@ -1473,19 +1473,19 @@ class A650(SingleTransferProtocol):
     A650 FlightBook Transfer Protocol Packet Sequence
     | N   | Direction      | Packet ID             | Packet Data Type |
     |-----+----------------+-----------------------+------------------|
-    | 0   | Host to Device | Pid_Command_Data      | Command        |
-    | 1   | Device to Host | Pid_Records           | RecordsType     |
-    | 2   | Device to Host | Pid_FlightBook_Record | <D0>             |
-    | …   | …              | …                     | …              |
-    | n-2 | Device to Host | Pid_FlightBook_Record | <D0>             |
-    | n-1 | Device to Host | Pid_Xfer_Cmplt        | Command        |
+    | 0   | Host to Device | pid_command_data      | Command          |
+    | 1   | Device to Host | pid_records           | RecordsType      |
+    | 2   | Device to Host | pid_flightbook_record | <D0>             |
+    | …   | …              | …                     | …                |
+    | n-2 | Device to Host | pid_flightbook_record | <D0>             |
+    | n-1 | Device to Host | pid_xfer_cmplt        | Command          |
 
     """
 
     def get_data(self, callback=None):
         return SingleTransferProtocol.get_data(self,
-                                               self.command.Cmnd_FlightBook_Transfer,
-                                               self.link.Pid_FlightBook_Record,
+                                               self.command.cmnd_flightbook_transfer,
+                                               self.link.pid_flightbook_record,
                                                callback=callback)
 
 
@@ -1495,18 +1495,18 @@ class A700(TransferProtocol):
     A700 Position Initialization Protocol Packet Sequence
     | N | Direction          | Packet ID         | Packet Data Type |
     |---+--------------------+-------------------+------------------|
-    | 0 | Device1 to Device2 | Pid_Position_Data | <D0>             |
+    | 0 | Device1 to Device2 | pid_position_data | <D0>             |
 
     """
 
     def get_data(self, callback=None):
-        self.link.send_packet(self.link.Pid_Command_Data,
-                              self.command.Cmnd_Transfer_Posn)
-        packet = self.link.expectPacket(self.link.Pid_Position_Data)
+        self.link.send_packet(self.link.pid_command_data,
+                              self.command.cmnd_transfer_posn)
+        packet = self.link.expectPacket(self.link.pid_position_data)
         datatype = PositionType()
         datatype.unpack(packet['data'])
         if callback:
-            callback(datatype, 1, 1, self.link.Pid_Position_Data)
+            callback(datatype, 1, 1, self.link.pid_position_data)
 
         return datatype
 
@@ -1518,8 +1518,8 @@ class A800(TransferProtocol):
     position, velocity, and time. This protocol is used as an alternative to
     NMEA (https://www.nmea.org/content/STANDARDS/STANDARDS).
 
-    PVT mode can be switched on and off by sending the Cmnd_Start_Pvt_Data and
-    Cmnd_Stop_Pvt_Data command.
+    PVT mode can be switched on and off by sending the cmnd_start_pvt_data and
+    cmnd_stop_pvt_data command.
 
     According to the specification the ACK and NAK packets are optional, but the
     device will not retransmit a PVT packet in response to receiving a NAK.
@@ -1527,20 +1527,20 @@ class A800(TransferProtocol):
     A800 PVT Protocol Packet Sequence
     | N | Direction                         | Packet ID    | Packet Data Type |
     |---+-----------------------------------+--------------+------------------|
-    | 0 | Device to Host (ACK/NAK optional) | Pid_Pvt_Data | <D0>             |
+    | 0 | Device to Host (ACK/NAK optional) | pid_pvt_data | <D0>             |
 
     """
 
     def data_on(self):
-        self.link.send_packet(self.link.Pid_Command_Data,
-                              self.command.Cmnd_Start_Pvt_Data)
+        self.link.send_packet(self.link.pid_command_data,
+                              self.command.cmnd_start_pvt_data)
 
     def data_off(self):
-        self.link.send_packet(self.link.Pid_Command_Data,
-                              self.command.Cmnd_Stop_Pvt_Data)
+        self.link.send_packet(self.link.pid_command_data,
+                              self.command.cmnd_stop_pvt_data)
 
     def get_data(self, callback=None):
-        packet = self.link.expectPacket(self.link.Pid_Pvt_Data)
+        packet = self.link.expectPacket(self.link.pid_pvt_data)
         datatype = self.datatypes[0]()
         datatype.unpack(packet['data'])
         if callback:
@@ -1601,12 +1601,12 @@ class A900:
     A900 Map Transfer Protocol Packet Sequence
     | N   | Direction      | Packet ID     | Packet Data Type |
     |-----+----------------+---------------+------------------|
-    | 0   | Host to Device | Pid_Mem_Wren  | Region           |
-    | 1   | Device to Host | Pid_Mem_Wel   |                  |
-    | 2   | Device to Host | Pid_Mem_Write | MemChunkType     |
+    | 0   | Host to Device | pid_mem_wren  | Region           |
+    | 1   | Device to Host | pid_mem_wel   |                  |
+    | 2   | Device to Host | pid_mem_write | MemChunkType     |
     | …   | …              | …             | …                |
-    | n-2 | Device to Host | Pid_Mem_Write | MemChunkType     |
-    | n-1 | Device to Host | Pid_Mem_Wrdi  | Region           |
+    | n-2 | Device to Host | pid_mem_write | MemChunkType     |
+    | n-1 | Device to Host | pid_mem_wrdi  | Region           |
 
     """
 
@@ -1617,10 +1617,10 @@ class A900:
 
     def get_memory_properties(self):
         log.info("Request capacity data...")
-        self.link.send_packet(self.link.Pid_Command_Data,
-                              self.command.Cmnd_Transfer_Mem)
+        self.link.send_packet(self.link.pid_command_data,
+                              self.command.cmnd_transfer_mem)
         log.info("Expect capacity data")
-        packet = self.link.expectPacket(self.link.Pid_Capacity_Data)
+        packet = self.link.expectPacket(self.link.pid_capacity_data)
         datatype = MemPropertiesType()
         datatype.unpack(packet['data'])
         mem_size = datatype.mem_size
@@ -1634,17 +1634,17 @@ class A900:
         datatype = MemFileType(mem_region=mem_region, subfile=file)
         datatype.pack()
         data = datatype.get_data()
-        self.link.send_packet(self.link.Pid_Mem_Read, data)
+        self.link.send_packet(self.link.pid_mem_read, data)
         packet = self.link.read_packet()
         pid = packet['id']
-        if pid == self.link.Pid_Mem_Data:
+        if pid == self.link.pid_mem_data:
             datatype = MemDataType()
             datatype.unpack(packet['data'])
             if int.from_bytes(datatype.data, byteorder='little') == 0:
                 log.info("Data not found")
             else:
                 log.info(f"Got unknown data {datatype.data}. Ignoring...")
-        elif pid == self.link.Pid_Mem_Records:
+        elif pid == self.link.pid_mem_records:
             # The RecordsType contains a 32-bit integer that indicates the number
             # of data packets to follow.
             datatype = RecordsType()
@@ -1653,12 +1653,12 @@ class A900:
             log.info(f"{type(self).__name__}: Expecting {packet_count} records")
             data = bytes()
             for idx in range(packet_count):
-                packet = self.link.expectPacket(self.link.Pid_Mem_Chunk)
+                packet = self.link.expectPacket(self.link.pid_mem_chunk)
                 datatype = MemRecordType()
                 datatype.unpack(packet['data'])
                 data += datatype.chunk
                 if callback:
-                    callback(datatype, idx+1, packet_count, self.link.Pid_Mem_Chunk)
+                    callback(datatype, idx+1, packet_count, self.link.pid_mem_chunk)
 
             return data
 
@@ -1693,9 +1693,9 @@ class A900:
                 datatype.pack()
                 data = datatype.get_data()
                 log.info(f"Upload {offset+len(chunk)}/{file_size} bytes")
-                self.link.send_packet(self.link.Pid_Mem_Write, data)
+                self.link.send_packet(self.link.pid_mem_write, data)
                 if callback:
-                    callback(datatype, offset+len(chunk), file_size, self.link.Pid_Mem_Chunk)
+                    callback(datatype, offset+len(chunk), file_size, self.link.pid_mem_chunk)
 
     def _write_bytes(self, bytes, chunk_size=250, callback=None):
         file_size = len(bytes)
@@ -1707,21 +1707,21 @@ class A900:
             datatype.pack()
             data = datatype.get_data()
             log.info(f"Upload {offset+len(chunk)}/{file_size} bytes")
-            self.link.send_packet(self.link.Pid_Mem_Write, data)
+            self.link.send_packet(self.link.pid_mem_write, data)
             if callback:
-                callback(datatype, offset+len(chunk), file_size, self.link.Pid_Mem_Chunk)
+                callback(datatype, offset+len(chunk), file_size, self.link.pid_mem_chunk)
 
     def write_memory(self, data, chunk_size=250, callback=None):
         mem_region = self.memory_properties.mem_region
         log.info("Turn off async mode")
-        self.link.send_packet(self.link.Pid_Enable_Async_Events, b'\x00\x00')
+        self.link.send_packet(self.link.pid_enable_async_events, b'\x00\x00')
         log.info("Enable write")
-        self.link.send_packet(self.link.Pid_Mem_Wren, mem_region)
+        self.link.send_packet(self.link.pid_mem_wren, mem_region)
         max_retries = 10
         retries = 0
         while retries <= max_retries:
             try:
-                self.link.expectPacket(self.link.Pid_Mem_Wel)
+                self.link.expectPacket(self.link.pid_mem_wel)
                 log.info("Write enabled")
                 break
             except LinkError as e:
@@ -1740,7 +1740,7 @@ class A900:
             log.info("Upload map...")
             self._write_bytes(data, chunk_size, callback)
         log.info("Disable write")
-        self.link.send_packet(self.link.Pid_Mem_Wrdi, mem_region)
+        self.link.send_packet(self.link.pid_mem_wrdi, mem_region)
 
 
 class A902:
@@ -1761,10 +1761,10 @@ class A902:
     def send_unlock_key(self, key):
         data = bytes(key)
         log.info("Send unlock key")
-        self.link.send_packet(self.link.Pid_Tx_Unlock_Key,
+        self.link.send_packet(self.link.pid_tx_unlock_key,
                               data)
         log.info("Acknowledge unlock key")
-        self.link.expectPacket(self.link.Pid_Ack_Unlock_Key)
+        self.link.expectPacket(self.link.pid_ack_unlock_key)
         # TODO: read data
 
 
@@ -1790,19 +1790,19 @@ class A906(SingleTransferProtocol):
     A906 Lap Transfer Protocol Packet Sequence
     | N   | Direction      | Packet ID      | Packet Data Type |
     |-----+----------------+----------------+------------------|
-    | 0   | Device to Host | Pid_Records    | RecordsType     |
-    | 1   | Device to Host | Pid_Lap        | <D0>             |
-    | 2   | Device to Host | Pid_Lap        | <D0>             |
-    | …   | …              | …              | …              |
-    | n-2 | Device to Host | Pid_Lap        | <D0>             |
-    | n-1 | Device to Host | Pid_Xfer_Cmplt | Command        |
+    | 0   | Device to Host | pid_records    | RecordsType      |
+    | 1   | Device to Host | pid_lap        | <D0>             |
+    | 2   | Device to Host | pid_lap        | <D0>             |
+    | …   | …              | …              | …                |
+    | n-2 | Device to Host | pid_lap        | <D0>             |
+    | n-1 | Device to Host | pid_xfer_cmplt | Command          |
 
     """
 
     def get_data(self, callback=None):
         return MultiTransferProtocol.get_data(self,
-                                              self.command.Cmnd_Transfer_Laps,
-                                              self.link.Pid_Lap,
+                                              self.command.cmnd_transfer_laps,
+                                              self.link.pid_lap,
                                               callback=callback)
 
 
@@ -1812,32 +1812,32 @@ class A1000(MultiTransferProtocol):
     A1000 Run Transfer Protocol Packet Sequence
     | N   | Direction      | Packet ID        | Packet Data Type |
     |-----+----------------+------------------+------------------|
-    | 0   | Host to Device | Pid_Command_Data | Command          |
-    | 1   | Device to Host | Pid_Records      | RecordsType      |
-    | 2   | Device to Host | Pid_Run          | <D0>             |
+    | 0   | Host to Device | pid_command_data | Command          |
+    | 1   | Device to Host | pid_records      | RecordsType      |
+    | 2   | Device to Host | pid_run          | <D0>             |
     | …   | …              | …                | …                |
-    | k-2 | Device to Host | Pid_Run          | <D0>             |
-    | k-1 | Device to Host | Pid_Xfer_Cmplt   | Command          |
-    | k   | Host to Device | Pid_Command_Data | Command          |
-    | k+1 | Device to Host | Pid_Records      | RecordsType      |
-    | k+2 | Device to Host | Pid_Lap          | LapType          |
+    | k-2 | Device to Host | pid_run          | <D0>             |
+    | k-1 | Device to Host | pid_xfer_cmplt   | Command          |
+    | k   | Host to Device | pid_command_data | Command          |
+    | k+1 | Device to Host | pid_records      | RecordsType      |
+    | k+2 | Device to Host | pid_lap          | LapType          |
     | …   | …              | …                | …                |
-    | m-2 | Device to Host | Pid_Lap          | LapType          |
-    | m-1 | Device to Host | Pid_Xfer_Cmplt   | Command          |
-    | m   | Host to Device | Pid_Command_Data | Command          |
-    | m+1 | Device to Host | Pid_Records      | RecordsType      |
-    | m+2 | Device to Host | Pid_Trk_Hdr      | TrkHdrType       |
-    | m+3 | Device to Host | Pid_Trk_Data     | TrkDataType      |
+    | m-2 | Device to Host | pid_lap          | LapType          |
+    | m-1 | Device to Host | pid_xfer_cmplt   | Command          |
+    | m   | Host to Device | pid_command_data | Command          |
+    | m+1 | Device to Host | pid_records      | RecordsType      |
+    | m+2 | Device to Host | pid_trk_hdr      | TrkHdrType       |
+    | m+3 | Device to Host | pid_trk_data     | TrkDataType      |
     | …   | …              | …                | …                |
-    | n-2 | Device to Host | Pid_Trk_Data     | TrkDataType      |
-    | n-1 | Device to Host | Pid_Xfer_Cmplt   | Command          |
+    | n-2 | Device to Host | pid_trk_data     | TrkDataType      |
+    | n-1 | Device to Host | pid_xfer_cmplt   | Command          |
 
     """
 
     def get_data(self, callback=None):
         return MultiTransferProtocol.get_data(self,
-                                              self.command.Cmnd_Transfer_Runs,
-                                              self.link.Pid_Run,
+                                              self.command.cmnd_transfer_runs,
+                                              self.link.pid_run,
                                               callback=callback)
 
 
@@ -1900,7 +1900,7 @@ class DataType():
 
 class RecordsType(DataType):
     """The Records type contains a 16-bit integer that indicates the number of data
-    packets to follow, excluding the Pid_Xfer_Cmplt packet.
+    packets to follow, excluding the pid_xfer_cmplt packet.
 
     """
     _fields = [('records', 'H'),  # number of data packets to follow
@@ -4742,10 +4742,10 @@ class Garmin:
 
         """
         log.info("Request Product Id...")
-        self.link.send_packet(self.link.Pid_Command_Data,
-                              self.command.Cmnd_Transfer_Unit_Id)
+        self.link.send_packet(self.link.pid_command_data,
+                              self.command.cmnd_transfer_unit_id)
         log.info("Expect Product Id packet")
-        packet = self.link.expectPacket(self.link.Pid_Unit_Id)
+        packet = self.link.expectPacket(self.link.pid_unit_id)
         unit_id = int.from_bytes(packet['data'], byteorder='little')
 
         return unit_id

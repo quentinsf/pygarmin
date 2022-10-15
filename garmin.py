@@ -838,7 +838,7 @@ class CommandProtocol:
     Device Command Protocol Packet Sequence
     | N | Direction          | Packet ID        | Packet Data Type |
     |---+--------------------+------------------+------------------|
-    | 0 | Device1 to Device2 | Pid_Command_Data | CommandIdType    |
+    | 0 | Device1 to Device2 | Pid_Command_Data | Command          |
 
     """
     Cmnd_Abort_Transfer = None
@@ -1019,7 +1019,7 @@ class TransferProtocol:
     |-----+--------------------+----------------+------------------|
     | 0   | Device1 to Device2 | Pid_Records    | RecordsType      |
     | …   | …                  | …              | …                |
-    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt | CommandIdType    |
+    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt | Command          |
 
     """
 
@@ -1027,6 +1027,22 @@ class TransferProtocol:
         self.link = link
         self.command = command
         self.datatypes = datatypes
+
+    def put_data(self, cmd, packets, callback=None):
+        packet_count = len(packets)
+        log.info(f"{type(self).__name__}: Sending {packet_count} records")
+        self.link.send_packet(self.link.Pid_Records, packet_count)
+        for idx, packet in enumerate(packets):
+            pid = packet['pid']
+            datatype = packet['datatype']
+            datatype.pack()
+            data = datatype.get_data()
+            log.debug(f"> packet {pid:3}: {bytes.hex(data)}")
+            self.link.send_packet(pid, data)
+            if callback:
+                callback(datatype, idx+1, packet_count, pid)
+
+        self.link.send_packet(self.link.Pid_Xfer_Cmplt, cmd)
 
 
 class SingleTransferProtocol(TransferProtocol):
@@ -1043,7 +1059,7 @@ class SingleTransferProtocol(TransferProtocol):
     | 2   | Device1 to Device2 | <Data Pid>     | <D0>             |
     | …   | …                  | …              | …                |
     | n-2 | Device1 to Device2 | <Data Pid>     | <D0>             |
-    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt | CommandIdType    |
+    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt | Command          |
 
     """
 
@@ -1061,25 +1077,10 @@ class SingleTransferProtocol(TransferProtocol):
             datatype.unpack(packet['data'])
             result.append(datatype)
             if callback:
-                callback(datatype, idx, packet_count, pid)
-                self.link.expectPacket(self.link.Pid_Xfer_Cmplt)
+                callback(datatype, idx+1, packet_count, pid)
+        self.link.expectPacket(self.link.Pid_Xfer_Cmplt)
 
         return result
-
-    def put_data(self, cmd, packets, callback=None):
-        packet_count = len(packets)
-        log.info(f"{type(self).__name__}: Sending {packet_count} records")
-        self.link.send_packet(self.link.Pid_Records, packet_count)
-        for idx, packet in enumerate(packets):
-            pid = packet['pid']
-            datatype = packet['datatype']
-            data = datatype.get_data()
-            log.debug(f"> packet {pid:3}: {bytes.hex(data)}")
-            self.link.send_packet(pid, data)
-            if callback:
-                callback(datatype, idx, packet_count, pid)
-
-        self.link.send_packet(self.link.Pid_Xfer_Cmplt, cmd)
 
 
 class MultiTransferProtocol(TransferProtocol):
@@ -1102,7 +1103,7 @@ class MultiTransferProtocol(TransferProtocol):
     |   3 | Device1 to Device2 | <Data Pid>     | <D1>             |
     |   … | …                  | …              | …                |
     | n-2 | Device1 to Device2 | <Data Pid>     | <D1>             |
-    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt | CommandIdType    |
+    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt | Command          |
 
 
     """
@@ -1119,8 +1120,8 @@ class MultiTransferProtocol(TransferProtocol):
             packet = self.link.read_packet()
             pid = packet['id']
             data = packet['data']
-            idx = pids.index(pid)
-            datatype = self.datatypes[idx]()
+            i = pids.index(pid)
+            datatype = self.datatypes[i]()
             log.info(f"Datatype {type(datatype).__name__}")
             datatype.unpack(data)
             if pid == hdr_pid:
@@ -1130,8 +1131,8 @@ class MultiTransferProtocol(TransferProtocol):
             else:
                 raise ProtocolError(f"Expected one of {*pids,}, got {pid}")
             if callback:
-                callback(datatype, idx, packet_count, pid)
-                self.link.expectPacket(self.link.Pid_Xfer_Cmplt)
+                callback(datatype, idx+1, packet_count, pid)
+        self.link.expectPacket(self.link.Pid_Xfer_Cmplt)
 
         return packets
 
@@ -1147,7 +1148,7 @@ class A100(SingleTransferProtocol):
     | 2   | Device1 to Device2 | Pid_Wpt_Data   | <D0>             |
     | …   | …                  | …              | …                |
     | n-2 | Device1 to Device2 | Pid_Wpt_Data   | <D0>             |
-    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt | CommandIdType    |
+    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt | Command          |
 
     """
 
@@ -1166,9 +1167,9 @@ class A100(SingleTransferProtocol):
             packets.append({'pid': pid, 'datatype': datatype})
 
         return SingleTransferProtocol.put_data(self,
-                                              self.command.Cmnd_Transfer_Wpt,
-                                              packets,
-                                              callback=callback)
+                                               self.command.Cmnd_Transfer_Wpt,
+                                               packets,
+                                               callback=callback)
 
 
 class A101(SingleTransferProtocol):
@@ -1182,7 +1183,7 @@ class A101(SingleTransferProtocol):
     | 2   | Device1 to Device2 | Pid_Wpt_Cat    | <D0>             |
     | …   | …                  | …              | …                |
     | n-2 | Device1 to Device2 | Pid_Wpt_Cat    | <D0>             |
-    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt | CommandIdType    |
+    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt | Command          |
 
     """
 
@@ -1205,7 +1206,7 @@ class A200(MultiTransferProtocol):
     |   3 | Device1 to Device2 | Pid_Rte_Wpt_Data | <D1>             |
     |   … | …                  | …                | …                |
     | n-2 | Device1 to Device2 | Pid_Rte_Wpt_Data | <D1>             |
-    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt   | CommandIdType    |
+    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt   | Command          |
 
     """
 
@@ -1230,9 +1231,9 @@ class A200(MultiTransferProtocol):
                 packets.append({'pid': pid, 'datatype': datatype})
 
         return MultiTransferProtocol.put_data(self,
-                                             self.command.Cmnd_Transfer_Rte,
-                                             packets,
-                                             callback=callback)
+                                              self.command.Cmnd_Transfer_Rte,
+                                              packets,
+                                              callback=callback)
 
 
 class A201(MultiTransferProtocol):
@@ -1249,7 +1250,7 @@ class A201(MultiTransferProtocol):
     |   5 | Device1 to Device2 | Pid_Rte_Link_Data | <D2>             |
     |   … | …                  | …                 | …                |
     | n-2 | Device1 to Device2 | Pid_Rte_Wpt_Data  | <D1>             |
-    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt    | CommandIdType    |
+    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt    | Command          |
 
     """
 
@@ -1277,9 +1278,9 @@ class A201(MultiTransferProtocol):
                 # packets.append((self.link.Pid_Rte_Link_Data, linkInstance))
 
         return MultiTransferProtocol.put_data(self,
-                                             self.command.Cmnd_Transfer_Rte,
-                                             packets,
-                                             callback=callback)
+                                              self.command.Cmnd_Transfer_Rte,
+                                              packets,
+                                              callback=callback)
 
 
 class A300(SingleTransferProtocol):
@@ -1293,7 +1294,7 @@ class A300(SingleTransferProtocol):
     | 2   | Device1 to Device2 | Pid_Trk_Data   | <D0>             |
     | …   | …                  | …              | …                |
     | n-2 | Device1 to Device2 | Pid_Trk_Data   | <D0>             |
-    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt | CommandIdType  |
+    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt | Command        |
 
     """
 
@@ -1311,9 +1312,9 @@ class A300(SingleTransferProtocol):
             packets.append({'pid': pid, 'datatype': datatype})
 
         return SingleTransferProtocol.put_data(self,
-                                              self.command.Cmnd_Transfer_Trk,
-                                              packets,
-                                              callback=callback)
+                                               self.command.Cmnd_Transfer_Trk,
+                                               packets,
+                                               callback=callback)
 
 
 class A301(MultiTransferProtocol):
@@ -1328,7 +1329,7 @@ class A301(MultiTransferProtocol):
     |   3 | Device1 to Device2 | Pid_Trk_Data   | <D1>             |
     |   … | …                  | …              | …                |
     | n-2 | Device1 to Device2 | Pid_Trk_Data   | <D1>             |
-    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt | CommandIdType    |
+    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt | Command          |
 
     """
 
@@ -1387,7 +1388,7 @@ class A400(SingleTransferProtocol):
     | 2   | Device1 to Device2 | Pid_Prx_Wpt_Data | <D0>             |
     | …   | …                  | …                | …                |
     | n-2 | Device1 to Device2 | Pid_Prx_Wpt_Data | <D0>             |
-    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt   | CommandIdType    |
+    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt   | Command          |
 
     """
 
@@ -1421,7 +1422,7 @@ class A500(SingleTransferProtocol):
     | 2   | Device1 to Device2 | Pid_Almanac_Data | <D0>             |
     | …   | …                  | …                | …                |
     | n-2 | Device1 to Device2 | Pid_Almanac_Data | <D0>             |
-    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt   | CommandIdType    |
+    | n-1 | Device1 to Device2 | Pid_Xfer_Cmplt   | Command          |
 
     """
 
@@ -1466,12 +1467,12 @@ class A650(SingleTransferProtocol):
     A650 FlightBook Transfer Protocol Packet Sequence
     | N   | Direction      | Packet ID             | Packet Data Type |
     |-----+----------------+-----------------------+------------------|
-    | 0   | Host to Device | Pid_Command_Data      | CommandIdType  |
+    | 0   | Host to Device | Pid_Command_Data      | Command        |
     | 1   | Device to Host | Pid_Records           | RecordsType     |
     | 2   | Device to Host | Pid_FlightBook_Record | <D0>             |
     | …   | …              | …                     | …              |
     | n-2 | Device to Host | Pid_FlightBook_Record | <D0>             |
-    | n-1 | Device to Host | Pid_Xfer_Cmplt        | CommandIdType  |
+    | n-1 | Device to Host | Pid_Xfer_Cmplt        | Command        |
 
     """
 
@@ -1814,7 +1815,7 @@ class A906(SingleTransferProtocol):
     | 2   | Device to Host | Pid_Lap        | <D0>             |
     | …   | …              | …              | …              |
     | n-2 | Device to Host | Pid_Lap        | <D0>             |
-    | n-1 | Device to Host | Pid_Xfer_Cmplt | CommandIdType  |
+    | n-1 | Device to Host | Pid_Xfer_Cmplt | Command        |
 
     """
 
@@ -1831,25 +1832,25 @@ class A1000(MultiTransferProtocol):
     A1000 Run Transfer Protocol Packet Sequence
     | N   | Direction      | Packet ID        | Packet Data Type |
     |-----+----------------+------------------+------------------|
-    | 0   | Host to Device | Pid_Command_Data | CommandIdType    |
+    | 0   | Host to Device | Pid_Command_Data | Command          |
     | 1   | Device to Host | Pid_Records      | RecordsType      |
     | 2   | Device to Host | Pid_Run          | <D0>             |
     | …   | …              | …                | …                |
     | k-2 | Device to Host | Pid_Run          | <D0>             |
-    | k-1 | Device to Host | Pid_Xfer_Cmplt   | CommandIdType    |
-    | k   | Host to Device | Pid_Command_Data | CommandIdType    |
+    | k-1 | Device to Host | Pid_Xfer_Cmplt   | Command          |
+    | k   | Host to Device | Pid_Command_Data | Command          |
     | k+1 | Device to Host | Pid_Records      | RecordsType      |
-    | k+2 | Device to Host | Pid_Lap          | <LapType>        |
+    | k+2 | Device to Host | Pid_Lap          | LapType          |
     | …   | …              | …                | …                |
-    | m-2 | Device to Host | Pid_Lap          | <LapType>        |
-    | m-1 | Device to Host | Pid_Xfer_Cmplt   | CommandIdType    |
-    | m   | Host to Device | Pid_Command_Data | CommandIdType    |
+    | m-2 | Device to Host | Pid_Lap          | LapType          |
+    | m-1 | Device to Host | Pid_Xfer_Cmplt   | Command          |
+    | m   | Host to Device | Pid_Command_Data | Command          |
     | m+1 | Device to Host | Pid_Records      | RecordsType      |
-    | m+2 | Device to Host | Pid_Trk_Hdr      | <TrkHdrType>     |
-    | m+3 | Device to Host | Pid_Trk_Data     | <TrkDataType>    |
+    | m+2 | Device to Host | Pid_Trk_Hdr      | TrkHdrType       |
+    | m+3 | Device to Host | Pid_Trk_Data     | TrkDataType      |
     | …   | …              | …                | …                |
-    | n-2 | Device to Host | Pid_Trk_Data     | <TrkDataType>    |
-    | n-1 | Device to Host | Pid_Xfer_Cmplt   | CommandIdType    |
+    | n-2 | Device to Host | Pid_Trk_Data     | TrkDataType      |
+    | n-1 | Device to Host | Pid_Xfer_Cmplt   | Command          |
 
     """
 

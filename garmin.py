@@ -1736,9 +1736,9 @@ class A900:
             raise LinkError("Maximum retries exceeded.")
 
         if isinstance(data, str):
-            self.upload_map_file(data, chunk_size, callback)
+            self._upload_map_file(data, chunk_size, callback)
         elif isinstance(data, bytes):
-            self.upload_map_bytes(data, chunk_size, callback)
+            self._upload_map_bytes(data, chunk_size, callback)
         log.info("Disable write")
         self.link.send_packet(self.link.Pid_Mem_Wrdi, mem_region)
 

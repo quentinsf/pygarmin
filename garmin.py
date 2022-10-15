@@ -1650,7 +1650,7 @@ class A900:
                 datatype.unpack(packet['data'])
                 data += datatype.chunk
                 if callback:
-                    callback(datatype, idx, packet_count, self.link.Pid_Mem_Chunk)
+                    callback(datatype, idx+1, packet_count, self.link.Pid_Mem_Chunk)
 
             return data
 

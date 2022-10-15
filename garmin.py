@@ -4781,6 +4781,16 @@ class Garmin:
             raise GarminError("Protocol track_log_transfer_protocol is not supported")
         return self.track_log_transfer.put_data(data, callback)
 
+    def get_proximities(self, callback=None):
+        if self.proximity_waypoint_transfer is None:
+            raise GarminError("Protocol proximity_waypoint_transfer_protocol is not supported")
+        return self.proximity_waypoint_transfer.get_data(callback)
+
+    def put_proximities(self, data, callback=None):
+        if self.proximity_waypoint_transfer is None:
+            raise GarminError("Protocol proximity_waypoint_transfer_protocol is not supported")
+        return self.proximity_waypoint_transfer.put_data(data, callback)
+
     def get_laps(self, callback=None):
         if self.lap_transfer is None:
             raise GarminError("Protocol lap_transfer_protocol is not supported")

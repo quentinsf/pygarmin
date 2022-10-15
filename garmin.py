@@ -162,6 +162,7 @@ class SerialLink(P000):
         data bytes, followed by a three-byte trailer (Checksum, DLE, and ETX).
 
         """
+        log.info("Unpack packet...")
         # Only the size, data, and checksum fields have to be unescaped, but
         # unescaping the whole packet doesn't hurt
         packet = self.unescape(buffer)
@@ -195,7 +196,7 @@ class SerialLink(P000):
         | n-1         | End of Text         | ASCII ETX character (3 decimal)                                |
 
         """
-        log.info("Pack packet")
+        log.debug("Pack packet...")
         if isinstance(data, bytes):
             pass
         elif isinstance(data, int):
@@ -209,11 +210,11 @@ class SerialLink(P000):
             datatype = type(data).__name__
             raise ProtocolError(f"Invalid data type: should be 'bytes' or 'int', but is {datatype}")
         size = len(data)
-        log.debug(f"size: {size}")
+        log.debug(f"Packet data size: {size}")
         checksum = self.checksum(bytes([pid])
                                  + bytes([size])
                                  + data)
-        log.debug(f"checksum: {checksum}")
+        log.debug(f"Packet data checksum: {checksum}")
         packet = bytes([self.DLE]) \
             + bytes([pid]) \
             + self.escape(bytes([size])) \
@@ -300,7 +301,7 @@ class SerialLink(P000):
                     self.read_ack(pid)
                 break
             except LinkError as e:
-                log.info(e)
+                log.error(e)
                 retries += 1
 
         if retries > self.max_retries:
@@ -501,7 +502,7 @@ class USBLink(P000):
         |        8-11 | Data size        |                                                |
         |         12+ | Data             |                                                |
         """
-        log.info("Pack packet")
+        log.debug("Pack packet")
         if isinstance(data, bytes):
             pass
         elif isinstance(data, int):
@@ -759,7 +760,7 @@ class A000:
         self.link = linkLayer
 
     def get_product_data(self):
-        log.info("Request product data")
+        log.info("Request product data...")
         self.link.send_packet(self.link.Pid_Product_Rqst, None)
         log.info("Expect product data")
         packet = self.link.expectPacket(self.link.Pid_Product_Data)
@@ -951,7 +952,7 @@ class T001:
                 return x
 
     def get_supported_baudrates(self):
-        log.info("Get supported baudrates")
+        log.info("Get supported baudrates...")
         self.link.send_packet(self.link.Pid_Command_Data,
                               self.command.Cmnd_Transfer_Baud)
         packet = self.link.expectPacket(self.link.Pid_Baud_Data)
@@ -967,6 +968,7 @@ class T001:
         """Change the baudrate of the device.
 
         """
+        log.info(f"Change baudrate to {baudrate}...")
         log.info("Turn off all requests")
         self.link.send_packet(self.link.Pid_Rqst_Data,
                               None)
@@ -1614,18 +1616,20 @@ class A900:
         self.memory_properties = self.get_memory_properties()
 
     def get_memory_properties(self):
-        log.info("Request capacity data")
+        log.info("Request capacity data...")
         self.link.send_packet(self.link.Pid_Command_Data,
                               self.command.Cmnd_Transfer_Mem)
         log.info("Expect capacity data")
         packet = self.link.expectPacket(self.link.Pid_Capacity_Data)
         datatype = MemPropertiesType()
         datatype.unpack(packet['data'])
+        mem_size = datatype.mem_size
+        log.info(f"Memory size: {mem_size} bytes")
 
         return datatype
 
     def get_memory_data(self, file='', callback=None):
-        log.info("Get memory data")
+        log.info("Get memory data...")
         mem_region = self.memory_properties.mem_region
         datatype = MemFileType(mem_region=mem_region, subfile=file)
         datatype.pack()
@@ -1659,7 +1663,7 @@ class A900:
             return data
 
     def get_map_properties(self):
-        log.info("Get map properties")
+        log.info("Get map properties...")
         subfile = "MAPSOURC.MPS"
         data = self.get_memory_data(file=subfile)
         if data is not None:
@@ -1670,7 +1674,7 @@ class A900:
             return result
 
     def read_memory(self, callback=None):
-        log.info("Download map")
+        log.info("Download map...")
         data = self.get_memory_data(file='', callback=callback)
         if data is not None:
             return data
@@ -1688,7 +1692,7 @@ class A900:
                 datatype = MemChunkType(offset, chunk)
                 datatype.pack()
                 data = datatype.get_data()
-                log.info(f"Upload {offset+len(chunk)}/{file_size}")
+                log.info(f"Upload {offset+len(chunk)}/{file_size} bytes")
                 self.link.send_packet(self.link.Pid_Mem_Write, data)
                 if callback:
                     callback(datatype, offset+len(chunk), file_size, self.link.Pid_Mem_Chunk)
@@ -1702,7 +1706,7 @@ class A900:
             datatype = MemChunkType(offset, chunk)
             datatype.pack()
             data = datatype.get_data()
-            log.info(f"Upload {offset+len(chunk)}/{file_size}")
+            log.info(f"Upload {offset+len(chunk)}/{file_size} bytes")
             self.link.send_packet(self.link.Pid_Mem_Write, data)
             if callback:
                 callback(datatype, offset+len(chunk), file_size, self.link.Pid_Mem_Chunk)
@@ -1721,19 +1725,19 @@ class A900:
                 log.info("Write enabled")
                 break
             except LinkError as e:
-                log.info(e)
+                log.error(e)
                 retries += 1
         if retries > max_retries:
             raise LinkError("Maximum retries exceeded.")
 
         if data is None:
-            log.info("Delete map")
+            log.info("Delete map...")
             pass
         elif isinstance(data, str):
-            log.info("Upload map")
+            log.info("Upload map...")
             self._write_file(data, chunk_size, callback)
         elif isinstance(data, bytes):
-            log.info("Upload map")
+            log.info("Upload map...")
             self._write_bytes(data, chunk_size, callback)
         log.info("Disable write")
         self.link.send_packet(self.link.Pid_Mem_Wrdi, mem_region)
@@ -4660,7 +4664,7 @@ class Garmin:
         return globals()[name]
 
     def lookup_protocols(self, product_id, software_version):
-        log.info("Look up protocols by Product ID and software version")
+        log.info("Look up protocols by Product ID and software version...")
         model = device_protocol_capabilities.get(product_id)
         if model is None:
             raise ValueError(f"Unknown Product ID: {product_id}")
@@ -4685,7 +4689,7 @@ class Garmin:
 
         """
         try:
-            log.info("Get supported protocols and data types")
+            log.info("Get supported protocols and data types...")
             protocols = self.protocol_capability.get_protocols()
         except LinkError:
             log.info("Protocol Capability Protocol not supported by the device")
@@ -4738,7 +4742,7 @@ class Garmin:
         (https://www8.garmin.com/support/download_details.jsp?id=209).
 
         """
-        log.info("Request Product Id")
+        log.info("Request Product Id...")
         self.link.send_packet(self.link.Pid_Command_Data,
                               self.command.Cmnd_Transfer_Unit_Id)
         log.info("Expect Product Id packet")
@@ -4836,6 +4840,7 @@ class Garmin:
         elif isinstance(data, bytes):
             map_size = len(data)
         mem_size = self.map_transfer.memory_properties.mem_size
+        log.info(f"Map size: {map_size} bytes")
         if map_size > mem_size:
             raise GarminError("Insufficient memory to upload map")
         else:

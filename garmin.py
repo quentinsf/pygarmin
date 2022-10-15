@@ -1624,6 +1624,7 @@ class A900:
         log.info("Get memory data")
         mem_region = self.memory_properties.mem_region
         datatype = MemFileType(mem_region=mem_region, subfile=file)
+        datatype.pack()
         data = datatype.get_data()
         self.link.send_packet(self.link.Pid_Mem_Read, data)
         packet = self.link.read_packet()
@@ -1698,6 +1699,7 @@ class A900:
                     break
                 offset = f.tell()
                 datatype = MemChunkType(offset, chunk)
+                datatype.pack()
                 data = datatype.get_data()
                 log.info(f"Upload chunk {idx+1} of {chunk_count}")
                 self.link.send_packet(self.link.Pid_Mem_Write, data)
@@ -1711,6 +1713,7 @@ class A900:
         for idx, offset in enumerate(offsets):
             chunk = data[offset:offset+chunk_size]
             datatype = MemChunkType(offset, chunk)
+            datatype.pack()
             data = datatype.get_data()
             log.info(f"Upload chunk {idx+1} of {chunk_count}")
             self.link.send_packet(self.link.Pid_Mem_Write, data)

@@ -1659,27 +1659,10 @@ class A900:
         subfile = "MAPSOURC.MPS"
         data = self.get_memory_data(file=subfile)
         if data is not None:
-            result = []
-            struct = MPSFileType.get_struct()
-            for record_type, record_length, record_content in struct.unpack(data):
-                record_type = chr(record_type)
-                if record_type == MPSFileType.Map_Product_Id:
-                    log.debug(f"Record 'F': Product")
-                    datatype = MapProductType()
-                elif record_type == MapProductType.Map_Segment_Id:
-                    log.debug(f"Record 'L': Map segment")
-                    datatype = MapSegmentType()
-                elif record_type == MapProductType.Map_Unknown_Id:
-                    log.debug(f"Record 'P': Unknown")
-                    datatype = MapUnknownType()
-                elif record_type == MapProductType.Map_Unlock_Id:
-                    log.debug(f"Record 'U': Unlock")
-                    datatype = MapUnlockType()
-                elif record_type == MapProductType.Map_Set_Id:
-                    log.debug(f"Record 'V': Mapset")
-                    datatype = MapSetType()
-                    result.append(datatype.unpack(record_content))
-
+            datatype = MPSFileType()
+            datatype.unpack(data)
+            records = datatype.get_records()
+            result = [ record.get_content() for record in records ]
             return result
 
     def download_map(self, callback=None):
@@ -4274,42 +4257,6 @@ class MemChunkType(DataType):
         self.chunk = chunk
 
 
-class MPSFileType(DataType):
-    """MPS file format.
-
-    The Mapsource (MPS) file format contains a list of maps and their
-    descriptions.
-
-    The MPS file is used as a subfile in the IMG container file format and by
-    MapSource software version 2.xx. Later versions of MapSource use a different
-    file format with the same filename extension.
-
-    The file format is reverse engineered by Herbert Oppmann
-    (https://www.memotech.franken.de/FileFormats/Garmin_IMG_Subfiles_Format.pdf).
-
-    The file consists of a sequence of variable sized records with the following
-    structure:
-
-    General record structure
-    | Byte Number | Byte Description |
-    |-------------+------------------|
-    |           0 | Record type      |
-    |           1 | Record length    |
-    |      2 to n | Record content   |
-
-    """
-    _fields = [('record_type', 'B'),
-               ('record_length', 'H'),
-               ('record_content', '/1s'),
-               ]
-    # Record types
-    Map_Product_Id = 'F'
-    Map_Segment_Id = 'L'
-    Map_Unknown_Id = 'P'
-    Map_Unlock_Id = 'U'
-    Map_Set_Id = 'V'
-
-
 class MapProductType(DataType):
     _fields = [('pid', 'H'),   # product ID
                ('fid', 'H'),   # family ID
@@ -4347,6 +4294,85 @@ class MapSetType(DataType):
     _fields = [('mapset_name', 'n'),
                ('auto_name', '?'),
                ]
+
+
+class MPSRecordType(DataType):
+    _fields = [('type', 'B'),
+               ('length', 'H'),
+               ('content', '/1s'),
+               ]
+    _type = {'F': 'map_product_id',
+             'L': 'map_segment_id',
+             'P': 'map_unknown_id',
+             'U': 'map_unlock_id',
+             'V': 'map_set_id',
+             }
+
+    def __init__(self, type, length, content):
+        self.type = type
+        self.length = length
+        self.content = content
+
+    def get_type(self):
+        """Return the type value.
+
+        The characters shown are translated to numeric values using the ASCII
+        character set.
+
+        """
+        return self._type.get(chr(self.type))
+
+    def get_content(self):
+        type = self.get_type()
+        if type == 'map_product_id':
+            log.debug(f"Record 'F': Product")
+            datatype = MapProductType()
+        elif type == 'map_segment_id':
+            log.debug(f"Record 'L': Map segment")
+            datatype = MapSegmentType()
+        elif type == 'map_unknown_id':
+            log.debug(f"Record 'P': Unknown")
+            datatype = MapUnknownType()
+        elif type == 'map_unlock_id':
+            log.debug(f"Record 'U': Unlock")
+            datatype = MapUnlockType()
+        elif type == 'map_set_id':
+            log.debug(f"Record 'V': Mapset")
+            datatype = MapSetType()
+        datatype.unpack(self.content)
+        return datatype
+
+
+class MPSFileType(DataType):
+    """MPS file format.
+
+    The Mapsource (MPS) file format contains a list of maps and their
+    descriptions.
+
+    The MPS file is used as a subfile in the IMG container file format and by
+    MapSource software version 2.xx. Later versions of MapSource use a different
+    file format with the same filename extension.
+
+    The file format is reverse engineered by Herbert Oppmann
+    (https://www.memotech.franken.de/FileFormats/Garmin_IMG_Subfiles_Format.pdf).
+
+    The file consists of a sequence of variable sized records with the following
+    structure:
+
+    General record structure
+    | Byte Number | Byte Description |
+    |-------------+------------------|
+    |           0 | Record type      |
+    |           1 | Record length    |
+    |      2 to n | Record content   |
+
+    """
+    _mps_record_fmt = MPSRecordType.get_format()
+    _fields = [('records', f'{{{_mps_record_fmt}}}'),
+               ]
+
+    def get_records(self):
+        return [ MPSRecordType(*record) for record in self.records ]
 
 
 # Garmin models ==============================================

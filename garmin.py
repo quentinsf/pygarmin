@@ -1692,7 +1692,6 @@ class A900:
         file_size = os.path.getsize(file)
         chunk_count = math.ceil(file_size / chunk_size)
         with open(file, 'rb') as f:
-            idx = 0
             while True:
                 chunk = f.read(chunk_size)
                 if not chunk:  # EOF reached
@@ -1701,24 +1700,24 @@ class A900:
                 datatype = MemChunkType(offset, chunk)
                 datatype.pack()
                 data = datatype.get_data()
-                log.info(f"Upload chunk {idx+1} of {chunk_count}")
+                log.info(f"Upload {offset+len(chunk)}/{file_size}")
                 self.link.send_packet(self.link.Pid_Mem_Write, data)
                 if callback:
-                    callback(datatype, idx, chunk_count, self.link.Pid_Mem_Chunk)
-                    idx += 1
+                    callback(datatype, offset+len(chunk), file_size, self.link.Pid_Mem_Chunk)
 
-    def _upload_map_bytes(self, data, chunk_size=250, callback=None):
-        offsets = range(0, len(data), chunk_size)
+    def _upload_map_bytes(self, bytes, chunk_size=250, callback=None):
+        file_size = len(bytes)
+        offsets = range(0, file_size, chunk_size)
         chunk_count = len(offsets)
-        for idx, offset in enumerate(offsets):
-            chunk = data[offset:offset+chunk_size]
+        for offset in offsets:
+            chunk = bytes[offset:offset+chunk_size]
             datatype = MemChunkType(offset, chunk)
             datatype.pack()
             data = datatype.get_data()
-            log.info(f"Upload chunk {idx+1} of {chunk_count}")
+            log.info(f"Upload {offset+len(chunk)}/{file_size}")
             self.link.send_packet(self.link.Pid_Mem_Write, data)
             if callback:
-                callback(datatype, idx, chunk_count, self.link.Pid_Mem_Chunk)
+                callback(datatype, offset+len(chunk), file_size, self.link.Pid_Mem_Chunk)
 
     def upload_map(self, data, chunk_size=250, callback=None):
         log.info("Upload map")

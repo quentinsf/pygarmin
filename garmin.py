@@ -390,6 +390,7 @@ class USBLink(P000):
         import usb
         self.usb = usb
         self.timeout = 1
+        self.max_retries = 5
         self.start_session()
 
     def __del__(self):
@@ -555,9 +556,20 @@ class USBLink(P000):
 
     def read_packet(self):
         """Read a packet."""
-        buffer = self.read()
-        log.debug(f"> {bytes.hex(buffer)}")
-        packet = self.unpack(buffer)
+        retries = 0
+        while retries <= self.max_retries:
+            try:
+                buffer = self.read()
+                log.debug(f"> {bytes.hex(buffer)}")
+                packet = self.unpack(buffer)
+                break
+            except self.usb.core.USBError as e:
+                log.info(e)
+                retries += 1
+
+        if retries > self.max_retries:
+            raise LinkError("Maximum retries exceeded.")
+
         return packet
 
     def send_packet(self, pid, data):

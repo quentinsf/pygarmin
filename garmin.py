@@ -676,7 +676,6 @@ class L001(L000):
     pid_xfer_cmplt = 12
     pid_date_time_data = 14
     pid_position_data = 17
-    pid_rqst_data = 18
     pid_prx_wpt_data = 19
     pid_records = 27
     pid_enable_async_events = 28
@@ -961,7 +960,7 @@ class T001:
             baudrate = self.desired_baudrate(baudrate)
             if baudrate:
                 baudrates.append(baudrate)
-                log.info(f"Supported baudrates: {*baudrates, }.")
+        log.info(f"Supported baudrates: {*baudrates, }.")
         return baudrates
 
     def set_baudrate(self, baudrate):
@@ -969,9 +968,8 @@ class T001:
 
         """
         log.info(f"Change baudrate to {baudrate}...")
-        log.info("Turn off all requests")
-        self.link.send_packet(self.link.pid_rqst_data,
-                              None)
+        log.info("Turn off async mode")
+        self.link.send_packet(self.link.pid_enable_async_events, b'\x00\x00')
         log.info("Request baudrate change")
         data = baudrate.to_bytes(4, byteorder='little')
         self.link.send_packet(self.link.pid_baud_rqst_data,

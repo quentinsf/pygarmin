@@ -31,6 +31,7 @@
 
 from array import array
 from datetime import datetime, timedelta
+import io
 import os
 import re
 import sys
@@ -1695,6 +1696,25 @@ class A900:
                 if callback:
                     callback(datatype, offset+len(chunk), file_size, self.link.pid_mem_chunk)
 
+    def _write_handle(self, handle, chunk_size=250, callback=None):
+        log.info(f"Upload map {handle.name}")
+        handle.seek(0, os.SEEK_END)
+        file_size = handle.tell()
+        chunk_count = math.ceil(file_size / chunk_size)
+        handle.seek(0, os.SEEK_SET)
+        while True:
+            chunk = handle.read(chunk_size)
+            if not chunk:  # EOF reached
+                break
+            offset = handle.tell()
+            datatype = MemChunkType(offset, chunk)
+            datatype.pack()
+            data = datatype.get_data()
+            log.info(f"Upload {offset+len(chunk)}/{file_size} bytes")
+            self.link.send_packet(self.link.pid_mem_write, data)
+            if callback:
+                callback(datatype, offset+len(chunk), file_size, self.link.pid_mem_chunk)
+
     def _write_bytes(self, bytes, chunk_size=250, callback=None):
         file_size = len(bytes)
         offsets = range(0, file_size, chunk_size)
@@ -1734,6 +1754,9 @@ class A900:
         elif isinstance(data, str):
             log.info("Upload map...")
             self._write_file(data, chunk_size, callback)
+        elif isinstance(data, io.BufferedReader):
+            log.info("Upload map...")
+            self._write_handle(data, chunk_size, callback)
         elif isinstance(data, bytes):
             log.info("Upload map...")
             self._write_bytes(data, chunk_size, callback)
@@ -4834,6 +4857,8 @@ class Garmin:
             raise GarminError("Protocol map_transfer_protocol is not supported")
         if isinstance(data, str):
             map_size = os.path.getsize(data)
+        elif isinstance(data, io.BufferedReader):
+            map_size = os.stat(data.fileno()).st_size
         elif isinstance(data, bytes):
             map_size = len(data)
         mem_size = self.map_transfer.memory_properties.mem_size

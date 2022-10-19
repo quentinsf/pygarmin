@@ -1514,7 +1514,7 @@ class A700(TransferProtocol):
         self.link.send_packet(self.link.pid_command_data,
                               self.command.cmnd_transfer_posn)
         packet = self.link.expectPacket(self.link.pid_position_data)
-        datatype = PositionType()
+        datatype = self.datatypes[0]()
         datatype.unpack(packet['data'])
         if callback:
             callback(datatype, 1, 1, self.link.pid_position_data)

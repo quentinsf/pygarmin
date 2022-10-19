@@ -3654,10 +3654,27 @@ class D500(AlmanacType):
                ('i', 'f'),      # inclination angle (r)
                ]
 
+    def __init__(self, wn=0, toa=0, af0=0, af1=0, e=0, sqrta=0, m0=0, w=0, omg0=0, odot=0, i=0):
+        self.wn = wn,
+        self.toa = toa,
+        self.af0 = af0,
+        self.af1 = af1,
+        self.e = e,
+        self.sqrta = sqrta,
+        self.m0 = m0,
+        self.w = w,
+        self.omg0 = omg0,
+        self.odot = odot,
+        self.i = i
+
 
 class D501(D500):
     _fields = D500._fields.copy()
     _fields.append(('hlth', 'B'))  # almanac health
+
+    def __init__(self, hlth=0, **kwargs):
+        super().__init__(**kwargs)
+        self.hlth = hlth
 
 
 class D550(D500):

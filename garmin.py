@@ -2063,7 +2063,7 @@ class PositionType(DataType):
         0x7FFFFFFF (-129).
 
         """
-        return not self.lat == -129 and self.lat == -129
+        return not ( self.lat == -129 and self.lon == -129 )
 
 
 class RadianPositionType(DataType):

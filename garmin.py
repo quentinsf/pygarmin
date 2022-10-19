@@ -1884,9 +1884,9 @@ class DataType():
     re_ascii = r'[\x20-\x7E]'
 
     @classmethod
-    def get_names(cls):
-        names = list(zip(*cls._fields))[0]
-        return names
+    def get_keys(cls):
+        keys = list(zip(*cls._fields))[0]
+        return keys
 
     @classmethod
     def get_format(cls):
@@ -1897,13 +1897,13 @@ class DataType():
     @classmethod
     def get_struct(cls):
         struct = rawutil.Struct(cls.get_format(),
-                                names=cls.get_names())
+                                names=cls.get_keys())
         struct.setbyteorder(cls.byteorder)
         return struct
 
     def get_dict(self):
-        names = self.get_names()
-        return {key: self.__dict__.get(key) for key in names}
+        keys = self.get_keys()
+        return {key: self.__dict__.get(key) for key in keys}
 
     def get_values(self):
         return list(self.get_dict().values())
@@ -1929,6 +1929,12 @@ class DataType():
 
     def __str__(self):
         return str(self.get_dict())
+
+    def __repr__(self):
+        keys = self.get_keys()
+        values = map(str, self.get_values())
+        kwargs = ', '.join(map('='.join, zip(keys, values)))
+        return f"{self.__class__.__name__}({kwargs})"
 
 
 class RecordsType(DataType):

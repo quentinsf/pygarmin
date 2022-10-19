@@ -1032,42 +1032,9 @@ class TransferProtocol:
     indicates that the transfer is complete. It also indicates the command ID
     used to initiate the data transfer transfer.
 
-    | N   | Direction          | Packet ID      | Packet Data Type |
-    |-----+--------------------+----------------+------------------|
-    | 0   | Device1 to Device2 | pid_records    | RecordsType      |
-    | …   | …                  | …              | …                |
-    | n-1 | Device1 to Device2 | pid_xfer_cmplt | Command          |
-
-    """
-
-    def __init__(self, link, command, datatypes):
-        self.link = link
-        self.command = command
-        self.datatypes = datatypes
-
-    def put_data(self, cmd, packets, callback=None):
-        packet_count = len(packets)
-        log.info(f"{type(self).__name__}: Sending {packet_count} records")
-        self.link.send_packet(self.link.pid_records, packet_count)
-        for idx, packet in enumerate(packets):
-            pid = packet['pid']
-            datatype = packet['datatype']
-            datatype.pack()
-            data = datatype.get_data()
-            log.debug(f"> packet {pid:3}: {bytes.hex(data)}")
-            self.link.send_packet(pid, data)
-            if callback:
-                callback(datatype, idx+1, packet_count, pid)
-
-        self.link.send_packet(self.link.pid_xfer_cmplt, cmd)
-
-
-class SingleTransferProtocol(TransferProtocol):
-    """Transfer protocols to send or receive one set of data.
-
-    The first and last packets (packet 0 and packet n-1) are the standard
-    beginning and ending packets. The packets in between (packet 1 through n-2)
-    each contain data records using a device-specific data type.
+    Some protocols are able to send or receive only one set of data. The packets
+    in between (packet 1 through n-2) each contain data records using a
+    device-specific data type.
 
     | N   | Direction          | Packet ID      | Packet Data Type |
     |-----+--------------------+----------------+------------------|
@@ -1078,39 +1045,12 @@ class SingleTransferProtocol(TransferProtocol):
     | n-2 | Device1 to Device2 | <Data Pid>     | <D0>             |
     | n-1 | Device1 to Device2 | pid_xfer_cmplt | Command          |
 
-    """
-
-    def get_data(self, cmd, pid, callback=None):
-        self.link.send_packet(self.link.pid_command_data, cmd)
-        packet = self.link.expectPacket(self.link.pid_records)
-        datatype = RecordsType()
-        datatype.unpack(packet['data'])
-        packet_count = datatype.records
-        log.info(f"{type(self).__name__}: Expecting {packet_count} records")
-        result = []
-        for idx in range(packet_count):
-            packet = self.link.expectPacket(pid)
-            datatype = self.datatypes[0]()
-            datatype.unpack(packet['data'])
-            result.append(datatype)
-            if callback:
-                callback(datatype, idx+1, packet_count, pid)
-        self.link.expectPacket(self.link.pid_xfer_cmplt)
-
-        return result
-
-
-class MultiTransferProtocol(TransferProtocol):
-    """Transfer protocols to send or receive multiple sets of data.
-
-    The first and last packets (packet 0 and packet n-1) are the standard
-    beginning and ending packets. The second packet (packet 1) contains header
-    information that uniquely identifies the data. The packets in between
-    (packet 2 through n-2) each contain data records using a device-specific
-    data type.
-
-    More sets of data can be transferred by appending another set of packets
-    with header information and data records (like packets 1 through n-2).
+    Other protocols are able to send or receive multiple sets of data. The
+    second packet (packet 1) contains header information that uniquely
+    identifies the data. The packets in between (packet 2 through n-2) each
+    contain data records using a device-specific data type. More sets of data
+    can be transferred by appending another set of packets with header
+    information and data records (like packets 1 through n-2).
 
     |   N | Direction          | Packet ID      | Packet Data Type |
     |-----+--------------------+----------------+------------------|
@@ -1122,17 +1062,21 @@ class MultiTransferProtocol(TransferProtocol):
     | n-2 | Device1 to Device2 | <Data Pid>     | <D1>             |
     | n-1 | Device1 to Device2 | pid_xfer_cmplt | Command          |
 
-
     """
+
+    def __init__(self, link, command, datatypes):
+        self.link = link
+        self.command = command
+        self.datatypes = datatypes
 
     def get_data(self, cmd, *pids, callback=None):
         self.link.send_packet(self.link.pid_command_data, cmd)
         packet = self.link.expectPacket(self.link.pid_records)
-        packet_count = int.from_bytes(packet['data'], byteorder='little')
-        log.info(f"Protocol {type(self).__name__}: Expecting {packet_count} records")
-        hdr_pid = pids[0]
-        data_pids = pids[1:]
-        packets = []
+        datatype = RecordsType()
+        datatype.unpack(packet['data'])
+        packet_count = datatype.records
+        log.info(f"{type(self).__name__}: Expecting {packet_count} records")
+        result = []
         for idx in range(packet_count):
             packet = self.link.read_packet()
             pid = packet['id']
@@ -1141,20 +1085,34 @@ class MultiTransferProtocol(TransferProtocol):
             datatype = self.datatypes[i]()
             log.info(f"Datatype {type(datatype).__name__}")
             datatype.unpack(data)
-            if pid == hdr_pid:
-                packets.append([datatype])
-            elif pid in data_pids:
-                packets[-1].append(datatype)
+            if pid in pids:
+                result.append(datatype)
             else:
                 raise ProtocolError(f"Expected one of {*pids,}, got {pid}")
             if callback:
                 callback(datatype, idx+1, packet_count, pid)
         self.link.expectPacket(self.link.pid_xfer_cmplt)
 
-        return packets
+        return result
+
+    def put_data(self, cmd, packets, callback=None):
+        packet_count = len(packets)
+        log.info(f"{type(self).__name__}: Sending {packet_count} records")
+        self.link.send_packet(self.link.pid_records, packet_count)
+        for idx, packet in enumerate(packets):
+            datatype = packet['datatype']
+            pid = packet['pid']
+            datatype.pack()
+            data = datatype.get_data()
+            log.debug(f"> packet {pid:3}: {bytes.hex(data)}")
+            self.link.send_packet(pid, data)
+            if callback:
+                callback(datatype, idx+1, packet_count, pid)
+
+        self.link.send_packet(self.link.pid_xfer_cmplt, cmd)
 
 
-class A100(SingleTransferProtocol):
+class A100(TransferProtocol):
     """Waypoint Transfer Protocol.
 
     Packet sequence
@@ -1170,10 +1128,10 @@ class A100(SingleTransferProtocol):
     """
 
     def get_data(self, callback=None):
-        return SingleTransferProtocol.get_data(self,
-                                               self.command.cmnd_transfer_wpt,
-                                               self.link.pid_wpt_data,
-                                               callback=callback)
+        return TransferProtocol.get_data(self,
+                                         self.command.cmnd_transfer_wpt,
+                                         self.link.pid_wpt_data,
+                                         callback=callback)
 
     def put_data(self, waypoints, callback=None):
         packets = []
@@ -1183,13 +1141,13 @@ class A100(SingleTransferProtocol):
             datatype = self.datatypes[0](**waypoint)
             packets.append({'pid': pid, 'datatype': datatype})
 
-        return SingleTransferProtocol.put_data(self,
-                                               self.command.cmnd_transfer_wpt,
-                                               packets,
-                                               callback=callback)
+        return TransferProtocol.put_data(self,
+                                         self.command.cmnd_transfer_wpt,
+                                         packets,
+                                         callback=callback)
 
 
-class A101(SingleTransferProtocol):
+class A101(TransferProtocol):
     """Waypoint Transfer Protocol.
 
     Packet sequence
@@ -1205,13 +1163,13 @@ class A101(SingleTransferProtocol):
     """
 
     def get_data(self, callback=None):
-        return SingleTransferProtocol.get_data(self,
-                                               self.command.cmnd_transfer_wpt_cats,
-                                               self.link.pid_wpt_cat,
-                                               callback=callback)
+        return TransferProtocol.get_data(self,
+                                         self.command.cmnd_transfer_wpt_cats,
+                                         self.link.pid_wpt_cat,
+                                         callback=callback)
 
 
-class A200(MultiTransferProtocol):
+class A200(TransferProtocol):
     """Route Transfer Protocol.
 
     A200 Route Transfer Protocol Packet Sequence
@@ -1228,11 +1186,11 @@ class A200(MultiTransferProtocol):
     """
 
     def get_data(self, callback=None):
-        return MultiTransferProtocol.get_data(self,
-                                              self.command.cmnd_transfer_rte,
-                                              self.link.pid_rte_hdr,
-                                              self.link.pid_rte_wpt_data,
-                                              callback=callback)
+        return TransferProtocol.get_data(self,
+                                         self.command.cmnd_transfer_rte,
+                                         self.link.pid_rte_hdr,
+                                         self.link.pid_rte_wpt_data,
+                                         callback=callback)
 
     def put_data(self, routes, callback=None):
         packets = []
@@ -1247,13 +1205,13 @@ class A200(MultiTransferProtocol):
                 datatype = self.datatypes[1](**waypoint)
                 packets.append({'pid': pid, 'datatype': datatype})
 
-        return MultiTransferProtocol.put_data(self,
-                                              self.command.cmnd_transfer_rte,
-                                              packets,
-                                              callback=callback)
+        return TransferProtocol.put_data(self,
+                                         self.command.cmnd_transfer_rte,
+                                         packets,
+                                         callback=callback)
 
 
-class A201(MultiTransferProtocol):
+class A201(TransferProtocol):
     """Route Transfer Protocol.
 
     Packet Sequence
@@ -1272,12 +1230,12 @@ class A201(MultiTransferProtocol):
     """
 
     def get_data(self, callback=None):
-        return MultiTransferProtocol.get_data(self,
-                                              self.command.cmnd_transfer_rte,
-                                              self.link.pid_rte_hdr,
-                                              self.link.pid_rte_wpt_data,
-                                              self.link.pid_rte_link_data,
-                                              callback=callback)
+        return TransferProtocol.get_data(self,
+                                         self.command.cmnd_transfer_rte,
+                                         self.link.pid_rte_hdr,
+                                         self.link.pid_rte_wpt_data,
+                                         self.link.pid_rte_link_data,
+                                         callback=callback)
 
     def put_data(self, routes, callback=None):
         packets = []
@@ -1294,13 +1252,13 @@ class A201(MultiTransferProtocol):
                 packets.append((self.link.pid_rte_wpt_data, datatype))
                 # packets.append((self.link.pid_rte_link_data, linkInstance))
 
-        return MultiTransferProtocol.put_data(self,
-                                              self.command.cmnd_transfer_rte,
-                                              packets,
-                                              callback=callback)
+        return TransferProtocol.put_data(self,
+                                         self.command.cmnd_transfer_rte,
+                                         packets,
+                                         callback=callback)
 
 
-class A300(SingleTransferProtocol):
+class A300(TransferProtocol):
     """Track Log Transfer Protocol.
 
     A300 Track Log Transfer Protocol Packet Sequence
@@ -1316,10 +1274,10 @@ class A300(SingleTransferProtocol):
     """
 
     def get_data(self, callback=None):
-        return SingleTransferProtocol.get_data(self,
-                                               self.command.cmnd_transfer_trk,
-                                               self.link.pid_trk_data,
-                                               callback=callback)
+        return TransferProtocol.get_data(self,
+                                         self.command.cmnd_transfer_trk,
+                                         self.link.pid_trk_data,
+                                         callback=callback)
 
     def put_data(self, tracks, callback=None):
         packets = []
@@ -1328,13 +1286,13 @@ class A300(SingleTransferProtocol):
             datatype = self.datatypes[0](track)
             packets.append({'pid': pid, 'datatype': datatype})
 
-        return SingleTransferProtocol.put_data(self,
-                                               self.command.cmnd_transfer_trk,
-                                               packets,
-                                               callback=callback)
+        return TransferProtocol.put_data(self,
+                                         self.command.cmnd_transfer_trk,
+                                         packets,
+                                         callback=callback)
 
 
-class A301(MultiTransferProtocol):
+class A301(TransferProtocol):
     """Track Log Transfer Protocol.
 
     A301 Track Log Transfer Protocol Packet Sequence
@@ -1351,11 +1309,11 @@ class A301(MultiTransferProtocol):
     """
 
     def get_data(self, callback=None):
-        return MultiTransferProtocol.get_data(self,
-                                              self.command.cmnd_transfer_trk,
-                                              self.link.pid_trk_hdr,
-                                              self.link.pid_trk_data,
-                                              callback=callback)
+        return TransferProtocol.get_data(self,
+                                         self.command.cmnd_transfer_trk,
+                                         self.link.pid_trk_hdr,
+                                         self.link.pid_trk_data,
+                                         callback=callback)
 
     def put_data(self, tracks, callback=None):
         packets = []
@@ -1374,10 +1332,10 @@ class A301(MultiTransferProtocol):
                     datatype.new_trk = True
                     packets.append({'pid': pid, 'datatype': datatype})
 
-        return MultiTransferProtocol.put_data(self,
-                                              self.command.cmnd_transfer_trk,
-                                              packets,
-                                              callback=callback)
+        return TransferProtocol.put_data(self,
+                                         self.command.cmnd_transfer_trk,
+                                         packets,
+                                         callback=callback)
 
 
 class A302(A301):
@@ -1394,7 +1352,7 @@ class A302(A301):
         pass
 
 
-class A400(SingleTransferProtocol):
+class A400(TransferProtocol):
     """Proximity Waypoint Transfer Protocol.
 
     A400 Proximity Waypoint Transfer Protocol Packet Sequence
@@ -1410,10 +1368,10 @@ class A400(SingleTransferProtocol):
     """
 
     def get_data(self, callback=None):
-        return SingleTransferProtocol.get_data(self,
-                                               self.command.cmnd_transfer_prx,
-                                               self.link.pid_prx_wpt_data,
-                                               callback=callback)
+        return TransferProtocol.get_data(self,
+                                         self.command.cmnd_transfer_prx,
+                                         self.link.pid_prx_wpt_data,
+                                         callback=callback)
 
     def put_data(self, waypoints, callback=None):
         packets = []
@@ -1422,13 +1380,13 @@ class A400(SingleTransferProtocol):
             datatype = self.datatypes[0](waypoint)
             packets.append({'pid': pid, 'datatype': datatype})
 
-        return SingleTransferProtocol.put_data(self,
-                                               self.command.cmnd_transfer_prx,
-                                               packets,
-                                               callback=callback)
+        return TransferProtocol.put_data(self,
+                                         self.command.cmnd_transfer_prx,
+                                         packets,
+                                         callback=callback)
 
 
-class A500(SingleTransferProtocol):
+class A500(TransferProtocol):
     """Almanac Transfer Protocol.
 
     A500 Almanac Transfer Protocol Packet Sequence
@@ -1444,10 +1402,10 @@ class A500(SingleTransferProtocol):
     """
 
     def get_data(self, callback=None):
-        return SingleTransferProtocol.get_data(self,
-                                               self.command.cmnd_transfer_alm,
-                                               self.link.pid_almanac_data,
-                                               callback=callback)
+        return TransferProtocol.get_data(self,
+                                         self.command.cmnd_transfer_alm,
+                                         self.link.pid_almanac_data,
+                                         callback=callback)
 
 
 class A600(TransferProtocol):
@@ -1478,7 +1436,7 @@ class A601(TransferProtocol):
     Used by GPSmap 60cs, no specifications as of 2004-09-26."""
 
 
-class A650(SingleTransferProtocol):
+class A650(TransferProtocol):
     """Flightbook Transfer Protocol.
 
     A650 FlightBook Transfer Protocol Packet Sequence
@@ -1494,10 +1452,10 @@ class A650(SingleTransferProtocol):
     """
 
     def get_data(self, callback=None):
-        return SingleTransferProtocol.get_data(self,
-                                               self.command.cmnd_flightbook_transfer,
-                                               self.link.pid_flightbook_record,
-                                               callback=callback)
+        return TransferProtocol.get_data(self,
+                                         self.command.cmnd_flightbook_transfer,
+                                         self.link.pid_flightbook_record,
+                                         callback=callback)
 
 
 class A700(TransferProtocol):
@@ -1817,7 +1775,7 @@ class A904:
     """
 
 
-class A906(SingleTransferProtocol):
+class A906(TransferProtocol):
     """Lap Transfer Protocol.
 
     A906 Lap Transfer Protocol Packet Sequence
@@ -1833,13 +1791,13 @@ class A906(SingleTransferProtocol):
     """
 
     def get_data(self, callback=None):
-        return MultiTransferProtocol.get_data(self,
-                                              self.command.cmnd_transfer_laps,
-                                              self.link.pid_lap,
-                                              callback=callback)
+        return TransferProtocol.get_data(self,
+                                         self.command.cmnd_transfer_laps,
+                                         self.link.pid_lap,
+                                         callback=callback)
 
 
-class A1000(MultiTransferProtocol):
+class A1000(TransferProtocol):
     """Run Transfer Protocol.
 
     A1000 Run Transfer Protocol Packet Sequence
@@ -1868,10 +1826,10 @@ class A1000(MultiTransferProtocol):
     """
 
     def get_data(self, callback=None):
-        return MultiTransferProtocol.get_data(self,
-                                              self.command.cmnd_transfer_runs,
-                                              self.link.pid_run,
-                                              callback=callback)
+        return TransferProtocol.get_data(self,
+                                         self.command.cmnd_transfer_runs,
+                                         self.link.pid_run,
+                                         callback=callback)
 
 
 class DataType():

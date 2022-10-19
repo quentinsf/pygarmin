@@ -2042,7 +2042,7 @@ class PositionType(DataType):
 
     @staticmethod
     def to_degrees(semi):
-        return semi * (1800 / 2 ** 31)
+        return semi * (180 / 2 ** 31)
 
     @staticmethod
     def to_radians(semi):

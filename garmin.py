@@ -1996,7 +1996,7 @@ class PositionType(DataType):
         self.lon = lon
 
     def __str__(self):
-        return f'Lat: {self.lat}, Lon:{self.lon}'
+        return f'{self.lat}, {self.lon}'
 
     @staticmethod
     def to_degrees(semi):
@@ -2044,7 +2044,7 @@ class RadianPositionType(DataType):
         self.lon = lon
 
     def __str__(self):
-        return f'Lat: {self.lat:.5f}, Lon: {self.lon:.5f}'
+        return f'{self.lat:.5f}, {self.lon:.5f}'
 
     @staticmethod
     def to_degrees(radians):
@@ -2079,7 +2079,7 @@ class DegreePositionType(DataType):
         self.lon = lon
 
     def __str__(self):
-        return f'Lat: {self.lat:.5f}, Lon: {self.lon:.5f}'
+        return f'{self.lat:.5f}, {self.lon:.5f}'
 
     @staticmethod
     def to_semicircles(degrees):
@@ -2556,7 +2556,7 @@ class SymbolType(DataType):
         self.smbl = smbl
 
     def __str__(self):
-        return f'Symbol: {self.get_smbl()}'
+        return f'{self.get_smbl()}'
 
     def get_smbl(self):
         """Return the symbol value.

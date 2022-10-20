@@ -4806,12 +4806,6 @@ class Garmin:
             raise GarminError("Protocol run_transfer_protocol is not supported")
         return self.run_transfer.get_data(callback)
 
-    def get_prox_points(self, callback=None):
-        return self.proximity_waypoint_transfer.get_data(callback)
-
-    def put_prox_points(self, data, callback=None):
-        return self.proximity_waypoint_transfer.put_data(data, callback)
-
     def get_almanac(self, callback=None):
         return self.almanac_transfer.get_data(callback)
 

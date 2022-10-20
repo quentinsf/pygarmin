@@ -2007,12 +2007,12 @@ class PositionType(DataType):
         return semi * (math.pi / 2 ** 31)
 
     def as_degrees(self):
-        return (self.to_degrees(self.lat),
-                self.to_degrees(self.lon))
+        return DegreePositionType(lat=self.to_degrees(self.lat),
+                                  lon=self.to_degrees(self.lon))
 
     def as_radians(self):
-        return (self.to_radians(self.lat),
-                self.to_radians(self.lon))
+        return RadianPositionType(lat=self.to_radians(self.lat),
+                                  lon=self.to_radians(self.lon))
 
     def is_valid(self):
         """Return whether the position is valid.
@@ -2055,12 +2055,12 @@ class RadianPositionType(DataType):
         return radians * (2 ** 31 / math.pi)
 
     def as_degrees(self):
-        return (self.to_degrees(self.lat),
-                self.to_degrees(self.lon))
+        return DegreePositionType(lat=self.to_degrees(self.lat),
+                                  lon=self.to_degrees(self.lon))
 
     def as_semicircles(self):
-        return (self.to_semicircles(self.lat),
-                self.to_semicircles(self.lon))
+        return PositionType(lat=self.to_semicircles(self.lat),
+                            lon=self.to_semicircles(self.lon))
 
 
 class DegreePositionType(DataType):
@@ -2090,12 +2090,12 @@ class DegreePositionType(DataType):
         return degrees * (math.pi / 180)
 
     def as_semicircles(self):
-        return (self.to_semicircles(self.lat),
-                self.to_semicircles(self.lon))
+        return PositionType(lat=self.to_semicircles(self.lat),
+                            lon=self.to_semicircles(self.lon))
 
     def as_radians(self):
-        return (self.to_radians(self.lat),
-                self.to_radians(self.lon))
+        return RadianPositionType(lat=self.to_radians(self.lat),
+                                  lon=self.to_radians(self.lon))
 
 
 class TimeType(DataType):

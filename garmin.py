@@ -1597,7 +1597,7 @@ class A900:
 
         return datatype
 
-    def get_memory_data(self, file='', callback=None):
+    def _read_memory(self, file='', callback=None):
         log.info("Get memory data...")
         mem_region = self.memory_properties.mem_region
         datatype = MemFileType(mem_region=mem_region, subfile=file)
@@ -1681,7 +1681,7 @@ class A900:
             if callback:
                 callback(datatype, offset+len(chunk), file_size, self.link.pid_mem_chunk)
 
-    def write_memory(self, data, chunk_size=250, callback=None):
+    def _write_memory(self, data, chunk_size=250, callback=None):
         mem_region = self.memory_properties.mem_region
         log.info("Turn off async mode")
         self.link.send_packet(self.link.pid_enable_async_events, b'\x00\x00')
@@ -4652,30 +4652,30 @@ class Garmin:
         self.software_version = self.product_data.software_version / 100
         self.product_description = self.product_data.product_description
         self.protocol_capability = A001(self.link)
-        self.supported_protocols = self.get_protocols()
-        self.registered_protocols = self.register_protocols(self.supported_protocols)
-        self.link = self.create_protocol('link_protocol', self.phys)
-        self.command = self.create_protocol('device_command_protocol', self.link)
-        self.transmission = self.create_protocol('transmission_protocol', self.phys, self.link, self.command)
-        self.waypoint_transfer = self.create_protocol('waypoint_transfer_protocol', self.link, self.command)
-        self.route_transfer = self.create_protocol('route_transfer_protocol', self.link, self.command)
-        self.track_log_transfer = self.create_protocol('track_log_transfer_protocol', self.link, self.command)
-        self.proximity_waypoint_transfer = self.create_protocol('proximity_waypoint_transfer_protocol', self.link, self.command)
-        self.almanac_transfer = self.create_protocol('almanac_transfer_protocol', self.link, self.command)
-        self.date_and_time_initialization = self.create_protocol('date_and_time_initialization_protocol', self.link, self.command)
-        self.flightbook_transfer = self.create_protocol('flightbook_transfer_protocol', self.link, self.command)
-        self.position_initialization = self.create_protocol('position_initialization_protocol', self.link, self.command)
-        self.pvt = self.create_protocol('pvt_protocol', self.link, self.command)
-        self.map_transfer = self.create_protocol('map_transfer_protocol', self.link, self.command)
-        self.map_unlock = self.create_protocol('map_unlock_protocol', self.link, self.command)
-        self.lap_transfer = self.create_protocol('lap_transfer_protocol', self.link, self.command)
-        self.run_transfer = self.create_protocol('run_transfer_protocol', self.link, self.command)
+        self.supported_protocols = self._get_protocols()
+        self.registered_protocols = self._register_protocols(self.supported_protocols)
+        self.link = self._create_protocol('link_protocol', self.phys)
+        self.command = self._create_protocol('device_command_protocol', self.link)
+        self.transmission = self._create_protocol('transmission_protocol', self.phys, self.link, self.command)
+        self.waypoint_transfer = self._create_protocol('waypoint_transfer_protocol', self.link, self.command)
+        self.route_transfer = self._create_protocol('route_transfer_protocol', self.link, self.command)
+        self.track_log_transfer = self._create_protocol('track_log_transfer_protocol', self.link, self.command)
+        self.proximity_waypoint_transfer = self._create_protocol('proximity_waypoint_transfer_protocol', self.link, self.command)
+        self.almanac_transfer = self._create_protocol('almanac_transfer_protocol', self.link, self.command)
+        self.date_and_time_initialization = self._create_protocol('date_and_time_initialization_protocol', self.link, self.command)
+        self.flightbook_transfer = self._create_protocol('flightbook_transfer_protocol', self.link, self.command)
+        self.position_initialization = self._create_protocol('position_initialization_protocol', self.link, self.command)
+        self.pvt = self._create_protocol('pvt_protocol', self.link, self.command)
+        self.map_transfer = self._create_protocol('map_transfer_protocol', self.link, self.command)
+        self.map_unlock = self._create_protocol('map_unlock_protocol', self.link, self.command)
+        self.lap_transfer = self._create_protocol('lap_transfer_protocol', self.link, self.command)
+        self.run_transfer = self._create_protocol('run_transfer_protocol', self.link, self.command)
 
     @staticmethod
-    def class_by_name(name):
+    def _class_by_name(name):
         return globals()[name]
 
-    def lookup_protocols(self, product_id, software_version):
+    def _lookup_protocols(self, product_id, software_version):
         log.info("Look up protocols by Product ID and software version...")
         model = device_protocol_capabilities.get(product_id)
         if model is None:
@@ -4692,7 +4692,7 @@ class Garmin:
 
         return protocols
 
-    def get_protocols(self):
+    def _get_protocols(self):
         """Return the protocol capabilities and device-specific data types.
 
         First wait for the device to report Protocol Capabilities Protocol data.
@@ -4706,14 +4706,14 @@ class Garmin:
         except LinkError:
             log.info("Protocol Capability Protocol not supported by the device")
             try:
-                protocols = self.lookup_protocols(self.product_id, self.software_version)
+                protocols = self._lookup_protocols(self.product_id, self.software_version)
             except KeyError:
                 raise ProtocolError("Couldn't determine protocol capabilities")
         log.info(f"Supported protocols and data types: {protocols}")
 
         return protocols
 
-    def register_protocols(self, supported_protocols):
+    def _register_protocols(self, supported_protocols):
         """Register the supported protocols."""
         protocols = {}
         for protocol_datatypes in supported_protocols:
@@ -4721,11 +4721,11 @@ class Garmin:
             datatypes = protocol_datatypes[1:]
             if protocol in self.protocol_keys:
                 key = self.protocol_keys[protocol]
-                protocol_class = self.class_by_name(protocol)
+                protocol_class = self._class_by_name(protocol)
                 protocols[key] = [protocol_class]
                 log.info(f"Register protocol {protocol}.")
                 if datatypes:
-                    datatype_classes = [self.class_by_name(datatype) for datatype in datatypes]
+                    datatype_classes = [ self._class_by_name(datatype) for datatype in datatypes ]
                     protocols[key].extend(datatype_classes)
                     log.info(f"Register datatypes {*datatypes, }.")
             else:
@@ -4733,7 +4733,7 @@ class Garmin:
         log.info(f"Registered protocols and data types: {protocols}")
         return protocols
 
-    def create_protocol(self, key, *args):
+    def _create_protocol(self, key, *args):
         protocol_datatypes = self.registered_protocols.get(key)
         if protocol_datatypes:
             protocol = protocol_datatypes[0]
@@ -4831,12 +4831,12 @@ class Garmin:
     def delete_map(self):
         if self.map_transfer is None:
             raise GarminError("Protocol map_transfer_protocol is not supported")
-        return self.map_transfer.write_memory(None)
+        return self.map_transfer._write_memory(None)
 
     def get_map(self, callback=None):
         if self.map_transfer is None:
             raise GarminError("Protocol map_transfer_protocol is not supported")
-        return self.map_transfer.read_memory(callback)
+        return self.map_transfer.get_map(callback)
 
     def put_map(self, data, key=None, callback=None):
         if self.map_transfer is None:
@@ -4865,7 +4865,7 @@ class Garmin:
             # 255 for both protocols, because large USB writes time out. The
             # chunk size then is 251 (maximum data size - offset size = 255 - 4)
             chunk_size = 251
-            self.map_transfer.write_memory(data, chunk_size, callback)
+            self.map_transfer._write_memory(data, chunk_size, callback)
             # Restore the baudrate to the original value
             if isinstance(self.phys, SerialLink) and self.transmission:
                 self.transmission.set_baudrate(current_baudrate)

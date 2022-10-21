@@ -1628,24 +1628,6 @@ class A900:
                 data += datatype.chunk
                 if callback:
                     callback(datatype, idx+1, packet_count, self.link.pid_mem_chunk)
-
-            return data
-
-    def get_map_properties(self):
-        log.info("Get map properties...")
-        subfile = "MAPSOURC.MPS"
-        data = self.get_memory_data(file=subfile)
-        if data is not None:
-            datatype = MPSFileType()
-            datatype.unpack(data)
-            records = datatype.get_records()
-            result = [ record.get_content() for record in records ]
-            return result
-
-    def read_memory(self, callback=None):
-        log.info("Download map...")
-        data = self.get_memory_data(file='', callback=callback)
-        if data is not None:
             return data
 
     def _write_file(self, file, chunk_size=250, callback=None):
@@ -1732,6 +1714,23 @@ class A900:
             self._write_bytes(data, chunk_size, callback)
         log.info("Disable write")
         self.link.send_packet(self.link.pid_mem_wrdi, mem_region)
+
+    def get_map_properties(self):
+        log.info("Get map properties...")
+        subfile = "MAPSOURC.MPS"
+        data = self._read_memory(file=subfile)
+        if data is not None:
+            datatype = MPSFileType()
+            datatype.unpack(data)
+            records = datatype.get_records()
+            result = [ record.get_content() for record in records ]
+            return result
+
+    def get_map(self, callback=None):
+        log.info("Download map...")
+        data = self._read_memory(file='', callback=callback)
+        if data is not None:
+            return data
 
 
 class A902:

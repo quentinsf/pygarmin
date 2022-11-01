@@ -668,7 +668,7 @@ class L000:
 
         return packet
 
-    def expectPacket(self, pid):
+    def expect_packet(self, pid):
         """Expect and read a particular packet type. Return data.
 
         """
@@ -775,7 +775,7 @@ class A000:
         log.info("Request product data...")
         self.link.send_packet(self.link.pid_product_rqst, None)
         log.info("Expect product data")
-        packet = self.link.expectPacket(self.link.pid_product_data)
+        packet = self.link.expect_packet(self.link.pid_product_data)
         datatype = ProductDataType()
         datatype.unpack(packet['data'])
         log.info(f"Product ID: {datatype.product_id}")
@@ -805,7 +805,7 @@ class A001:
 
     def get_protocols(self):
         log.info("Read protocols using Protocol Capability Protocol")
-        packet = self.link.expectPacket(self.link.pid_protocol_array)
+        packet = self.link.expect_packet(self.link.pid_protocol_array)
         protocols = []
         log.info("Parse supported protocols and datatypes...")
         # The order of array elements is used to associate data types with
@@ -967,7 +967,7 @@ class T001:
         log.info("Get supported baudrates...")
         self.link.send_packet(self.link.pid_command_data,
                               self.command.cmnd_transfer_baud)
-        packet = self.link.expectPacket(self.link.pid_baud_data)
+        packet = self.link.expect_packet(self.link.pid_baud_data)
         baudrates = []
         for baudrate, in rawutil.iter_unpack('<I', packet['data']):
             baudrate = self.desired_baudrate(baudrate)
@@ -989,7 +989,7 @@ class T001:
                               data)
         # The device will respond by sending a packet with the highest
         # acceptable baudrate closest to what was requested
-        packet = self.link.expectPacket(self.link.pid_baud_acpt_data)
+        packet = self.link.expect_packet(self.link.pid_baud_acpt_data)
         baudrate = int.from_bytes(packet['data'], byteorder='little')
         log.info(f"Accepted baudrate: {baudrate}")
         # Determine the desired baudrate value from accepted baudrate
@@ -1071,7 +1071,7 @@ class TransferProtocol:
 
     def get_data(self, cmd, *pids, callback=None):
         self.link.send_packet(self.link.pid_command_data, cmd)
-        packet = self.link.expectPacket(self.link.pid_records)
+        packet = self.link.expect_packet(self.link.pid_records)
         datatype = RecordsType()
         datatype.unpack(packet['data'])
         packet_count = datatype.records
@@ -1091,7 +1091,7 @@ class TransferProtocol:
                 raise ProtocolError(f"Expected one of {*pids,}, got {pid}")
             if callback:
                 callback(datatype, idx+1, packet_count, pid)
-        self.link.expectPacket(self.link.pid_xfer_cmplt)
+        self.link.expect_packet(self.link.pid_xfer_cmplt)
 
         return result
 
@@ -1421,7 +1421,7 @@ class A600(TransferProtocol):
     def get_data(self, callback=None):
         self.link.send_packet(self.link.pid_command_data,
                               self.command.cmnd_transfer_time)
-        packet = self.link.expectPacket(self.link.pid_date_time_data)
+        packet = self.link.expect_packet(self.link.pid_date_time_data)
         datatype = self.datatypes[0]()
         datatype.unpack(packet['data'])
         if callback:
@@ -1471,7 +1471,7 @@ class A700(TransferProtocol):
     def get_data(self, callback=None):
         self.link.send_packet(self.link.pid_command_data,
                               self.command.cmnd_transfer_posn)
-        packet = self.link.expectPacket(self.link.pid_position_data)
+        packet = self.link.expect_packet(self.link.pid_position_data)
         datatype = self.datatypes[0]()
         datatype.unpack(packet['data'])
         if callback:
@@ -1509,7 +1509,7 @@ class A800(TransferProtocol):
                               self.command.cmnd_stop_pvt_data)
 
     def get_data(self, callback=None):
-        packet = self.link.expectPacket(self.link.pid_pvt_data)
+        packet = self.link.expect_packet(self.link.pid_pvt_data)
         datatype = self.datatypes[0]()
         datatype.unpack(packet['data'])
         if callback:
@@ -1589,12 +1589,11 @@ class A900:
         self.link.send_packet(self.link.pid_command_data,
                               self.command.cmnd_transfer_mem)
         log.info("Expect capacity data")
-        packet = self.link.expectPacket(self.link.pid_capacity_data)
+        packet = self.link.expect_packet(self.link.pid_capacity_data)
         datatype = MemPropertiesType()
         datatype.unpack(packet['data'])
         mem_size = datatype.mem_size
         log.info(f"Memory size: {mem_size} bytes")
-
         return datatype
 
     def _read_memory(self, file='', callback=None):
@@ -1622,7 +1621,7 @@ class A900:
             log.info(f"{type(self).__name__}: Expecting {packet_count} records")
             data = bytes()
             for idx in range(packet_count):
-                packet = self.link.expectPacket(self.link.pid_mem_chunk)
+                packet = self.link.expect_packet(self.link.pid_mem_chunk)
                 datatype = MemRecordType()
                 datatype.unpack(packet['data'])
                 data += datatype.chunk
@@ -1691,7 +1690,7 @@ class A900:
         retries = 0
         while retries <= max_retries:
             try:
-                self.link.expectPacket(self.link.pid_mem_wel)
+                self.link.expect_packet(self.link.pid_mem_wel)
                 log.info("Write enabled")
                 break
             except LinkError as e:
@@ -1754,7 +1753,7 @@ class A902:
         self.link.send_packet(self.link.pid_tx_unlock_key,
                               data)
         log.info("Acknowledge unlock key")
-        self.link.expectPacket(self.link.pid_ack_unlock_key)
+        self.link.expect_packet(self.link.pid_ack_unlock_key)
         # TODO: read data
 
 
@@ -4758,7 +4757,7 @@ class Garmin:
         self.link.send_packet(self.link.pid_command_data,
                               self.command.cmnd_transfer_unit_id)
         log.info("Expect Product Id packet")
-        packet = self.link.expectPacket(self.link.pid_unit_id)
+        packet = self.link.expect_packet(self.link.pid_unit_id)
         unit_id = int.from_bytes(packet['data'], byteorder='little')
 
         return unit_id

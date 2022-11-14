@@ -2880,7 +2880,7 @@ class D108(D103):
         A “alt” value of 1.0e25 indicates that this parameter is not supported or unknown.
 
         """
-        return not self.alt == 1.0e25
+        return not f"{self.alt:.1e}" == "1.0e+25"
 
     def is_valid_dpth(self):
         """Return whether the depth is valid.
@@ -2888,7 +2888,7 @@ class D108(D103):
         A “dpth” value of 1.0e25 indicates that this parameter is not supported or unknown.
 
         """
-        return not self.dpth == 1.0e25
+        return not f"{self.dpth:.1e}" == "1.0e+25"
 
 
 class D109(D108):
@@ -3090,7 +3090,7 @@ class D110(D109):
         A “temp” value of 1.0e25 indicates that this parameter is not supported or unknown.
 
         """
-        return not self.temp == 1.0e25
+        return not f"{self.temp:.1e}" == "1.0e+25"
 
     def is_valid_time(self):
         """Return whether the time is valid.
@@ -3377,7 +3377,7 @@ class D301(D300):
         A “alt” value of 1.0e25 indicates that this parameter is not supported or unknown.
 
         """
-        return not self.alt == 1.0e25
+        return not f"{self.alt:.1e}" == "1.0e+25"
 
     def is_valid_dpth(self):
         """Return whether the depth is valid.
@@ -3385,7 +3385,7 @@ class D301(D300):
         A “dpth” value of 1.0e25 indicates that this parameter is not supported or unknown.
 
         """
-        return not self.dpth == 1.0e25
+        return not f"{self.dpth:.1e}" == "1.0e+25"
 
 
 class D302(D300):
@@ -3411,7 +3411,7 @@ class D302(D300):
         A “alt” value of 1.0e25 indicates that this parameter is not supported or unknown.
 
         """
-        return not self.alt == 1.0e25
+        return not f"{self.alt:.1e}" == "1.0e+25"
 
     def is_valid_dpth(self):
         """Return whether the depth is valid.
@@ -3419,7 +3419,7 @@ class D302(D300):
         A “dpth” value of 1.0e25 indicates that this parameter is not supported or unknown.
 
         """
-        return not self.dpth == 1.0e25
+        return not f"{self.dpth:.1e}" == "1.0e+25"
 
     def is_valid_temp(self):
         """Return whether the temperature is valid.
@@ -3427,7 +3427,7 @@ class D302(D300):
         A “temp” value of 1.0e25 indicates that this parameter is not supported or unknown.
 
         """
-        return not self.temp == 1.0e25
+        return not f"{self.temp:.1e}" == "1.0e+25"
 
 
 class D303(D301):
@@ -3451,7 +3451,7 @@ class D303(D301):
         A “alt” value of 1.0e25 indicates that this parameter is not supported or unknown.
 
         """
-        return not self.alt == 1.0e25
+        return not f"{self.alt:.1e}" == "1.0e+25"
 
     def is_valid_heart_rate(self):
         """Return whether the heart rate is valid.

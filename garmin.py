@@ -288,7 +288,7 @@ class SerialLink(P000):
                 retries += 1
 
         if retries > self.max_retries:
-            raise LinkError("Maximum retries exceeded.")
+            raise LinkError("Maximum retries exceeded")
 
         return packet
 
@@ -308,7 +308,7 @@ class SerialLink(P000):
                 retries += 1
 
         if retries > self.max_retries:
-            raise LinkError("Maximum retries exceeded.")
+            raise LinkError("Maximum retries exceeded")
 
     def read_ack(self, pid):
         """Read a ACK/NAK packet.
@@ -329,7 +329,7 @@ class SerialLink(P000):
                 raise ProtocolError(f"Device expected {expected_pid}, got {received_pid}")
         elif packet['id'] == self.pid_nak_byte:
             log.info("Received NAK packet")
-            raise LinkError("Packet was not received correctly.")
+            raise LinkError("Packet was not received correctly")
         else:
             raise GarminError("Received neither ACK nor NAK packet")
 
@@ -570,7 +570,7 @@ class USBLink(P000):
                 retries += 1
 
         if retries > self.max_retries:
-            raise LinkError("Maximum retries exceeded.")
+            raise LinkError("Maximum retries exceeded")
 
         return packet
 
@@ -1699,7 +1699,7 @@ class A900:
                 log.error(e)
                 retries += 1
         if retries > max_retries:
-            raise LinkError("Maximum retries exceeded.")
+            raise LinkError("Maximum retries exceeded")
 
         if data is None:
             log.info("Delete map...")

@@ -3360,10 +3360,15 @@ class TrkPointType(DataType):
     def is_valid_time(self):
         """Return whether the time is valid.
 
-        A “time” value of 0xFFFFFFFF  that this parameter is not supported or unknown.
+        The device ignores the time value for track log points that are not
+        recorded by the device itself, but transferred to the device by an
+        external host. Some devices use 0x7FFFFFFF or 0xFFFFFFFF instead of zero
+        to indicate an invalid time value.
 
         """
-        return not self.time == 4294967295
+        return not ( self.time == 0 or
+                     self.time == 4294967295 or  # 0xFFFFFFFF
+                     self.time == 4294967167 )   # 0x7FFFFFFF
 
 
 class D300(TrkPointType):

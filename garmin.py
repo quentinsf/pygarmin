@@ -2629,6 +2629,14 @@ class D101(D100):
         symbol = self.get_symbol()
         return symbol.get_smbl()
 
+    def is_valid_dst(self):
+        """Return whether the proximity distance is valid.
+
+        A “dst” value of 1.0e25 indicates that this parameter is not supported or unknown.
+
+        """
+        return not f"{self.dst:.1e}" == "1.0e+25"
+
 
 class D102(D101):
     _posn_fmt = PositionType.get_format()
@@ -2779,6 +2787,14 @@ class D107(D103):
         """
         return self._color.get(self.color, 0)
 
+    def is_valid_dst(self):
+        """Return whether the proximity distance is valid.
+
+        A “dst” value of 1.0e25 indicates that this parameter is not supported or unknown.
+
+        """
+        return not f"{self.dst:.1e}" == "1.0e+25"
+
 
 class D108(D103):
     _posn_fmt = PositionType.get_format()
@@ -2889,6 +2905,14 @@ class D108(D103):
 
         """
         return not f"{self.dpth:.1e}" == "1.0e+25"
+
+    def is_valid_dist(self):
+        """Return whether the proximity distance is valid.
+
+        A “dist” value of 1.0e25 indicates that this parameter is not supported or unknown.
+
+        """
+        return not f"{self.dist:.1e}" == "1.0e+25"
 
 
 class D109(D108):
@@ -3599,8 +3623,16 @@ class D450(PrxWptType, D150):
 
 
 class AlmanacType(DataType):
-    pass
 
+    def is_valid(self):
+        """Return whether the data is valid.
+
+        If the data for a particular satellite is missing or if the satellite is
+        non-existent, then the week number for that satellite must be set to a
+        negative number to indicate that the data is invalid.
+
+        """
+        return not self.wn < 0
 
 class D500(AlmanacType):
     _fields = [('wn', 'H'),     # week number (weeks)

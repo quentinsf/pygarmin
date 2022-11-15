@@ -1,25 +1,42 @@
 #!/usr/bin/env python
 """Module for communicating with Garmin GPS devices.
 
-   This module implements the protocol used for communication by the
-   Garmin GPS receivers. It is based on the official description
-   available from Garmin at
+   This module implements the protocol used for communication by the Garmin GPS
+   receivers. It is based on the official description available from Garmin at
 
    http://www.garmin.com/support/commProtocol.html
 
-   There are lots of variations in the protocols employed by different
-   Garmin products. This module tries to cover most of them, which is
-   why it looks so big! Only a small subset of the module will be used
-   by any particular model. It can easily be extended to cover any
-   models not currently included.
+   The protocols used in the Garmin Device Interface are arranged in the
+   following three layers:
 
-   For documentation, see the source, and the included index.html file.
+   | Application | (highest) |
+   | Link        |           |
+   | Physical    | (lowest)  |
+
+   The Physical link protocol for serial is based on RS-232 and uses DLE/ETX
+   framing. The Physical protocol for USB uses packetization intrinsic
+   to USB bulk pipes.
+
+   There are several link protocols. All devices implement the L000 Basic Link
+   Protocol. Of the product-specific protocols, most devices implement the L001
+   Link Protocol 1, and some panel-mounted aviation devices implement L002 Link
+   Protocol 2. The link protocols are carried over either Physical protocol.
+
+   At the Application layer, there are several protocols used to implement data
+   transfers between a host and a device. They are carried over Link protocols.
+
+   The Physical, Link, and Application protocol IDs are 3-digit numbers prefixed
+   with P, L, and A respectively, and data type IDs are prefixed with D.
+
+   This code is partly from the Garmin IOSDK and partly from the sample code in
+   the Linux garmin_gps driver. For documentation, see the source, and the
+   included index.html file.
 
    This is released under the Gnu General Public Licence. A copy of
    this can be found at http://www.opensource.org/licenses/gpl-license.html
 
    For the latest information about PyGarmin, please see
-   http://pygarmin.sourceforge.net/
+   https://github.com/quentinsf/pygarmin
 
    (c) 2007-2008 Bjorn Tillenius <bjorn.tillenius@gmail.com>
    (c) 2003 Quentin Stafford-Fraser <www.qandr.org/quentin>
@@ -44,21 +61,6 @@ import rawutil
 # Set default logging handler to avoid "No handler found" warnings.
 log = logging.getLogger('pygarmin')
 log.addHandler(logging.NullHandler())
-
-# Introduction =====================================================
-
-# The protocols used in the Garmin Device Interface are arranged in the
-# following three layers:
-
-# | Application | (highest) |
-# | Link        |           |
-# | Physical    | (lowest)  |
-
-# The Physical layer is based on RS-232. The Link layer uses packets with
-# minimal overhead. At the Application layer, there are several protocols used
-# to implement data transfers between a host and a device. The Physical, Link,
-# and Application protocol IDs are prefixed with P, L, and A respectively, and
-# data type IDs are prefixed with D.
 
 
 class GarminError(Exception):
@@ -4640,10 +4642,31 @@ device_protocol_capabilities = {
 
 
 class Garmin:
-    """A representation of the GPS device.
+    """Garmin GPS device object.
 
-    It is connected via some physical connection, typically a SerialLink
-    of some sort.
+    The class provides methods to communicate with the hardware.
+
+    Most GNU/Linux distributions use a kernel module called 'garmin_gps' to make
+    a USB Garmin device accessible via a serial port. In order to communicate
+    with a Windows computer via a serial link, Garmin USB drivers need to be
+    installed. To communicate with a Garmin device connected to the serial port
+    "/dev/ttyUSB0", you could try this:
+
+    >>> import garmin
+    >>> port = '/dev/ttyUSB0'
+    >>> phys = SerialLink(port)
+    >>> gps = Garmin(phys)
+    >>> print(gps.product_data)
+
+    Alternatively, internal USB support can be used. For this to work on
+    GNU/Linux, you probably should remove and blacklist the garmin_gps kernel
+    module.
+
+    >>> import garmin
+    >>> phys = USBLink()
+    >>> gps = Garmin(phys)
+    >>> gps.product_data
+
     """
     protocol_keys = {
         'L000': 'link_protocol',

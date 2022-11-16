@@ -4776,6 +4776,7 @@ class Garmin:
         self.command = self._create_protocol('device_command_protocol', self.link)
         self.transmission = self._create_protocol('transmission_protocol', self.phys, self.link, self.command)
         self.waypoint_transfer = self._create_protocol('waypoint_transfer_protocol', self.link, self.command)
+        self.waypoint_category_transfer = self._create_protocol('waypoint_category_transfer_protocol', self.link, self.command)
         self.route_transfer = self._create_protocol('route_transfer_protocol', self.link, self.command)
         self.track_log_transfer = self._create_protocol('track_log_transfer_protocol', self.link, self.command)
         self.proximity_waypoint_transfer = self._create_protocol('proximity_waypoint_transfer_protocol', self.link, self.command)

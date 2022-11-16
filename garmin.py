@@ -56,6 +56,7 @@ from functools import cached_property
 import math
 import logging
 import rawutil
+import PIL.Image
 
 
 # Set default logging handler to avoid "No handler found" warnings.
@@ -709,6 +710,7 @@ class L001(L000):
     pid_baud_rqst_data = 48  # undocumented
     pid_baud_acpt_data = 49  # undocumented
     pid_pvt_data = 51
+    pid_screen_data = 69  # undocumented
     pid_mem_wel = 74  # Write Enable Latch (WEL) undocumented
     pid_mem_wren = 75  # Write Enable (WREN) undocumented
     pid_mem_read = 89  # undocumented
@@ -895,6 +897,7 @@ class A010(CommandProtocol):
     cmnd_transfer_wpt = 7                     # transfer waypoints
     cmnd_turn_off_pwr = 8                     # turn off power
     cmnd_transfer_unit_id = 14                # transfer product id (undocumented)
+    cmnd_transfer_screen = 32                 # transfer screenshot (undocumented)
     cmnd_start_pvt_data = 49                  # start transmitting PVT data
     cmnd_stop_pvt_data = 50                   # stop transmitting PVT data
     cmnd_transfer_baud = 57                   # transfer supported baudrates (undocumented)
@@ -1836,6 +1839,74 @@ class A904:
     implementation as of yet.
 
     """
+
+
+class ScreenshotTransfer:
+
+    def __init__(self, link, command):
+        self.link = link
+        self.command = command
+
+    def get_image(self, callback=None):
+        log.info("Request screenshot...")
+        self.link.send_packet(self.link.pid_command_data, self.command.cmnd_transfer_screen)
+        log.info("Expect screen data")
+        packet = self.link.expect_packet(self.link.pid_screen_data)
+        datatype = ScreenHeaderType()
+        datatype.unpack(packet['data'])
+        dimensions = datatype.get_dimensions()
+        pixel_size = datatype.get_size()
+        colors_used = datatype.get_colors_used()
+        log.info(f"Dimensions: {'x'.join(map(str, dimensions))} pixels")
+        log.info(f"Size: {pixel_size} bytes")
+        log.info(f"Bits per pixel: {datatype.bpp}")
+        log.info(f"Colors used: {colors_used}")
+        if colors_used is None or colors_used == 0:
+            raise GarminError("Screenshots without a color palette are not supported")
+        # The color table is sent per color, so each packet data size is 11
+        # bytes, consisting of 4 bytes for the section, 4 bytes for the offset,
+        # and 3 bytes for the color.
+        color_table_size = colors_used * 11
+        # The pixel data is sent per row, "bottom-up", with a packet data size
+        # of maximum 136 bytes, consisting of 4 bytes for the section, 4 bytes
+        # for the offset, and maximum 128 bytes for the chunk of pixel data.
+        max_chunk_size = 128
+        chunk_count = math.ceil(datatype.width / max_chunk_size)
+        row_size = chunk_count * 8 + datatype.width
+        pixel_data_size = row_size * datatype.height
+        total_bytes = color_table_size + pixel_data_size
+        received_bytes = 0
+        log.info("Expect color table")
+        color_table = bytes()
+        while received_bytes < color_table_size:
+            packet = self.link.expect_packet(self.link.pid_screen_data)
+            datatype = ScreenChunkType()
+            datatype.unpack(packet['data'])
+            section = datatype.get_section()
+            if section == 'color_table':
+                color_table += datatype.chunk
+                received_bytes += len(packet['data'])
+                if callback:
+                    callback(datatype, received_bytes, total_bytes, self.link.pid_screen_data)
+            else:
+                raise ProtocolError(f"Invalid section: expected color_table, got {section}")
+        log.info("Expect pixel data")
+        pixel_data = bytes()
+        while received_bytes < total_bytes:
+            packet = self.link.expect_packet(self.link.pid_screen_data)
+            datatype = ScreenChunkType()
+            datatype.unpack(packet['data'])
+            section = datatype.get_section()
+            if section == 'pixel_data':
+                pixel_data += datatype.chunk
+                received_bytes += len(packet['data'])
+                if callback:
+                    callback(datatype, received_bytes, total_bytes, self.link.pid_screen_data)
+            else:
+                raise ProtocolError(f"Invalid section: expected pixel_data, got {section}")
+        image = PIL.Image.frombytes(mode='P', size=dimensions, data=pixel_data, decoder_name='raw')
+        image.putpalette(color_table, rawmode='BGR')
+        return image.transpose(method=PIL.Image.Transpose.ROTATE_180)
 
 
 class A906(TransferProtocol):
@@ -4484,6 +4555,101 @@ class MPSFileType(DataType):
         return [ MPSRecordType(*record) for record in self.records ]
 
 
+class BGR(DataType):
+    """BGR is a sRGB format that uses 24 bits of data per per pixel.
+
+    Each color channel (blue, green, and red) is allocated 8 bits per pixel
+    (BPP).
+
+    """
+    _fields = [('blue', 'B'),
+               ('green', 'B'),
+               ('red', 'B'),
+               ]
+
+    def __init__(self, blue=0, green=0, red=0):
+        self.blue = blue
+        self.green = green
+        self.red = red
+
+
+class ScreenType(DataType):
+    """Screenshot format.
+
+    The data structure seems to be derived from the Microsoft Windows Bitmap
+    file format. The format contains three sections: a bitmap information
+    header, a color palette, and the bitmap data. This resembles a DIB data
+    structure.
+
+    The header isn't one of the known DIB headers. It seems to provide
+    information on the screen dimensions and color depth.
+
+    The color table is an array of structures that specify the red, green, and
+    blue intensity values of each color in a color palette. Each pixel in the
+    bitmap data stores a single value used as an index into the color palette.
+    1-, 4-, and 8-bit BMP files are expected to always contain a color palette.
+    16-, 24-, and 32-bit BMP files never contain color palettes. 16- and 32-bit
+    BMP files contain bitfields mask values in place of the color palette.
+
+    The pixel data is a series of values representing either color palette
+    indices or actual RGB color values. Pixels are packed into bytes and
+    arranged as scan lines. In a BMP file, each scan line must end on a 4-byte
+    boundary, so one, two, or three bytes of padding may follow each scan line.
+    Scan lines are stored from the bottom up with the origin in the lower-left
+    corner.
+
+    """
+    _fields = [('section', 'I'),
+               ('offset', 'I'),
+               ]
+
+    _section = { 0: 'header',
+                 1: 'pixel_data',
+                 2: 'color_table',
+                }
+
+    def get_section(self):
+        return self._section.get(self.section)
+
+
+class ScreenHeaderType(ScreenType):
+    _fields = ScreenType._fields.copy()
+    _fields.extend((('unknown1', 'I'),   # width in bytes?
+                    ('bpp', 'I'),        # bits per pixel or color depth
+                    ('width', 'I'),      # width in pixels
+                    ('height', 'I'),     # heigth in pixels
+                    ('unknown2', 'I'),
+                    ('unknown3', 'I'),
+                    ('unknown4', 'I'),
+                    ))
+
+    def get_dimensions(self):
+        return (self.width, self.height)
+
+    def get_size(self):
+        return (self.bpp * self.width * self.height) // 8
+
+    def get_colors_used(self):
+        if self.bpp <= 8:
+            return 1 << self.bpp
+        elif self.bpp == 24:
+            return 0
+
+
+class ScreenColorTableType(ScreenType):
+    _bgr_fmt = BGR.get_format()
+    _fields = ScreenType._fields.copy()
+    _fields.append(('color', f'{_bgr_fmt}'))
+
+    def get_colors(self):
+        return BGR(*self.color)
+
+
+class ScreenChunkType(ScreenType):
+    _fields = ScreenType._fields.copy()
+    _fields.append(('chunk', '$'))
+
+
 # Garmin models ==============================================
 
 # For reference, here are some of the product ID numbers used by
@@ -4793,6 +4959,7 @@ class Garmin:
         self.map_unlock = self._create_protocol('map_unlock_protocol', self.link, self.command)
         self.lap_transfer = self._create_protocol('lap_transfer_protocol', self.link, self.command)
         self.run_transfer = self._create_protocol('run_transfer_protocol', self.link, self.command)
+        self.screen_transfer = ScreenshotTransfer(self.link, self.command)
 
     @staticmethod
     def _class_by_name(name):
@@ -4992,6 +5159,9 @@ class Garmin:
             # Restore the baudrate to the original value
             if isinstance(self.phys, SerialLink) and self.transmission:
                 self.transmission.set_baudrate(current_baudrate)
+
+    def get_screenshot(self, callback=None):
+        return self.screen_transfer.get_image(callback)
 
     def abort_transfer(self):
         self.command.abort_transfer()

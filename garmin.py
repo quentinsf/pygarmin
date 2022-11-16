@@ -200,6 +200,10 @@ class SerialLink(P000):
 
         """
         log.debug("Pack packet...")
+        if 0 < pid < 256:
+            pass
+        else:
+            raise ProtocolError("Serial link doesn't support PIDs higher than 255. Try USB link instead.")
         if isinstance(data, bytes):
             pass
         elif isinstance(data, int):

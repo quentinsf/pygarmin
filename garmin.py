@@ -1102,8 +1102,8 @@ class TransferProtocol:
         log.info(f"{type(self).__name__}: Sending {packet_count} records")
         self.link.send_packet(self.link.pid_records, packet_count)
         for idx, packet in enumerate(packets):
-            datatype = packet['datatype']
-            pid = packet['pid']
+            pid = packet['id']
+            datatype = packet['data']
             datatype.pack()
             data = datatype.get_data()
             log.debug(f"> packet {pid:3}: {bytes.hex(data)}")
@@ -1135,13 +1135,19 @@ class A100(TransferProtocol):
                                          self.link.pid_wpt_data,
                                          callback=callback)
 
-    def put_data(self, waypoints, callback=None):
+    def put_data(self, points, callback=None):
         packets = []
         log.info(f"Datatypes: {*[datatype.__name__ for datatype in self.datatypes],}")
-        for waypoint in waypoints:
+        for point in points:
             pid = self.link.pid_wpt_data
-            datatype = self.datatypes[0](**waypoint)
-            packets.append({'pid': pid, 'datatype': datatype})
+            if isinstance(point, WptType):
+                datatype = point
+            elif isinstance(point, dict):
+                datatype = self.datatypes[0](**point)
+            else:
+                raise ProtocolError("Invalid class type: expected dict or {datatypes[0].__name__}")
+            packet = {'id': pid, 'data': datatype}
+            packets.append(packet)
 
         return TransferProtocol.put_data(self,
                                          self.command.cmnd_transfer_wpt,
@@ -1168,6 +1174,24 @@ class A101(TransferProtocol):
         return TransferProtocol.get_data(self,
                                          self.command.cmnd_transfer_wpt_cats,
                                          self.link.pid_wpt_cat,
+                                         callback=callback)
+
+    def put_data(self, categories, callback=None):
+        packets = []
+        log.info(f"Datatypes: {*[datatype.__name__ for datatype in self.datatypes],}")
+        for category in categories:
+            pid = self.link.pid_wpt_cat
+            if isinstance(point, WptCatType):
+                datatype = point
+            elif isinstance(point, dict):
+                datatype = self.datatypes[0](**point)
+            else:
+                raise ProtocolError("Invalid class type: expected dict or {datatypes[0].__name__}")
+            packet = {'id': pid, 'data': datatype}
+            packets.append(packet)
+        return TransferProtocol.put_data(self,
+                                         self.command.cmnd_transfer_wpt_cats,
+                                         packets,
                                          callback=callback)
 
 
@@ -1198,14 +1222,26 @@ class A200(TransferProtocol):
         packets = []
         for route in routes:
             header = route[0]
-            waypoints = route[1:]
+            points = route[1:]
             pid = self.link.pid_rte_hdr
-            datatype = self.datatypes[0](**header)
-            packets.append({'pid': pid, 'datatype': datatype})
-            for waypoint in waypoints:
+            if isinstance(header, RteHdrType):
+                datatype = header
+            elif isinstance(header, dict):
+                datatype = self.datatypes[0](**header)
+            else:
+                raise ProtocolError("Invalid class type: expected dict or {datatypes[0].__name__}")
+            packet = {'id': pid, 'data': datatype}
+            packets.append(packet)
+            for point in points:
                 pid = self.link.pid_rte_wpt_data
-                datatype = self.datatypes[1](**waypoint)
-                packets.append({'pid': pid, 'datatype': datatype})
+                if isinstance(point, WptType):
+                    datatype = point
+                elif isinstance(point, dict):
+                    datatype = self.datatypes[0](**point)
+                else:
+                    raise ProtocolError("Invalid class type: expected dict or {datatypes[0].__name__}")
+                packet = {'id': pid, 'data': datatype}
+                packets.append(packet)
 
         return TransferProtocol.put_data(self,
                                          self.command.cmnd_transfer_rte,
@@ -1241,19 +1277,22 @@ class A201(TransferProtocol):
 
     def put_data(self, routes, callback=None):
         packets = []
-        for route in routes:
+        for point in routes:
             header = route[0]
-            waypoints = route[1:]
+            points = route[1:]
             pid = self.link.pid_rte_hdr
             datatype = self.datatypes[0](**header)
-            packets.append({'pid': pid, 'datatype': datatype})
-            for waypoint in waypoints:
-                datatype = self.datatypes[1](**waypoint)
-                # REVIEW: append linkInstance?
-                # linkInstance = self.datatypes[2]()
-                packets.append((self.link.pid_rte_wpt_data, datatype))
-                # packets.append((self.link.pid_rte_link_data, linkInstance))
-
+            packet = {'id': pid, 'data': datatype}
+            packets.append(packet)
+            is_even = lambda x: x % 2 == 0
+            for idx, point in enumerate(points):
+                if is_even(idx):
+                    pid = self.link.pid_rte_wpt_data
+                else:
+                    pid = self.link.pid_rte_link_data
+                datatype = self.datatypes[idx+1](**point)
+                packet = {'id': pid, 'data': datatype}
+                packets.append(packet)
         return TransferProtocol.put_data(self,
                                          self.command.cmnd_transfer_rte,
                                          packets,
@@ -1281,12 +1320,18 @@ class A300(TransferProtocol):
                                          self.link.pid_trk_data,
                                          callback=callback)
 
-    def put_data(self, tracks, callback=None):
+    def put_data(self, points, callback=None):
         packets = []
-        for track in tracks:
+        for point in points:
             pid = self.link.pid_trk_data
-            datatype = self.datatypes[0](track)
-            packets.append({'pid': pid, 'datatype': datatype})
+            if isinstance(point, TrkPointType):
+                datatype = point
+            elif isinstance(point, dict):
+                datatype = self.datatypes[0](**point)
+            else:
+                raise ProtocolError("Invalid class type: expected dict or {datatypes[0].__name__}")
+            packet = (pid, datatype)
+            packets.append(packet)
 
         return TransferProtocol.put_data(self,
                                          self.command.cmnd_transfer_trk,
@@ -1319,20 +1364,28 @@ class A301(TransferProtocol):
 
     def put_data(self, tracks, callback=None):
         packets = []
-        for track_idx, track in enumerate(tracks):
+        for track in tracks:
             header = track[0]
             points = track[1:]
             pid = self.link.pid_trk_hdr
-            datatype = self.datatypes[0](**header)
-            if not datatype.trk_ident:
-                datatype.trk_ident = f"TRACK{track_idx+1}"
-            packets.append({'pid': pid, 'datatype': datatype})
-            for point_idx, point in enumerate(points):
+            if isinstance(header, TrkHdrType):
+                datatype = header
+            elif isinstance(header, dict):
+                datatype = self.datatypes[0](**header)
+            else:
+                raise ProtocolError("Invalid class type: expected dict or {datatypes[0].__name__}")
+            packet = (pid, datatype)
+            packets.append(packet)
+            for point in points:
                 pid = self.link.pid_trk_data
-                datatype = self.datatypes[1](**point)
-                if point_idx == 0:
-                    datatype.new_trk = True
-                    packets.append({'pid': pid, 'datatype': datatype})
+                if isinstance(point, TrkPointType):
+                    datatype = point
+                elif isinstance(point, dict):
+                    datatype = self.datatypes[1](**point)
+                else:
+                    raise ProtocolError("Invalid class type: expected dict or {datatypes[1].__name__}")
+                packet = (pid, datatype)
+                packets.append(packet)
 
         return TransferProtocol.put_data(self,
                                          self.command.cmnd_transfer_trk,
@@ -1375,12 +1428,18 @@ class A400(TransferProtocol):
                                          self.link.pid_prx_wpt_data,
                                          callback=callback)
 
-    def put_data(self, waypoints, callback=None):
+    def put_data(self, points, callback=None):
         packets = []
-        for waypoint in waypoints:
+        for point in points:
             pid = self.link.pid_prx_wpt_data
-            datatype = self.datatypes[0](waypoint)
-            packets.append({'pid': pid, 'datatype': datatype})
+            if isinstance(point, PrxWptType):
+                datatype = point
+            elif isinstance(point, dict):
+                datatype = self.datatypes[0](**point)
+            else:
+                raise ProtocolError("Invalid class type: expected dict or {datatypes[0].__name__}")
+            packet = {'id': pid, 'data': datatype}
+            packets.append(packet)
 
         return TransferProtocol.put_data(self,
                                          self.command.cmnd_transfer_prx,

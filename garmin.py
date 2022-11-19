@@ -1484,6 +1484,12 @@ class A500(TransferProtocol):
     | n-2 | Device1 to Device2 | pid_almanac_data | <D0>             |
     | n-1 | Device1 to Device2 | pid_xfer_cmplt   | Command          |
 
+    Some device-specific data types do not include a satellite ID to relate each
+    data packet to a particular satellite in the GPS constellation. For these
+    data types, the order of the 32 pid_almanac_data packets corresponds to PRN
+    order (i.e., the first packet contains data for PRN-01 and so on up to
+    PRN-32).
+
     """
 
     def get_data(self, callback=None):

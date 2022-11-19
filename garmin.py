@@ -726,6 +726,23 @@ class L001(L000):
     pid_lap = 149  # part of Forerunner data
     pid_wpt_cat = 152
     pid_baud_data = 252  # undocumented
+    pid_image_name_rx = 875
+    pid_image_name_tx = 876
+    pid_image_list_rx = 877
+    pid_image_list_tx = 878
+    pid_image_props_rx = 879
+    pid_image_props_tx = 880
+    pid_image_id_rx = 881
+    pid_image_id_tx = 882
+    pid_image_data_cmplt = 883
+    pid_image_data_rx = 884
+    pid_image_data_tx = 885
+    pid_color_table_rx = 886
+    pid_color_table_tx = 887
+    pid_image_type_idx_rx = 888
+    pid_image_type_idx_tx = 889
+    pid_image_type_name_rx = 890
+    pid_image_type_name_tx = 891
     pid_run = 990
     pid_workout = 991
     pid_workout_occurrence = 992
@@ -1839,6 +1856,228 @@ class A904:
     implementation as of yet.
 
     """
+
+
+class ImageTransfer:
+    """Image transfer protocol.
+
+    With the image transfer protocol a screenshot and custom waypoint icons can
+    be downloaded. The latter can also be uploaded. This protocol is
+    undocumented. The implementation is derived from the GarminDev drivers of
+    the abandoned QLandkarteGT application
+    (https://sourceforge.net/projects/qlandkartegt/) and by reverse-engineering
+    the Garmin xImage utility
+    (https://www8.garmin.com/support/download_details.jsp?id=545). Compatible
+    devices include the Garmin GPSMAP 60CX/60CSX, eTrex Legend C, eTrex Vista C,
+    GPSMAP 60C/60CS, GPSMAP 76C/76CS. Some devices, like the 60C and 76C,
+    originally didn’t support custom waypoint icons, but later it was added with
+    a firmware update.
+
+    """
+
+    def __init__(self, link, command):
+        self.link = link
+        self.command = command
+
+
+    def get_image_types(self):
+        log.info("Request image types")
+        self.link.send_packet(self.link.pid_image_type_idx_rx, None)
+        packet = self.link.expect_packet(self.link.pid_image_type_idx_tx)
+        indices = list(packet['data'])
+        log.info("Request image type names")
+        image_types = list()
+        for idx in indices:
+            self.link.send_packet(self.link.pid_image_type_name_rx, idx)
+            packet = self.link.expect_packet(self.link.pid_image_type_name_tx)
+            datatype = ImageNameType()
+            datatype.unpack(packet['data'])
+            image_types.append({'idx': idx, 'name': datatype.name.decode()})
+        return image_types
+
+    def get_image_list(self):
+        log.info("Request image list")
+        self.link.send_packet(self.link.pid_image_list_rx, None)
+        packet = self.link.expect_packet(self.link.pid_image_list_tx)
+        datatype = ImageListType()
+        datatype.unpack(packet['data'])
+        images = list()
+        for image in datatype.get_images():
+            idx = image.idx
+            image_dict = image.get_dict()
+            log.info("Request image name")
+            self.link.send_packet(self.link.pid_image_name_rx, idx)
+            packet = self.link.expect_packet(self.link.pid_image_name_tx)
+            datatype = ImageNameType()
+            datatype.unpack(packet['data'])
+            image_dict['name'] = datatype.name.decode()
+            images.append(image_dict)
+        return images
+
+    def get_image(self, idx=None, callback=None):
+        log.info("Turn off async mode")
+        self.link.send_packet(self.link.pid_enable_async_events, b'\x00\x00')
+        log.info("Request image properties")
+        self.link.send_packet(self.link.pid_image_props_rx, idx)
+        packet = self.link.expect_packet(self.link.pid_image_props_tx)
+        if not packet['data']:
+            raise ValueError(f"Invalid symbol index {idx}")
+        datatype = ImageInformationHeader()
+        datatype.unpack(packet['data'])
+        dimensions = datatype.get_dimensions()
+        pixel_size = datatype.get_size()
+        colors_used = datatype.get_colors_used()
+        log.info(f"Dimensions: {'x'.join(map(str, dimensions))} pixels")
+        log.info(f"Size: {pixel_size} bytes")
+        log.info(f"Bits per pixel: {datatype.bpp}")
+        log.info(f"Colors used: {colors_used}")
+        if colors_used is None or colors_used == 0:
+            raise GarminError("Images without a color palette are not supported")
+        log.info("Request image ID")
+        self.link.send_packet(self.link.pid_image_id_rx, idx)
+        packet = self.link.expect_packet(self.link.pid_image_id_tx)
+        receive = ImageIdType()
+        receive.unpack(packet['data'])
+        log.info(f"Image ID: {receive.id}")
+        log.info(f"Request color table for image ID {receive.id}")
+        # The color table is sent in one packet, consisting of 4 bytes for the
+        # id, and 4 bytes per color.
+        color_table_size = colors_used * 4 + 4
+        # The pixel data is sent in chunks, with a packet data size of maximum
+        # 500 bytes, consisting of 4 bytes for the id and maximum 496 bytes for
+        # the chunk of pixel data. Finally, a packet with only the 4 byte id is
+        # sent.
+        max_chunk_size = 496
+        chunk_count = math.ceil(pixel_size / max_chunk_size)
+        pixel_data_size = chunk_count * 4 + pixel_size + 4
+        total_bytes = color_table_size + pixel_data_size
+        received_bytes = 0
+        self.link.send_packet(self.link.pid_color_table_rx, receive.get_data())
+        packet = self.link.expect_packet(self.link.pid_color_table_tx)
+        received_bytes += len(packet['data'])
+        if callback:
+            callback(datatype, received_bytes, total_bytes, self.link.pid_color_table_tx)
+        datatype = ImageColorTableType()
+        datatype.unpack(packet['data'])
+        palette = datatype.get_palette()
+        log.info(f"Request pixel data for image ID {receive.id}")
+        pixel_data = bytes()
+        while True:
+            self.link.send_packet(self.link.pid_image_data_rx, receive.get_data())
+            packet = self.link.expect_packet(self.link.pid_image_data_tx)
+            received_bytes += len(packet['data'])
+            datatype = ImageChunkType()
+            datatype.unpack(packet['data'])
+            if callback:
+                callback(datatype, received_bytes, total_bytes, self.link.pid_image_data_tx)
+            if not datatype.data:
+                break
+            else:
+                pixel_data += datatype.data
+        log.info(f"Completed request pixel data for image ID {receive.id}")
+        self.link.send_packet(self.link.pid_image_data_cmplt, receive.get_data())
+        log.info("Create image from pixel data")
+        image = PIL.Image.frombytes(mode='P', size=dimensions, data=pixel_data, decoder_name='raw')
+        log.info("Attach palette to image")
+        image.putpalette(palette, rawmode='RGB')
+        return image.transpose(method=PIL.Image.Transpose.ROTATE_180)
+
+    def put_image(self, idx=None, image=None, callback=None):
+        log.info("Turn off async mode")
+        self.link.send_packet(self.link.pid_enable_async_events, b'\x00\x00')
+        log.info("Request image properties")
+        self.link.send_packet(self.link.pid_image_props_rx, idx)
+        packet = self.link.expect_packet(self.link.pid_image_props_tx)
+        if not packet['data']:
+            raise ValueError(f"Invalid symbol index {idx}")
+        datatype = ImageInformationHeader()
+        datatype.unpack(packet['data'])
+        dimensions = datatype.get_dimensions()
+        pixel_size = datatype.get_size()
+        bpp = datatype.bpp
+        colors_used = datatype.get_colors_used()
+        log.info(f"Dimensions: {'x'.join(map(str, dimensions))} pixels")
+        log.info(f"Size: {pixel_size} bytes")
+        log.info(f"Bits per pixel: {bpp}")
+        log.info(f"Colors used: {colors_used}")
+        if colors_used is None or colors_used == 0:
+            raise GarminError("Images without a color palette are not supported")
+        log.info("Request image ID")
+        self.link.send_packet(self.link.pid_image_id_rx, idx)
+        packet = self.link.expect_packet(self.link.pid_image_id_tx)
+        transmit = ImageIdType()
+        transmit.unpack(packet['data'])
+        log.info(f"Image ID: {transmit.id}")
+        log.info(f"Request color table for image ID {transmit.id}")
+        self.link.send_packet(self.link.pid_color_table_rx, transmit.get_data())
+        packet = self.link.expect_packet(self.link.pid_color_table_tx)
+        datatype = ImageColorTableType()
+        datatype.unpack(packet['data'])
+        palette = datatype.get_palette()
+        # The color table is sent in one packet, consisting of 4 bytes for the
+        # id, and 4 bytes per color.
+        color_table_size = colors_used * 4 + 4
+        # The pixel data is sent in chunks, with a packet data size of maximum
+        # 500 bytes, consisting of 4 bytes for the id and maximum 496 bytes for
+        # the chunk of pixel data. Finally, a packet with only the 4 byte id is
+        # sent.
+        max_chunk_size = 496
+        chunk_count = math.ceil(pixel_size / max_chunk_size)
+        pixel_data_size = chunk_count * 4 + pixel_size + 4
+        total_bytes = color_table_size + pixel_data_size
+        sent_bytes = 0
+        log.info(f"Send color table for image ID {transmit.id}")
+        # Use the just received color table of the existing image
+        data = datatype.get_data()
+        self.link.send_packet(self.link.pid_color_table_tx, data)
+        sent_bytes += len(data)
+        if callback:
+            callback(datatype, sent_bytes, total_bytes, self.link.pid_color_table_tx)
+        packet = self.link.expect_packet(self.link.pid_color_table_rx)
+        receive = ImageIdType()
+        receive.unpack(packet['data'])
+        if receive.id != transmit.id:
+            raise ProtocolError(f"Expected {transmit.id}, got {receive.id}")
+        out = image.transpose(method=PIL.Image.Transpose.ROTATE_180)
+        if out.mode in ('RGBA', 'LA','PA'):
+            log.info(f"Replace the alpha channel with magenta as transparency color")
+            color=(255, 0, 255)
+            alpha = out.getchannel('A')
+            # convert semi-transparent pixels to black and white
+            mask = out.convert(mode='1')
+            background = PIL.Image.new('RGB', out.size, color)
+            background.paste(out, mask=mask)
+            out = background
+        if out.size != dimensions:
+            log.info(f"Resize image to {'x'.join(map(str, dimensions))} pixels")
+            out = out.resize(dimensions)
+        if not (out.mode == 'P' and out.palette == palette):
+            log.info(f"Convert image to {bpp}-bit RGB format")
+            out = out.convert(mode='RGB')
+            log.info(f"Quantize image to the received color palette.")
+            new_image = PIL.Image.new('P', dimensions)
+            new_palette = PIL.ImagePalette.ImagePalette(palette=palette)
+            new_image.putpalette(new_palette)
+            out = out.quantize(colors=colors_used, palette=new_image)
+        pixel_data = out.tobytes()
+        log.info(f"Send pixel data for image ID {transmit.id}")
+        datatype = ImageChunkType(transmit.id, pixel_data)
+        datatype.pack()
+        data = datatype.get_data()
+        self.link.send_packet(self.link.pid_image_data_tx, data)
+        sent_bytes += len(data)
+        if callback:
+            callback(datatype, sent_bytes, total_bytes, self.link.pid_image_data_tx)
+        packet = self.link.expect_packet(self.link.pid_image_data_rx)
+        receive = ImageIdType()
+        receive.unpack(packet['data'])
+        if receive.id != transmit.id:
+            raise ProtocolError(f"Expected {transmit.id}, got {receive.id}")
+        log.info(f"Completed send pixel data for image ID {transmit.id}")
+        self.link.send_packet(self.link.pid_image_data_cmplt, transmit.get_data())
+        sent_bytes += len(transmit.get_data())
+        if callback:
+            callback(transmit, sent_bytes, total_bytes, self.link.pid_image_data_tx)
 
 
 class ScreenshotTransfer:
@@ -4555,6 +4794,129 @@ class MPSFileType(DataType):
         return [ MPSRecordType(*record) for record in self.records ]
 
 
+class RGBA(DataType):
+    """RGBA is a sRGB format that uses 32 bits of data per pixel.
+
+    Each channel (red, green, blue, and alpha) is allocated 8 bits per pixel
+    (BPP). The alpha channel is unused. Instead, a color is used for
+    transparency. Most devices make magenta (255,0,255) transparent.
+
+    """
+    _fields = [('red', 'B'),
+               ('green', 'B'),
+               ('blue', 'B'),
+               ('unused', 'B'),
+               ]
+
+    def __init__(self, red=0, green=0, blue=0, unused=0):
+        self.red = red
+        self.green = green
+        self.blue = blue
+        self.unused = unused
+
+
+class ImagePropType(DataType):
+    _fields = [('idx', 'H'),         # image index
+               ('writable', '?'),    # writable?
+               ('image_type', 'B'),  # image type (0 for screenshot or 2 for icon)
+               ]
+
+    def __init__(self, idx=0, writable=False, image_type=0):
+        self.idx = idx
+        self.writable = writable
+        self.image_type = image_type
+
+
+class ImageListType(DataType):
+    _image_prop_fmt = ImagePropType.get_format()
+    _fields = [('images', f'{{{_image_prop_fmt}}}'),
+               ]
+
+    def get_images(self):
+        return [ ImagePropType(*image) for image in self.images ]
+
+
+class ImageNameType(DataType):
+    _fields = (('name',  'n'),
+               )
+
+
+class ImageInformationHeader(DataType):
+    _rgba_fmt = RGBA.get_format()
+    _fields = (('unknown1', 'B'),
+               ('bpp', 'B'),                 # bits per pixel or color depth
+               ('unknown2', 'H'),
+               ('height', 'H'),              # heigth in pixels
+               ('width', 'H'),               # width in pixels
+               ('bytewidth', 'H'),           # width in bytes?
+               ('unknown3', 'H'),
+               ('color', f'({_rgba_fmt})'),  # transparent color
+               )
+
+    def get_dimensions(self):
+        return (self.width, self.height)
+
+    def get_size(self):
+        return (self.bpp * self.width * self.height) // 8
+
+    def get_colors_used(self):
+        if self.bpp <= 8:
+            return 1 << self.bpp
+        elif self.bpp == 24:
+            return 0
+
+    def get_color(self):
+        return RGBA(*self.colors)
+
+
+class ImageIdType(DataType):
+    _fields = (('id',  'I'),
+               )
+
+
+class ImageColorTableType(DataType):
+    """BMP color table.
+
+    The color table is a block of bytes listing the colors used by the image.
+    Each pixel in an indexed color image is described by a number of bits (1, 4,
+    or 8) which is an index of a single color described by this table. The
+    purpose of the color palette in indexed color bitmaps is to inform the
+    application about the actual color that each of these index values
+    corresponds to.
+
+    The colors in the color table are specified in the 4-byte per entry RGBA
+    format. Each entry in the color table occupies 4 bytes, in the order blue, green,
+    red, 0x00.
+
+    """
+    _id_fmt = ImageIdType.get_format()
+    _rgba_fmt = RGBA.get_format()
+    _fields = [('id', f'{_id_fmt}'),
+               ('colors', f'{{{_rgba_fmt}}}'),
+               ]
+
+    def get_colors(self):
+        return [ RGBA(*color) for color in self.colors ]
+
+    def get_palette(self):
+        """Returns the RGB color palette as a list of ints."""
+        palette = []
+        for color in self.get_colors():
+            palette.extend([color.red, color.green, color.blue])
+        return palette
+
+
+class ImageChunkType(DataType):
+    _id_fmt = ImageIdType.get_format()
+    _fields = [('id', f'{_id_fmt}'),
+               ('data', '$'),
+               ]
+
+    def __init__(self, id=0, data=b''):
+        self.id = id
+        self.data = data
+
+
 class BGR(DataType):
     """BGR is a sRGB format that uses 24 bits of data per per pixel.
 
@@ -4960,6 +5322,7 @@ class Garmin:
         self.lap_transfer = self._create_protocol('lap_transfer_protocol', self.link, self.command)
         self.run_transfer = self._create_protocol('run_transfer_protocol', self.link, self.command)
         self.screen_transfer = ScreenshotTransfer(self.link, self.command)
+        self.image_transfer = ImageTransfer(self.link, self.command)
 
     @staticmethod
     def _class_by_name(name):
@@ -5162,6 +5525,19 @@ class Garmin:
 
     def get_screenshot(self, callback=None):
         return self.screen_transfer.get_image(callback)
+
+    def get_image_types(self):
+        return self.image_transfer.get_image_types()
+
+    def get_image_list(self):
+        return self.image_transfer.get_image_list()
+
+    def get_image(self, idx, callback=None):
+        return self.image_transfer.get_image(idx, callback)
+
+    def put_image(self, idx, data, callback=None):
+        with PIL.Image.open(data) as image:
+            self.image_transfer.put_image(idx, image, callback)
 
     def abort_transfer(self):
         self.command.abort_transfer()

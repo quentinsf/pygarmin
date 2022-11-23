@@ -5478,9 +5478,11 @@ class Garmin:
         return self.position_initialization.get_data(callback)
 
     def pvt_on(self):
+        log.info(f"Start transmitting PVT data")
         return self.pvt.data_on()
 
     def pvt_off(self):
+        log.info("Stop transmitting PVT data")
         return self.pvt.data_off()
 
     def get_pvt(self, callback=None):
@@ -5545,7 +5547,9 @@ class Garmin:
             self.image_transfer.put_image(idx, image, callback)
 
     def abort_transfer(self):
+        log.info("Abort transfer")
         self.command.abort_transfer()
 
     def turn_power_off(self):
+        log.info("Turn power off")
         self.command.turn_power_off()

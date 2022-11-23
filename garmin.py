@@ -1115,7 +1115,7 @@ class TransferProtocol:
             else:
                 raise ProtocolError(f"Expected one of {*pids,}, got {pid}")
             if callback:
-                callback(datatype, idx+1, packet_count, pid)
+                callback(datatype, idx+1, packet_count)
         self.link.expect_packet(self.link.pid_xfer_cmplt)
 
         return result
@@ -1132,7 +1132,7 @@ class TransferProtocol:
             log.debug(f"> packet {pid:3}: {bytes.hex(data)}")
             self.link.send_packet(pid, data)
             if callback:
-                callback(datatype, idx+1, packet_count, pid)
+                callback(datatype, idx+1, packet_count)
 
         self.link.send_packet(self.link.pid_xfer_cmplt, cmd)
 
@@ -1515,7 +1515,7 @@ class A600(TransferProtocol):
         datatype = self.datatypes[0]()
         datatype.unpack(packet['data'])
         if callback:
-            callback(datatype, 1, 1, self.link.pid_date_time_data)
+            callback(datatype, 1, 1)
 
         return datatype
 
@@ -1565,7 +1565,7 @@ class A700(TransferProtocol):
         datatype = self.datatypes[0]()
         datatype.unpack(packet['data'])
         if callback:
-            callback(datatype, 1, 1, self.link.pid_position_data)
+            callback(datatype, 1, 1)
 
         return datatype
 
@@ -1603,7 +1603,7 @@ class A800(TransferProtocol):
         datatype = self.datatypes[0]()
         datatype.unpack(packet['data'])
         if callback:
-            callback(datatype, 1, 1, packet['id'])
+            callback(datatype, 1, 1)
 
         return datatype
 
@@ -1716,7 +1716,7 @@ class A900:
                 datatype.unpack(packet['data'])
                 data += datatype.chunk
                 if callback:
-                    callback(datatype, idx+1, packet_count, self.link.pid_mem_chunk)
+                    callback(datatype, idx+1, packet_count)
             return data
 
     def _write_file(self, file, chunk_size=250, callback=None):
@@ -1735,7 +1735,7 @@ class A900:
                 log.info(f"Upload {offset+len(chunk)}/{file_size} bytes")
                 self.link.send_packet(self.link.pid_mem_write, data)
                 if callback:
-                    callback(datatype, offset+len(chunk), file_size, self.link.pid_mem_chunk)
+                    callback(datatype, offset+len(chunk), file_size)
 
     def _write_handle(self, handle, chunk_size=250, callback=None):
         log.info(f"Upload map {handle.name}")
@@ -1754,7 +1754,7 @@ class A900:
             log.info(f"Upload {offset+len(chunk)}/{file_size} bytes")
             self.link.send_packet(self.link.pid_mem_write, data)
             if callback:
-                callback(datatype, offset+len(chunk), file_size, self.link.pid_mem_chunk)
+                callback(datatype, offset+len(chunk), file_size)
 
     def _write_bytes(self, bytes, chunk_size=250, callback=None):
         file_size = len(bytes)
@@ -1768,7 +1768,7 @@ class A900:
             log.info(f"Upload {offset+len(chunk)}/{file_size} bytes")
             self.link.send_packet(self.link.pid_mem_write, data)
             if callback:
-                callback(datatype, offset+len(chunk), file_size, self.link.pid_mem_chunk)
+                callback(datatype, offset+len(chunk), file_size)
 
     def _write_memory(self, data, chunk_size=250, callback=None):
         mem_region = self.memory_properties.mem_region
@@ -1961,7 +1961,7 @@ class ImageTransfer:
         packet = self.link.expect_packet(self.link.pid_color_table_tx)
         received_bytes += len(packet['data'])
         if callback:
-            callback(datatype, received_bytes, total_bytes, self.link.pid_color_table_tx)
+            callback(datatype, received_bytes, total_bytes)
         datatype = ImageColorTableType()
         datatype.unpack(packet['data'])
         palette = datatype.get_palette()
@@ -1974,7 +1974,7 @@ class ImageTransfer:
             datatype = ImageChunkType()
             datatype.unpack(packet['data'])
             if callback:
-                callback(datatype, received_bytes, total_bytes, self.link.pid_image_data_tx)
+                callback(datatype, received_bytes, total_bytes)
             if not datatype.data:
                 break
             else:
@@ -2037,7 +2037,7 @@ class ImageTransfer:
         self.link.send_packet(self.link.pid_color_table_tx, data)
         sent_bytes += len(data)
         if callback:
-            callback(datatype, sent_bytes, total_bytes, self.link.pid_color_table_tx)
+            callback(datatype, sent_bytes, total_bytes)
         packet = self.link.expect_packet(self.link.pid_color_table_rx)
         receive = ImageIdType()
         receive.unpack(packet['data'])
@@ -2072,7 +2072,7 @@ class ImageTransfer:
         self.link.send_packet(self.link.pid_image_data_tx, data)
         sent_bytes += len(data)
         if callback:
-            callback(datatype, sent_bytes, total_bytes, self.link.pid_image_data_tx)
+            callback(datatype, sent_bytes, total_bytes)
         packet = self.link.expect_packet(self.link.pid_image_data_rx)
         receive = ImageIdType()
         receive.unpack(packet['data'])
@@ -2082,7 +2082,7 @@ class ImageTransfer:
         self.link.send_packet(self.link.pid_image_data_cmplt, transmit.get_data())
         sent_bytes += len(transmit.get_data())
         if callback:
-            callback(transmit, sent_bytes, total_bytes, self.link.pid_image_data_tx)
+            callback(transmit, sent_bytes, total_bytes)
 
 
 class ScreenshotTransfer:
@@ -2131,7 +2131,7 @@ class ScreenshotTransfer:
                 color_table += datatype.chunk
                 received_bytes += len(packet['data'])
                 if callback:
-                    callback(datatype, received_bytes, total_bytes, self.link.pid_screen_data)
+                    callback(datatype, received_bytes, total_bytes)
             else:
                 raise ProtocolError(f"Invalid section: expected color_table, got {section}")
         log.info("Expect pixel data")
@@ -2145,7 +2145,7 @@ class ScreenshotTransfer:
                 pixel_data += datatype.chunk
                 received_bytes += len(packet['data'])
                 if callback:
-                    callback(datatype, received_bytes, total_bytes, self.link.pid_screen_data)
+                    callback(datatype, received_bytes, total_bytes)
             else:
                 raise ProtocolError(f"Invalid section: expected pixel_data, got {section}")
         image = PIL.Image.frombytes(mode='P', size=dimensions, data=pixel_data, decoder_name='raw')

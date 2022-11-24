@@ -1758,6 +1758,7 @@ class A900:
                 callback(datatype, offset+len(chunk), file_size)
 
     def _write_bytes(self, bytes, chunk_size=250, callback=None):
+        log.info(f"Upload map")
         file_size = len(bytes)
         offsets = range(0, file_size, chunk_size)
         chunk_count = len(offsets)
@@ -1793,13 +1794,10 @@ class A900:
             log.info("Delete map...")
             pass
         elif isinstance(data, str):
-            log.info("Upload map...")
             self._write_file(data, chunk_size, callback)
         elif isinstance(data, io.BufferedReader):
-            log.info("Upload map...")
             self._write_handle(data, chunk_size, callback)
         elif isinstance(data, bytes):
-            log.info("Upload map...")
             self._write_bytes(data, chunk_size, callback)
         log.info("Disable write")
         self.link.send_packet(self.link.pid_mem_wrdi, mem_region)

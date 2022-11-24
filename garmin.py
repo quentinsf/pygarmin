@@ -1726,10 +1726,10 @@ class A900:
         chunk_count = math.ceil(file_size / chunk_size)
         with open(file, 'rb') as f:
             while True:
+                offset = f.tell()
                 chunk = f.read(chunk_size)
                 if not chunk:  # EOF reached
                     break
-                offset = f.tell()
                 datatype = MemChunkType(offset, chunk)
                 datatype.pack()
                 data = datatype.get_data()
@@ -1745,10 +1745,10 @@ class A900:
         chunk_count = math.ceil(file_size / chunk_size)
         handle.seek(0, os.SEEK_SET)
         while True:
+            offset = handle.tell()
             chunk = handle.read(chunk_size)
             if not chunk:  # EOF reached
                 break
-            offset = handle.tell()
             datatype = MemChunkType(offset, chunk)
             datatype.pack()
             data = datatype.get_data()

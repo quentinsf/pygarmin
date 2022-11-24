@@ -165,7 +165,7 @@ class SerialLink(P000):
         data bytes, followed by a three-byte trailer (Checksum, DLE, and ETX).
 
         """
-        log.info("Unpack packet...")
+        log.debug("Unpack packet...")
         # Only the size, data, and checksum fields have to be unescaped, but
         # unescaping the whole packet doesn't hurt
         packet = self.unescape(buffer)
@@ -322,24 +322,24 @@ class SerialLink(P000):
         received correctly and should be sent again.
 
         """
-        log.info("Read ACK/NAK")
+        log.debug("Read ACK/NAK")
         packet = self.read_packet(acknowledge=False)
         expected_pid = pid
         received_pid = int.from_bytes(packet['data'], byteorder='little')
 
         if packet['id'] == self.pid_ack_byte:
-            log.info("Received ACK packet")
+            log.debug("Received ACK packet")
             if expected_pid != received_pid:
                 raise ProtocolError(f"Device expected {expected_pid}, got {received_pid}")
         elif packet['id'] == self.pid_nak_byte:
-            log.info("Received NAK packet")
+            log.debug("Received NAK packet")
             raise LinkError("Packet was not received correctly")
         else:
             raise GarminError("Received neither ACK nor NAK packet")
 
     def send_ack(self, pid):
         """Send an ACK packet."""
-        log.info("Send ACK packet")
+        log.debug("Send ACK packet")
         data = pid.to_bytes(1, byteorder='little')
         self.send_packet(self.pid_ack_byte, data, acknowledge=False)
 
@@ -350,7 +350,7 @@ class SerialLink(P000):
         errors in any higher-layer protocol.
 
         """
-        log.info("Send NAK packet")
+        log.debug("Send NAK packet")
         data = bytes()  # we cannot determine the packet id because it was corrupted
         self.send_packet(self.pid_nak_byte, data, acknowledge=False)
 
@@ -1732,7 +1732,7 @@ class A900:
                 datatype = MemChunkType(offset, chunk)
                 datatype.pack()
                 data = datatype.get_data()
-                log.info(f"Upload {offset+len(chunk)}/{file_size} bytes")
+                log.debug(f"Upload {offset+len(chunk)}/{file_size} bytes")
                 self.link.send_packet(self.link.pid_mem_write, data)
                 if callback:
                     callback(datatype, offset+len(chunk), file_size)
@@ -1751,7 +1751,7 @@ class A900:
             datatype = MemChunkType(offset, chunk)
             datatype.pack()
             data = datatype.get_data()
-            log.info(f"Upload {offset+len(chunk)}/{file_size} bytes")
+            log.debug(f"Upload {offset+len(chunk)}/{file_size} bytes")
             self.link.send_packet(self.link.pid_mem_write, data)
             if callback:
                 callback(datatype, offset+len(chunk), file_size)
@@ -1765,7 +1765,7 @@ class A900:
             datatype = MemChunkType(offset, chunk)
             datatype.pack()
             data = datatype.get_data()
-            log.info(f"Upload {offset+len(chunk)}/{file_size} bytes")
+            log.debug(f"Upload {offset+len(chunk)}/{file_size} bytes")
             self.link.send_packet(self.link.pid_mem_write, data)
             if callback:
                 callback(datatype, offset+len(chunk), file_size)
@@ -1784,11 +1784,10 @@ class A900:
                 log.info("Write enabled")
                 break
             except LinkError as e:
-                log.error(e)
+                log.info(e)
                 retries += 1
         if retries > max_retries:
             raise LinkError("Maximum retries exceeded")
-
         if data is None:
             log.info("Delete map...")
             pass

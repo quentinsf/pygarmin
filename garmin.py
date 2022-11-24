@@ -5511,24 +5511,23 @@ class Garmin:
         log.info(f"Map size: {map_size} bytes")
         if map_size > mem_size:
             raise GarminError("Insufficient memory to upload map")
-        else:
-            if key:
-                self.map_unlock.send_unlock_key(key)
-            # Maximize the baudrate if supported
-            if isinstance(self.phys, SerialLink) and self.transmission:
-                current_baudrate = self.transmission.get_baudrate()
-                baudrates = self.transmission.get_supported_baudrates()
-                self.transmission.set_baudrate(baudrates[0])
-            # The maximum data size differs between the serial and USB protocol:
-            # 255 for serial (maximum value of 8-bit unsigned integer) and 4084
-            # for USB (maximum buffer size - header size = 4096 - 12). We chose
-            # 255 for both protocols, because large USB writes time out. The
-            # chunk size then is 251 (maximum data size - offset size = 255 - 4)
-            chunk_size = 251
-            self.map_transfer._write_memory(data, chunk_size, callback)
-            # Restore the baudrate to the original value
-            if isinstance(self.phys, SerialLink) and self.transmission:
-                self.transmission.set_baudrate(current_baudrate)
+        if key:
+            self.map_unlock.send_unlock_key(key)
+        # Maximize the baudrate if supported
+        if isinstance(self.phys, SerialLink) and self.transmission:
+            current_baudrate = self.transmission.get_baudrate()
+            baudrates = self.transmission.get_supported_baudrates()
+            self.transmission.set_baudrate(baudrates[0])
+        # The maximum data size differs between the serial and USB protocol:
+        # 255 for serial (maximum value of 8-bit unsigned integer) and 4084
+        # for USB (maximum buffer size - header size = 4096 - 12). We chose
+        # 255 for both protocols, because large USB writes time out. The
+        # chunk size then is 251 (maximum data size - offset size = 255 - 4)
+        chunk_size = 251
+        self.map_transfer._write_memory(data, chunk_size, callback)
+        # Restore the baudrate to the original value
+        if isinstance(self.phys, SerialLink) and self.transmission:
+            self.transmission.set_baudrate(current_baudrate)
 
     def get_screenshot(self, callback=None):
         return self.screen_transfer.get_image(callback)

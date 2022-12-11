@@ -572,7 +572,7 @@ class USBLink(P000):
                 log.debug(f"> {bytes.hex(buffer)}")
                 packet = self.unpack(buffer)
                 break
-            except self.usb.core.USBError as e:
+            except LinkError as e:
                 log.info(e)
                 retries += 1
 
@@ -1780,18 +1780,8 @@ class A900:
         self.link.send_packet(self.link.pid_enable_async_events, b'\x00\x00')
         log.info("Enable write")
         self.link.send_packet(self.link.pid_mem_wren, mem_region)
-        max_retries = 10
-        retries = 0
-        while retries <= max_retries:
-            try:
-                self.link.expect_packet(self.link.pid_mem_wel)
-                log.info("Write enabled")
-                break
-            except LinkError as e:
-                log.info(e)
-                retries += 1
-        if retries > max_retries:
-            raise LinkError("Maximum retries exceeded")
+        self.link.expect_packet(self.link.pid_mem_wel)
+        log.info("Write enabled")
         if data is None:
             log.info("Delete map...")
             pass

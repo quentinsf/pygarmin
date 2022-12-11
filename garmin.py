@@ -3613,8 +3613,7 @@ class D152(D150):
 
 class D154(D101, D150):
     _smbl_fmt = SymbolType.get_format()
-    _fields = D150._fields.copy()
-    _fields.append(('smbl', f'{_smbl_fmt}'))  # symbol id
+    _fields = D150._fields + [('smbl', f'{_smbl_fmt}')]  # symbol id
 
     _wpt_class = {0: 'apt_wpt_class',     # airport waypoint class
                   1: 'int_wpt_class',     # intersection waypoint class
@@ -3635,10 +3634,9 @@ class D154(D101, D150):
 
 class D155(D101, D150):
     _smbl_fmt = SymbolType.get_format()
-    _fields = D150._fields.copy()
-    _fields.extend([('smbl', f'{_smbl_fmt}'),    # symbol id
-                    ('dspl', 'B'),               # display option
-                    ])
+    _fields = D150._fields + [('smbl', f'{_smbl_fmt}'),    # symbol id
+                              ('dspl', 'B'),               # display option
+                              ]
     _dspl = {1: 'dspl_smbl_only',  # display symbol by itself
              3: 'dspl_smbl_name',  # display symbol with waypoint name
              5: 'dspl_smbl_cmnt',  # display symbol with comment
@@ -3873,11 +3871,10 @@ class D303(D301):
 
 
 class D304(D303):
-    _fields = D303._fields.copy()
-    _fields.extend([('distance', 'f'),    # distance traveled in meters, invalid if 1.0e25
-                    ('cadence', 'B'),     # in revolutions per minute, invalid if 0xFF
-                    ('sensor', '?'),      # is a wheel sensor present?
-                    ])
+    _fields = D303._fields + [('distance', 'f'),    # distance traveled in meters, invalid if 1.0e25
+                              ('cadence', 'B'),     # in revolutions per minute, invalid if 0xFF
+                              ('sensor', '?'),      # is a wheel sensor present?
+                              ]
 
     def __init__(self, distance=1.0e25, heart_rate=0, cadence=255, sensor=False, **kwargs):
         super().__init__(**kwargs)
@@ -3980,8 +3977,7 @@ class PrxWptType(WptType):
 
 
 class D400(PrxWptType, D100):
-    _fields = D100._fields.copy()
-    _fields.append(('dst', 'f'))  # proximity distance (meters)
+    _fields = D100._fields + [('dst', 'f')]  # proximity distance (meters)
 
     def __init__(self, dst=0, **kwargs):
         super().__init__(**kwargs)
@@ -3989,8 +3985,7 @@ class D400(PrxWptType, D100):
 
 
 class D403(PrxWptType, D103):
-    _fields = D103._fields.copy()
-    _fields.append(('dst', 'f'))  # proximity distance (meters)
+    _fields = D103._fields + [('dst', 'f')]  # proximity distance (meters)
 
     def __init__(self, dst=0, **kwargs):
         super().__init__(**kwargs)
@@ -3998,9 +3993,10 @@ class D403(PrxWptType, D103):
 
 
 class D450(PrxWptType, D150):
-    _fields = D150._fields.copy()
-    _fields.insert(0, ('idx', 'i'))  # proximity index
-    _fields.append(('dst', 'f'))     # proximity distance (meters)
+    _fields = [('idx', 'i')  # proximity index
+               ] + \
+               D150._fields + \
+               [('dst', 'f')]  # proximity distance (meters)
 
     def __init__(self, idx=0, dst=0, **kwargs):
         super().__init__(**kwargs)
@@ -4049,8 +4045,7 @@ class D500(AlmanacType):
 
 
 class D501(D500):
-    _fields = D500._fields.copy()
-    _fields.append(('hlth', 'B'))  # almanac health
+    _fields = D500._fields + [('hlth', 'B')]  # almanac health
 
     def __init__(self, hlth=0, **kwargs):
         super().__init__(**kwargs)
@@ -4058,8 +4053,8 @@ class D501(D500):
 
 
 class D550(D500):
-    _fields = D500._fields.copy()
-    _fields.insert(0, ('svid', 'B'))  # satellite id
+    _fields = [('svid', 'B')  # satellite id
+               ] + D500._fields
 
     def get_prn(self):
         """Return the PRN.
@@ -4073,8 +4068,8 @@ class D550(D500):
 
 
 class D551(D501):
-    _fields = D501._fields.copy()
-    _fields.insert(0, ('svid', 'B'))  # satellite id
+    _fields = [('svid', 'B')  # satellite id
+               ] + D501._fields
 
     def get_prn(self):
         """Return the PRN.
@@ -4151,7 +4146,7 @@ class D650(FlightBookRecordType):
 
 
 class D700(RadianPositionType):
-    _fields = RadianPositionType._fields.copy()
+    _fields = RadianPositionType._fields
 
 
 class PVTDataType(DataType):
@@ -4365,10 +4360,11 @@ class WorkoutType(DataType):
 
 
 class D1000(RunType):
-    _fields = RunType._fields.copy()
-    _fields.append(('unused', 'H'))          # Unused. Set to 0.
-    _fields.extend(VirtualPartner._fields)  # Virtual partner
-    _fields.extend(WorkoutType._fields)     # Workout
+    _fields = RunType._fields + \
+        [('unused', 'H')  # Unused. Set to 0.
+         ] + \
+         VirtualPartner._fields + \
+         WorkoutType._fields
 
 
 class D1001(LapType):
@@ -4402,7 +4398,7 @@ class WorkoutOccurrenceType(DataType):
 
 
 class D1003(WorkoutOccurrenceType):
-    _fields = WorkoutOccurrenceType._fields.copy()
+    _fields = WorkoutOccurrenceType._fields
 
 
 class HeartRateZones(DataType):
@@ -4498,13 +4494,12 @@ class D1008(WorkoutType):
 
 
 class D1009(RunType):
-    _fields = RunType._fields.copy()
-    _fields.extend([('multisport', 'B'),
-                    ('unused1', 'B'),
-                    ('unused2', 'H'),
-                    ('quick_workout_time', 'I'),
-                    ('quick_workout_distance', 'f'),
-                    ])
+    _fields = RunType._fields + [('multisport', 'B'),
+                                 ('unused1', 'B'),
+                                 ('unused2', 'H'),
+                                 ('quick_workout_time', 'I'),
+                                 ('quick_workout_distance', 'f'),
+                                 ]
 
 
 class D1011(LapType):
@@ -4547,8 +4542,8 @@ class D1010(RunType):
                ('unused', 'B'),           # Unused. Set to 0.
                ('time', f'{_time_fmt}'),  # Time result of virtual partner
                ('distance', 'f'),         # Distance result of virtual partner
-               ]
-    _fields.extend(WorkoutType._fields)  # Workout
+               ] + \
+               WorkoutType._fields  # Workout
     _program_type = {0: 'none',
                      1: 'virtual_partner',  # Completed with Virtual Partner
                      2: 'workout',          # Completed as part of a workout
@@ -4981,15 +4976,14 @@ class ScreenType(DataType):
 
 
 class ScreenHeaderType(ScreenType):
-    _fields = ScreenType._fields.copy()
-    _fields.extend((('unknown1', 'I'),   # width in bytes?
-                    ('bpp', 'I'),        # bits per pixel or color depth
-                    ('width', 'I'),      # width in pixels
-                    ('height', 'I'),     # heigth in pixels
-                    ('unknown2', 'I'),
-                    ('unknown3', 'I'),
-                    ('unknown4', 'I'),
-                    ))
+    _fields = ScreenType._fields + [('unknown1', 'I'),   # width in bytes?
+                                    ('bpp', 'I'),        # bits per pixel or color depth
+                                    ('width', 'I'),      # width in pixels
+                                    ('height', 'I'),     # heigth in pixels
+                                    ('unknown2', 'I'),
+                                    ('unknown3', 'I'),
+                                    ('unknown4', 'I'),
+                                    ]
 
     def get_dimensions(self):
         return (self.width, self.height)
@@ -5006,16 +5000,14 @@ class ScreenHeaderType(ScreenType):
 
 class ScreenColorTableType(ScreenType):
     _bgr_fmt = BGR.get_format()
-    _fields = ScreenType._fields.copy()
-    _fields.append(('color', f'{_bgr_fmt}'))
+    _fields = ScreenType._fields + [('color', f'{_bgr_fmt}')]
 
     def get_colors(self):
         return BGR(*self.color)
 
 
 class ScreenChunkType(ScreenType):
-    _fields = ScreenType._fields.copy()
-    _fields.append(('chunk', '$'))
+    _fields = ScreenType._fields + [('chunk', '$')]
 
 
 # Garmin models ==============================================

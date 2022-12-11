@@ -5512,12 +5512,16 @@ class Garmin:
             current_baudrate = self.transmission.get_baudrate()
             baudrates = self.transmission.get_supported_baudrates()
             self.transmission.set_baudrate(baudrates[0])
-        # The maximum data size differs between the serial and USB protocol:
-        # 255 for serial (maximum value of 8-bit unsigned integer) and 4084
-        # for USB (maximum buffer size - header size = 4096 - 12). We chose
-        # 255 for both protocols, because large USB writes time out. The
-        # chunk size then is 251 (maximum data size - offset size = 255 - 4)
-        chunk_size = 251
+        # The maximum data size differs between the serial and USB protocol: 255
+        # for serial (maximum value of 8-bit unsigned integer) and 4084 for USB
+        # (maximum buffer size - header size = 4096 - 12). So, in theory a chunk
+        # size of 251 (maximum data size - offset size = 255 - 4) would work.
+        # However, the maximum chunk size apparently is 250 bytes, because
+        # transfers with a larger chunk size don't work in practice. The old map
+        # on the device is deleted, but the new map isn't shown on the device.
+        # This is surprising, because when the map is transferred from the
+        # device to the computer, the expected maximum data size of 255 is used.
+        chunk_size = 250
         self.map_transfer._write_memory(data, chunk_size, callback)
         # Restore the baudrate to the original value
         if isinstance(self.phys, SerialLink) and self.transmission:

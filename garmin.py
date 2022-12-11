@@ -584,8 +584,18 @@ class USBLink(P000):
     def send_packet(self, pid, data):
         """Send a packet."""
         buffer = self.pack(self.Application_Layer, pid, data)
-        log.debug(f"< {bytes.hex(buffer)}")
-        self.write(buffer)
+        log.debug(f"< {bytes.hex(buffer, sep=' ')}")
+        retries = 0
+        while retries <= self.max_retries:
+            try:
+                self.write(buffer)
+                break
+            except LinkError as e:
+                log.error(e)
+                retries += 1
+
+        if retries > self.max_retries:
+            raise LinkError("Maximum retries exceeded")
 
     def send_start_session_packet(self):
         """Send a Start Session packet.

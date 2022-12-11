@@ -1738,7 +1738,6 @@ class A900:
     def _write_file(self, file, chunk_size=250, callback=None):
         log.info(f"Upload map {file}")
         file_size = os.path.getsize(file)
-        chunk_count = math.ceil(file_size / chunk_size)
         with open(file, 'rb') as f:
             while True:
                 offset = f.tell()
@@ -1757,7 +1756,6 @@ class A900:
         log.info(f"Upload map {handle.name}")
         handle.seek(0, os.SEEK_END)
         file_size = handle.tell()
-        chunk_count = math.ceil(file_size / chunk_size)
         handle.seek(0, os.SEEK_SET)
         while True:
             offset = handle.tell()
@@ -1776,7 +1774,6 @@ class A900:
         log.info(f"Upload map")
         file_size = len(bytes)
         offsets = range(0, file_size, chunk_size)
-        chunk_count = len(offsets)
         for offset in offsets:
             chunk = bytes[offset:offset+chunk_size]
             datatype = MemChunkType(offset, chunk)

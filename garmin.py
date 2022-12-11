@@ -1685,7 +1685,10 @@ class A900:
     def __init__(self, link, command):
         self.link = link
         self.command = command
-        self.memory_properties = self.get_memory_properties()
+
+    @cached_property
+    def memory_properties(self):
+        return self.get_memory_properties()
 
     def get_memory_properties(self):
         log.info("Request capacity data...")

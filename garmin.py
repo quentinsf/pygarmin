@@ -56,7 +56,9 @@ import os
 import PIL.Image
 import rawutil
 import re
+import serial
 import sys
+import usb
 
 
 # Set default logging handler to avoid "No handler found" warnings.
@@ -108,10 +110,6 @@ class SerialLink(P000):
     pid_nak_byte = 21  # Negative Acknowledge
 
     def __init__(self, port):
-        # Import serial here, so that you don't have to have that module
-        # installed, if you're not using a serial link.
-        import serial
-        self.serial = serial
         self.port = port
         self.timeout = 1
         self.baudrate = 9600
@@ -245,7 +243,7 @@ class SerialLink(P000):
             # boundaries
             try:
                 buffer += self.ser.read(2-len(buffer))
-            except self.serial.SerialException as e:
+            except serial.SerialException as e:
                 raise LinkError(e.strerror)
             if not buffer:
                 raise LinkError("Reading packet timed out")
@@ -276,7 +274,7 @@ class SerialLink(P000):
     def write(self, buffer):
         try:
             self.ser.write(buffer)
-        except self.serial.SerialException as e:
+        except serial.SerialException as e:
             raise LinkError(e.strerror)
 
     def read_packet(self, acknowledge=True):
@@ -394,16 +392,12 @@ class USBLink(P000):
     pid_session_started = 6
 
     def __init__(self):
-        # Import usb here, so that you don't have to have that module
-        # installed, if you're not using a usb link.
-        import usb
-        self.usb = usb
         self.timeout = 1
         self.max_retries = 5
         self.start_session()
 
     def __del__(self):
-        self.usb.util.dispose_resources(self.dev)
+        usb.util.dispose_resources(self.dev)
 
     def set_timeout(self, seconds):
         self.timeout = seconds
@@ -419,7 +413,7 @@ class USBLink(P000):
         and cache the resulting value for future use.
 
         """
-        dev = self.usb.core.find(idVendor=self.idVendor)
+        dev = usb.core.find(idVendor=self.idVendor)
         if dev is None:
             raise LinkError("Garmin device not found")
 
@@ -464,7 +458,7 @@ class USBLink(P000):
         and cache the resulting value for future use.
 
         """
-        ep = self.usb.util.find_descriptor(self.intf,
+        ep = usb.util.find_descriptor(self.intf,
                                            bEndpointAddress=self.Interrupt_IN)
         return ep
 
@@ -477,7 +471,7 @@ class USBLink(P000):
 
         """
 
-        ep = self.usb.util.find_descriptor(self.intf,
+        ep = usb.util.find_descriptor(self.intf,
                                            bEndpointAddress=self.Bulk_OUT)
         return ep
 
@@ -547,7 +541,7 @@ class USBLink(P000):
         timeout = self.timeout * 1000 if self.timeout else None
         try:
             buffer = self.dev.read(endpoint, size, timeout=timeout)
-        except self.usb.core.USBError as e:
+        except usb.core.USBError as e:
             raise LinkError(e.strerror)
 
         # pyusb returns an array object, but we want a bytes object
@@ -560,7 +554,7 @@ class USBLink(P000):
         timeout = self.timeout * 1000 if self.timeout else None
         try:
             self.dev.write(endpoint, buffer, timeout=timeout)
-        except self.usb.core.USBError as e:
+        except usb.core.USBError as e:
             raise LinkError(e.strerror)
 
     def read_packet(self):

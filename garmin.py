@@ -277,14 +277,14 @@ class SerialLink(P000):
         try:
             self.ser.write(buffer)
         except self.serial.SerialException as e:
-            raise LinkError(e)
+            raise LinkError(e.strerror)
 
     def read_packet(self, acknowledge=True):
         retries = 0
         while retries <= self.max_retries:
             try:
                 buffer = self.read()
-                log.debug(f"> {bytes.hex(buffer)}")
+                log.debug(f"> {bytes.hex(buffer, sep=' ')}")
                 packet = self.unpack(buffer)
                 if acknowledge:
                     self.send_ack(packet['id'])
@@ -548,7 +548,7 @@ class USBLink(P000):
         try:
             buffer = self.dev.read(endpoint, size, timeout=timeout)
         except self.usb.core.USBError as e:
-            raise LinkError(e)
+            raise LinkError(e.strerror)
 
         # pyusb returns an array object, but we want a bytes object
         return buffer.tobytes()
@@ -561,7 +561,7 @@ class USBLink(P000):
         try:
             self.dev.write(endpoint, buffer, timeout=timeout)
         except self.usb.core.USBError as e:
-            raise LinkError(e)
+            raise LinkError(e.strerror)
 
     def read_packet(self):
         """Read a packet."""

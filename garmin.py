@@ -5482,7 +5482,7 @@ class Garmin:
     def get_pvt(self, callback=None):
         return self.pvt.get_data(callback)
 
-    def delete_map(self):
+    def del_map(self):
         if self.map_transfer is None:
             raise GarminError("Protocol map_transfer_protocol is not supported")
         return self.map_transfer._write_memory(None)

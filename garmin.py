@@ -246,8 +246,10 @@ class SerialLink(P000):
             try:
                 buffer += self.ser.read(2-len(buffer))
             except self.serial.SerialException as e:
-                raise LinkError(e)
-            if len(buffer) != 2:
+                raise LinkError(e.strerror)
+            if not buffer:
+                raise LinkError("Reading packet timed out")
+            elif len(buffer) != 2:
                 raise LinkError("Invalid packet: unexpected end")
             elif len(packet) == 0:
                 # Packet header

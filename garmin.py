@@ -484,7 +484,7 @@ class USBLink(P000):
     def unpack(self, buffer):
         """Unpack a raw USB packet.
 
-        Return a tuple: (pid, data)"""
+        """
         # packet_type = buffer[0]  # unused
         # reserved_1 = buffer[1:4]  # unused
         id = buffer[4:6]

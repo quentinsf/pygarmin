@@ -302,7 +302,7 @@ class SerialLink(P000):
     def send_packet(self, pid, data, acknowledge=True):
         """Send a packet."""
         buffer = self.pack(pid, data)
-        log.debug(f"< {bytes.hex(buffer)}")
+        log.debug(f"< {bytes.hex(buffer, sep=' ')}")
         retries = 0
         while retries <= self.max_retries:
             try:
@@ -569,7 +569,7 @@ class USBLink(P000):
         while retries <= self.max_retries:
             try:
                 buffer = self.read()
-                log.debug(f"> {bytes.hex(buffer)}")
+                log.debug(f"> {bytes.hex(buffer, sep=' ')}")
                 packet = self.unpack(buffer)
                 break
             except LinkError as e:
@@ -1142,7 +1142,7 @@ class TransferProtocol:
             datatype = packet['data']
             datatype.pack()
             data = datatype.get_data()
-            log.debug(f"> packet {pid:3}: {bytes.hex(data)}")
+            log.debug(f"> packet {pid:3}: {bytes.hex(data, sep=' ')}")
             self.link.send_packet(pid, data)
             if callback:
                 callback(datatype, idx+1, packet_count)

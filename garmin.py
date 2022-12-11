@@ -343,7 +343,7 @@ class SerialLink(P000):
     def send_ack(self, pid):
         """Send an ACK packet."""
         log.debug("Send ACK packet")
-        data = pid.to_bytes(1, byteorder='little')
+        data = pid.to_bytes(2, byteorder='little')
         self.send_packet(self.pid_ack_byte, data, acknowledge=False)
 
     def send_nak(self):

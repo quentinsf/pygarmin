@@ -5360,7 +5360,7 @@ class Garmin:
                 protocols = self._lookup_protocols(self.product_id, self.software_version)
             except KeyError:
                 raise ProtocolError("Couldn't determine protocol capabilities")
-        log.info(f"Supported protocols and data types: {protocols}")
+        log.debug(f"Supported protocols and data types: {protocols}")
 
         return protocols
 
@@ -5381,12 +5381,13 @@ class Garmin:
                     log.info(f"Register datatypes {*datatypes, }.")
             else:
                 log.info(f"Ignore undocumented protocol {protocol}.")
-        log.info(f"Registered protocols and data types: {protocols}")
+        log.debug(f"Registered protocols and data types: {protocols}")
         return protocols
 
     def _create_protocol(self, key, *args):
         protocol_datatypes = self.registered_protocols.get(key)
         if protocol_datatypes:
+            log.info(f"Create protocol {key}...")
             protocol = protocol_datatypes[0]
             datatypes = protocol_datatypes[1:]
             if datatypes:

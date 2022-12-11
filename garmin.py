@@ -1702,10 +1702,10 @@ class A900:
         log.info(f"Memory size: {mem_size} bytes")
         return datatype
 
-    def _read_memory(self, file='', callback=None):
+    def _read_memory(self, filename='', callback=None):
         log.info("Get memory data...")
         mem_region = self.memory_properties.mem_region
-        datatype = MemFileType(mem_region=mem_region, subfile=file)
+        datatype = MemFileType(mem_region=mem_region, subfile=filename)
         datatype.pack()
         data = datatype.get_data()
         self.link.send_packet(self.link.pid_mem_read, data)
@@ -1806,18 +1806,19 @@ class A900:
 
     def get_map_properties(self):
         log.info("Get map properties...")
-        subfile = "MAPSOURC.MPS"
-        data = self._read_memory(file=subfile)
-        if data is not None:
-            datatype = MPSFileType()
-            datatype.unpack(data)
-            records = datatype.get_records()
-            result = [ record.get_content() for record in records ]
-            return result
+        filenames = ("MAKEGMAP.MPS", "MAPSOURC.MPS", "BLUCHART.MPS")
+        for filename in filenames:
+            data = self._read_memory(filename=filename)
+            if data is not None:
+                datatype = MPSFileType()
+                datatype.unpack(data)
+                records = datatype.get_records()
+                result = [ record.get_content() for record in records ]
+                return result
 
     def get_map(self, callback=None):
         log.info("Download map...")
-        data = self._read_memory(file='', callback=callback)
+        data = self._read_memory(filename='', callback=callback)
         if data is not None:
             return data
 

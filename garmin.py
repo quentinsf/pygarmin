@@ -1892,7 +1892,9 @@ class ImageTransfer:
             packet = self.link.expect_packet(self.link.pid_image_type_name_tx)
             datatype = ImageName()
             datatype.unpack(packet['data'])
-            image_types.append({'idx': idx, 'name': datatype.name.decode()})
+            name = datatype.name.decode()
+            log.info(f"Image type name: {name}")
+            image_types.append({'idx': idx, 'name': name})
         return image_types
 
     def get_image_list(self):
@@ -1910,7 +1912,9 @@ class ImageTransfer:
             packet = self.link.expect_packet(self.link.pid_image_name_tx)
             datatype = ImageName()
             datatype.unpack(packet['data'])
-            image_dict['name'] = datatype.name.decode()
+            name = datatype.name.decode()
+            log.info(f"Image name: {name}")
+            image_dict['name'] = name
             images.append(image_dict)
         return images
 

@@ -666,13 +666,13 @@ class L000:
         while True:
             packet = self.phys.read_packet()
             if packet['id'] == self.pid_ext_product_data:
-                # The ExtProductDataType contains zero or more null-terminated
+                # The ExtProductData contains zero or more null-terminated
                 # strings that are used during manufacturing to identify other
                 # properties of the device and are not formatted for display to the
                 # end user. According to the specification the host should ignore
                 # it.
                 log.info(f"Got packet type {self.pid_ext_product_data}, ignoring...")
-                datatype = ExtProductDataType()
+                datatype = ExtProductData()
                 datatype.unpack(packet['data'])
                 for property in datatype.properties:
                     log.debug(f"Extra Product Data: {property[0].decode()}")
@@ -789,13 +789,13 @@ class A000:
     and data types supported by the device.
 
     Packet sequence
-    |   N | Direction      | Packet ID            | Packet Data Type   |
-    |-----+----------------+----------------------+--------------------|
-    |   0 | Host to Device | pid_product_rqst     | ignored            |
-    |   1 | Device to Host | pid_product_data     | ProductDataType    |
-    |   2 | Device to Host | pid_ext_product_data | ExtProductDataType |
-    |   … | …              | …                    | …                  |
-    | N-1 | Device to Host | pid_ext_product_data | ExtProductDataType |
+    |   N | Direction      | Packet ID            | Packet Data Type |
+    |-----+----------------+----------------------+------------------|
+    |   0 | Host to Device | pid_product_rqst     | ignored          |
+    |   1 | Device to Host | pid_product_data     | ProductData      |
+    |   2 | Device to Host | pid_ext_product_data | ExtProductData   |
+    |   … | …              | …                    | …                |
+    | N-1 | Device to Host | pid_ext_product_data | ExtProductData   |
 
     """
 
@@ -807,7 +807,7 @@ class A000:
         self.link.send_packet(self.link.pid_product_rqst, None)
         log.info("Expect product data")
         packet = self.link.expect_packet(self.link.pid_product_data)
-        datatype = ProductDataType()
+        datatype = ProductData()
         datatype.unpack(packet['data'])
         log.info(f"Product ID: {datatype.product_id}")
         log.info(f"Software version: {datatype.software_version:.2f}")
@@ -825,9 +825,9 @@ class A001:
     of the A000 Product Data Protocol.
 
     Packet sequence
-    | N | Direction      | Packet ID          | Packet Data Type  |
-    |---+----------------+--------------------+-------------------|
-    | 0 | Device to Host | pid_protocol_array | ProtocolArrayType |
+    | N | Direction      | Packet ID          | Packet Data Type |
+    |---+----------------+--------------------+------------------|
+    | 0 | Device to Host | pid_protocol_array | ProtocolArray    |
 
     """
 
@@ -844,7 +844,7 @@ class A001:
         # and <D1> is indicated by a tag-encoded protocol ID followed by two
         # tag-encoded data type IDs, where the first data type ID identifies
         # <D0> and the second data type ID identifies <D1>.
-        datatype = ProtocolArrayType()
+        datatype = ProtocolArray()
         datatype.unpack(packet['data'])
         for protocol_data in datatype.get_protocol_data():
             # Format the record to a string consisting of the tag and 3-digit number
@@ -1070,7 +1070,7 @@ class TransferProtocol:
 
     | N   | Direction          | Packet ID      | Packet Data Type |
     |-----+--------------------+----------------+------------------|
-    | 0   | Device1 to Device2 | pid_records    | RecordsType      |
+    | 0   | Device1 to Device2 | pid_records    | Records          |
     | 1   | Device1 to Device2 | <Data Pid>     | <D0>             |
     | 2   | Device1 to Device2 | <Data Pid>     | <D0>             |
     | …   | …                  | …              | …                |
@@ -1086,7 +1086,7 @@ class TransferProtocol:
 
     |   N | Direction          | Packet ID      | Packet Data Type |
     |-----+--------------------+----------------+------------------|
-    |   0 | Device1 to Device2 | pid_records    | RecordsType      |
+    |   0 | Device1 to Device2 | pid_records    | Records          |
     |   1 | Device1 to Device2 | <Header Pid>   | <D0>             |
     |   2 | Device1 to Device2 | <Data Pid>     | <D1>             |
     |   3 | Device1 to Device2 | <Data Pid>     | <D1>             |
@@ -1104,7 +1104,7 @@ class TransferProtocol:
     def get_data(self, cmd, *pids, callback=None):
         self.link.send_packet(self.link.pid_command_data, cmd)
         packet = self.link.expect_packet(self.link.pid_records)
-        datatype = RecordsType()
+        datatype = Records()
         datatype.unpack(packet['data'])
         packet_count = datatype.records
         log.info(f"{type(self).__name__}: Expecting {packet_count} records")
@@ -1150,7 +1150,7 @@ class A100(TransferProtocol):
     Packet sequence
     | N   | Direction          | Packet ID      | Packet Data Type |
     |-----+--------------------+----------------+------------------|
-    | 0   | Device1 to Device2 | pid_records    | RecordsType      |
+    | 0   | Device1 to Device2 | pid_records    | Records          |
     | 1   | Device1 to Device2 | pid_wpt_data   | <D0>             |
     | 2   | Device1 to Device2 | pid_wpt_data   | <D0>             |
     | …   | …                  | …              | …                |
@@ -1170,7 +1170,7 @@ class A100(TransferProtocol):
         log.info(f"Datatypes: {*[datatype.__name__ for datatype in self.datatypes],}")
         for point in points:
             pid = self.link.pid_wpt_data
-            if isinstance(point, WptType):
+            if isinstance(point, Wpt):
                 datatype = point
             elif isinstance(point, dict):
                 datatype = self.datatypes[0](**point)
@@ -1191,7 +1191,7 @@ class A101(TransferProtocol):
     Packet sequence
     | N   | Direction          | Packet ID      | Packet Data Type |
     |-----+--------------------+----------------+------------------|
-    | 0   | Device1 to Device2 | pid_records    | RecordsType      |
+    | 0   | Device1 to Device2 | pid_records    | Records          |
     | 1   | Device1 to Device2 | pid_wpt_cat    | <D0>             |
     | 2   | Device1 to Device2 | pid_wpt_cat    | <D0>             |
     | …   | …                  | …              | …                |
@@ -1211,7 +1211,7 @@ class A101(TransferProtocol):
         log.info(f"Datatypes: {*[datatype.__name__ for datatype in self.datatypes],}")
         for category in categories:
             pid = self.link.pid_wpt_cat
-            if isinstance(point, WptCatType):
+            if isinstance(point, WptCat):
                 datatype = point
             elif isinstance(point, dict):
                 datatype = self.datatypes[0](**point)
@@ -1231,7 +1231,7 @@ class A200(TransferProtocol):
     A200 Route Transfer Protocol Packet Sequence
     |   N | Direction          | Packet ID        | Packet Data Type |
     |-----+--------------------+------------------+------------------|
-    |   0 | Device1 to Device2 | pid_records      | RecordsType      |
+    |   0 | Device1 to Device2 | pid_records      | Records          |
     |   1 | Device1 to Device2 | pid_rte_hdr      | <D0>             |
     |   2 | Device1 to Device2 | pid_rte_wpt_data | <D1>             |
     |   3 | Device1 to Device2 | pid_rte_wpt_data | <D1>             |
@@ -1254,7 +1254,7 @@ class A200(TransferProtocol):
             header = route[0]
             points = route[1:]
             pid = self.link.pid_rte_hdr
-            if isinstance(header, RteHdrType):
+            if isinstance(header, RteHdr):
                 datatype = header
             elif isinstance(header, dict):
                 datatype = self.datatypes[0](**header)
@@ -1264,7 +1264,7 @@ class A200(TransferProtocol):
             packets.append(packet)
             for point in points:
                 pid = self.link.pid_rte_wpt_data
-                if isinstance(point, WptType):
+                if isinstance(point, Wpt):
                     datatype = point
                 elif isinstance(point, dict):
                     datatype = self.datatypes[0](**point)
@@ -1285,7 +1285,7 @@ class A201(TransferProtocol):
     Packet Sequence
     |   N | Direction          | Packet ID         | Packet Data Type |
     |-----+--------------------+-------------------+------------------|
-    |   0 | Device1 to Device2 | pid_records       | RecordsType      |
+    |   0 | Device1 to Device2 | pid_records       | Records          |
     |   1 | Device1 to Device2 | pid_rte_hdr       | <D0>             |
     |   2 | Device1 to Device2 | pid_rte_wpt_data  | <D1>             |
     |   3 | Device1 to Device2 | pid_rte_link_data | <D2>             |
@@ -1335,7 +1335,7 @@ class A300(TransferProtocol):
     A300 Track Log Transfer Protocol Packet Sequence
     | N   | Direction          | Packet ID      | Packet Data Type |
     |-----+--------------------+----------------+------------------|
-    | 0   | Device1 to Device2 | pid_records    | RecordsType      |
+    | 0   | Device1 to Device2 | pid_records    | Records          |
     | 1   | Device1 to Device2 | pid_trk_data   | <D0>             |
     | 2   | Device1 to Device2 | pid_trk_data   | <D0>             |
     | …   | …                  | …              | …                |
@@ -1354,7 +1354,7 @@ class A300(TransferProtocol):
         packets = []
         for point in points:
             pid = self.link.pid_trk_data
-            if isinstance(point, TrkPointType):
+            if isinstance(point, TrkPoint):
                 datatype = point
             elif isinstance(point, dict):
                 datatype = self.datatypes[0](**point)
@@ -1375,7 +1375,7 @@ class A301(TransferProtocol):
     A301 Track Log Transfer Protocol Packet Sequence
     |   N | Direction          | Packet ID      | Packet Data Type |
     |-----+--------------------+----------------+------------------|
-    |   0 | Device1 to Device2 | pid_records    | RecordsType      |
+    |   0 | Device1 to Device2 | pid_records    | Records          |
     |   1 | Device1 to Device2 | pid_trk_hdr    | <D0>             |
     |   2 | Device1 to Device2 | pid_trk_data   | <D1>             |
     |   3 | Device1 to Device2 | pid_trk_data   | <D1>             |
@@ -1398,7 +1398,7 @@ class A301(TransferProtocol):
             header = track[0]
             points = track[1:]
             pid = self.link.pid_trk_hdr
-            if isinstance(header, TrkHdrType):
+            if isinstance(header, TrkHdr):
                 datatype = header
             elif isinstance(header, dict):
                 datatype = self.datatypes[0](**header)
@@ -1408,7 +1408,7 @@ class A301(TransferProtocol):
             packets.append(packet)
             for point in points:
                 pid = self.link.pid_trk_data
-                if isinstance(point, TrkPointType):
+                if isinstance(point, TrkPoint):
                     datatype = point
                 elif isinstance(point, dict):
                     datatype = self.datatypes[1](**point)
@@ -1443,7 +1443,7 @@ class A400(TransferProtocol):
     A400 Proximity Waypoint Transfer Protocol Packet Sequence
     | N   | Direction          | Packet ID        | Packet Data Type |
     |-----+--------------------+------------------+------------------|
-    | 0   | Device1 to Device2 | pid_records      | RecordsType      |
+    | 0   | Device1 to Device2 | pid_records      | Records          |
     | 1   | Device1 to Device2 | pid_prx_wpt_data | <D0>             |
     | 2   | Device1 to Device2 | pid_prx_wpt_data | <D0>             |
     | …   | …                  | …                | …                |
@@ -1462,7 +1462,7 @@ class A400(TransferProtocol):
         packets = []
         for point in points:
             pid = self.link.pid_prx_wpt_data
-            if isinstance(point, PrxWptType):
+            if isinstance(point, PrxWpt):
                 datatype = point
             elif isinstance(point, dict):
                 datatype = self.datatypes[0](**point)
@@ -1483,7 +1483,7 @@ class A500(TransferProtocol):
     A500 Almanac Transfer Protocol Packet Sequence
     | N   | Direction          | Packet ID        | Packet Data Type |
     |-----+--------------------+------------------+------------------|
-    | 0   | Device1 to Device2 | pid_records      | RecordsType      |
+    | 0   | Device1 to Device2 | pid_records      | Records          |
     | 1   | Device1 to Device2 | pid_almanac_data | <D0>             |
     | 2   | Device1 to Device2 | pid_almanac_data | <D0>             |
     | …   | …                  | …                | …                |
@@ -1540,7 +1540,7 @@ class A650(TransferProtocol):
     | N   | Direction      | Packet ID             | Packet Data Type |
     |-----+----------------+-----------------------+------------------|
     | 0   | Host to Device | pid_command_data      | Command          |
-    | 1   | Device to Host | pid_records           | RecordsType      |
+    | 1   | Device to Host | pid_records           | Records          |
     | 2   | Device to Host | pid_flightbook_record | <D0>             |
     | …   | …              | …                     | …                |
     | n-2 | Device to Host | pid_flightbook_record | <D0>             |
@@ -1669,9 +1669,9 @@ class A900:
     |-----+----------------+---------------+------------------|
     | 0   | Host to Device | pid_mem_wren  | Region           |
     | 1   | Device to Host | pid_mem_wel   |                  |
-    | 2   | Device to Host | pid_mem_write | MemChunkType     |
+    | 2   | Device to Host | pid_mem_write | MemChunk         |
     | …   | …              | …             | …                |
-    | n-2 | Device to Host | pid_mem_write | MemChunkType     |
+    | n-2 | Device to Host | pid_mem_write | MemChunk         |
     | n-1 | Device to Host | pid_mem_wrdi  | Region           |
 
     """
@@ -1690,7 +1690,7 @@ class A900:
                               self.command.cmnd_transfer_mem)
         log.info("Expect capacity data")
         packet = self.link.expect_packet(self.link.pid_capacity_data)
-        datatype = MemPropertiesType()
+        datatype = MemProperties()
         datatype.unpack(packet['data'])
         mem_size = datatype.mem_size
         log.info(f"Memory size: {mem_size} bytes")
@@ -1699,30 +1699,30 @@ class A900:
     def _read_memory(self, filename='', callback=None):
         log.info("Get memory data...")
         mem_region = self.memory_properties.mem_region
-        datatype = MemFileType(mem_region=mem_region, subfile=filename)
+        datatype = MemFile(mem_region=mem_region, subfile=filename)
         datatype.pack()
         data = datatype.get_data()
         self.link.send_packet(self.link.pid_mem_read, data)
         packet = self.link.read_packet()
         pid = packet['id']
         if pid == self.link.pid_mem_data:
-            datatype = MemDataType()
+            datatype = MemData()
             datatype.unpack(packet['data'])
             if int.from_bytes(datatype.data, byteorder='little') == 0:
                 log.info("Data not found")
             else:
                 log.info(f"Got unknown data {datatype.data}. Ignoring...")
         elif pid == self.link.pid_mem_records:
-            # The RecordsType contains a 32-bit integer that indicates the number
+            # The Records contains a 32-bit integer that indicates the number
             # of data packets to follow.
-            datatype = RecordsType()
+            datatype = Records()
             datatype.unpack(packet['data'])
             packet_count = datatype.records
             log.info(f"{type(self).__name__}: Expecting {packet_count} records")
             data = bytes()
             for idx in range(packet_count):
                 packet = self.link.expect_packet(self.link.pid_mem_chunk)
-                datatype = MemRecordType()
+                datatype = MemRecord()
                 datatype.unpack(packet['data'])
                 data += datatype.chunk
                 if callback:
@@ -1738,7 +1738,7 @@ class A900:
                 chunk = f.read(chunk_size)
                 if not chunk:  # EOF reached
                     break
-                datatype = MemChunkType(offset, chunk)
+                datatype = MemChunk(offset, chunk)
                 datatype.pack()
                 data = datatype.get_data()
                 log.debug(f"Upload {offset+len(chunk)}/{file_size} bytes")
@@ -1756,7 +1756,7 @@ class A900:
             chunk = handle.read(chunk_size)
             if not chunk:  # EOF reached
                 break
-            datatype = MemChunkType(offset, chunk)
+            datatype = MemChunk(offset, chunk)
             datatype.pack()
             data = datatype.get_data()
             log.debug(f"Upload {offset+len(chunk)}/{file_size} bytes")
@@ -1770,7 +1770,7 @@ class A900:
         offsets = range(0, file_size, chunk_size)
         for offset in offsets:
             chunk = bytes[offset:offset+chunk_size]
-            datatype = MemChunkType(offset, chunk)
+            datatype = MemChunk(offset, chunk)
             datatype.pack()
             data = datatype.get_data()
             log.debug(f"Upload {offset+len(chunk)}/{file_size} bytes")
@@ -1804,7 +1804,7 @@ class A900:
         for filename in filenames:
             data = self._read_memory(filename=filename)
             if data is not None:
-                datatype = MPSFileType()
+                datatype = MPSFile()
                 datatype.unpack(data)
                 records = datatype.get_records()
                 result = [ record.get_content() for record in records ]
@@ -1890,7 +1890,7 @@ class ImageTransfer:
         for idx in indices:
             self.link.send_packet(self.link.pid_image_type_name_rx, idx)
             packet = self.link.expect_packet(self.link.pid_image_type_name_tx)
-            datatype = ImageNameType()
+            datatype = ImageName()
             datatype.unpack(packet['data'])
             image_types.append({'idx': idx, 'name': datatype.name.decode()})
         return image_types
@@ -1899,7 +1899,7 @@ class ImageTransfer:
         log.info("Request image list")
         self.link.send_packet(self.link.pid_image_list_rx, None)
         packet = self.link.expect_packet(self.link.pid_image_list_tx)
-        datatype = ImageListType()
+        datatype = ImageList()
         datatype.unpack(packet['data'])
         images = list()
         for image in datatype.get_images():
@@ -1908,7 +1908,7 @@ class ImageTransfer:
             log.info("Request image name")
             self.link.send_packet(self.link.pid_image_name_rx, idx)
             packet = self.link.expect_packet(self.link.pid_image_name_tx)
-            datatype = ImageNameType()
+            datatype = ImageName()
             datatype.unpack(packet['data'])
             image_dict['name'] = datatype.name.decode()
             images.append(image_dict)
@@ -1936,7 +1936,7 @@ class ImageTransfer:
         log.info("Request image ID")
         self.link.send_packet(self.link.pid_image_id_rx, idx)
         packet = self.link.expect_packet(self.link.pid_image_id_tx)
-        receive = ImageIdType()
+        receive = ImageId()
         receive.unpack(packet['data'])
         log.info(f"Image ID: {receive.id}")
         log.info(f"Request color table for image ID {receive.id}")
@@ -1957,7 +1957,7 @@ class ImageTransfer:
         received_bytes += len(packet['data'])
         if callback:
             callback(datatype, received_bytes, total_bytes)
-        datatype = ImageColorTableType()
+        datatype = ImageColorTable()
         datatype.unpack(packet['data'])
         palette = datatype.get_palette()
         log.info(f"Request pixel data for image ID {receive.id}")
@@ -1966,7 +1966,7 @@ class ImageTransfer:
             self.link.send_packet(self.link.pid_image_data_rx, receive.get_data())
             packet = self.link.expect_packet(self.link.pid_image_data_tx)
             received_bytes += len(packet['data'])
-            datatype = ImageChunkType()
+            datatype = ImageChunk()
             datatype.unpack(packet['data'])
             if callback:
                 callback(datatype, received_bytes, total_bytes)
@@ -2005,13 +2005,13 @@ class ImageTransfer:
         log.info("Request image ID")
         self.link.send_packet(self.link.pid_image_id_rx, idx)
         packet = self.link.expect_packet(self.link.pid_image_id_tx)
-        transmit = ImageIdType()
+        transmit = ImageId()
         transmit.unpack(packet['data'])
         log.info(f"Image ID: {transmit.id}")
         log.info(f"Request color table for image ID {transmit.id}")
         self.link.send_packet(self.link.pid_color_table_rx, transmit.get_data())
         packet = self.link.expect_packet(self.link.pid_color_table_tx)
-        datatype = ImageColorTableType()
+        datatype = ImageColorTable()
         datatype.unpack(packet['data'])
         palette = datatype.get_palette()
         # The color table is sent in one packet, consisting of 4 bytes for the
@@ -2034,7 +2034,7 @@ class ImageTransfer:
         if callback:
             callback(datatype, sent_bytes, total_bytes)
         packet = self.link.expect_packet(self.link.pid_color_table_rx)
-        receive = ImageIdType()
+        receive = ImageId()
         receive.unpack(packet['data'])
         if receive.id != transmit.id:
             raise ProtocolError(f"Expected {transmit.id}, got {receive.id}")
@@ -2061,7 +2061,7 @@ class ImageTransfer:
             out = out.quantize(colors=colors_used, palette=new_image)
         pixel_data = out.tobytes()
         log.info(f"Send pixel data for image ID {transmit.id}")
-        datatype = ImageChunkType(transmit.id, pixel_data)
+        datatype = ImageChunk(transmit.id, pixel_data)
         datatype.pack()
         data = datatype.get_data()
         self.link.send_packet(self.link.pid_image_data_tx, data)
@@ -2069,7 +2069,7 @@ class ImageTransfer:
         if callback:
             callback(datatype, sent_bytes, total_bytes)
         packet = self.link.expect_packet(self.link.pid_image_data_rx)
-        receive = ImageIdType()
+        receive = ImageId()
         receive.unpack(packet['data'])
         if receive.id != transmit.id:
             raise ProtocolError(f"Expected {transmit.id}, got {receive.id}")
@@ -2091,7 +2091,7 @@ class ScreenshotTransfer:
         self.link.send_packet(self.link.pid_command_data, self.command.cmnd_transfer_screen)
         log.info("Expect screen data")
         packet = self.link.expect_packet(self.link.pid_screen_data)
-        datatype = ScreenHeaderType()
+        datatype = ScreenHeader()
         datatype.unpack(packet['data'])
         dimensions = datatype.get_dimensions()
         pixel_size = datatype.get_size()
@@ -2119,7 +2119,7 @@ class ScreenshotTransfer:
         color_table = bytes()
         while received_bytes < color_table_size:
             packet = self.link.expect_packet(self.link.pid_screen_data)
-            datatype = ScreenChunkType()
+            datatype = ScreenChunk()
             datatype.unpack(packet['data'])
             section = datatype.get_section()
             if section == 'color_table':
@@ -2133,7 +2133,7 @@ class ScreenshotTransfer:
         pixel_data = bytes()
         while received_bytes < total_bytes:
             packet = self.link.expect_packet(self.link.pid_screen_data)
-            datatype = ScreenChunkType()
+            datatype = ScreenChunk()
             datatype.unpack(packet['data'])
             section = datatype.get_section()
             if section == 'pixel_data':
@@ -2154,7 +2154,7 @@ class A906(TransferProtocol):
     A906 Lap Transfer Protocol Packet Sequence
     | N   | Direction      | Packet ID      | Packet Data Type |
     |-----+----------------+----------------+------------------|
-    | 0   | Device to Host | pid_records    | RecordsType      |
+    | 0   | Device to Host | pid_records    | Records          |
     | 1   | Device to Host | pid_lap        | <D0>             |
     | 2   | Device to Host | pid_lap        | <D0>             |
     | …   | …              | …              | …                |
@@ -2177,23 +2177,23 @@ class A1000(TransferProtocol):
     | N   | Direction      | Packet ID        | Packet Data Type |
     |-----+----------------+------------------+------------------|
     | 0   | Host to Device | pid_command_data | Command          |
-    | 1   | Device to Host | pid_records      | RecordsType      |
+    | 1   | Device to Host | pid_records      | Records          |
     | 2   | Device to Host | pid_run          | <D0>             |
     | …   | …              | …                | …                |
     | k-2 | Device to Host | pid_run          | <D0>             |
     | k-1 | Device to Host | pid_xfer_cmplt   | Command          |
     | k   | Host to Device | pid_command_data | Command          |
-    | k+1 | Device to Host | pid_records      | RecordsType      |
-    | k+2 | Device to Host | pid_lap          | LapType          |
+    | k+1 | Device to Host | pid_records      | Records          |
+    | k+2 | Device to Host | pid_lap          | Lap              |
     | …   | …              | …                | …                |
-    | m-2 | Device to Host | pid_lap          | LapType          |
+    | m-2 | Device to Host | pid_lap          | Lap              |
     | m-1 | Device to Host | pid_xfer_cmplt   | Command          |
     | m   | Host to Device | pid_command_data | Command          |
-    | m+1 | Device to Host | pid_records      | RecordsType      |
-    | m+2 | Device to Host | pid_trk_hdr      | TrkHdrType       |
-    | m+3 | Device to Host | pid_trk_data     | TrkDataType      |
+    | m+1 | Device to Host | pid_records      | Records          |
+    | m+2 | Device to Host | pid_trk_hdr      | TrkHdr           |
+    | m+3 | Device to Host | pid_trk_data     | TrkPoint         |
     | …   | …              | …                | …                |
-    | n-2 | Device to Host | pid_trk_data     | TrkDataType      |
+    | n-2 | Device to Host | pid_trk_data     | TrkPoint         |
     | n-1 | Device to Host | pid_xfer_cmplt   | Command          |
 
     """
@@ -2268,7 +2268,7 @@ class DataType():
         return f"{self.__class__.__name__}({kwargs})"
 
 
-class RecordsType(DataType):
+class Records(DataType):
     """The Records type contains a 16-bit integer that indicates the number of data
     packets to follow, excluding the pid_xfer_cmplt packet.
 
@@ -2277,7 +2277,7 @@ class RecordsType(DataType):
                ]
 
 
-class ProductDataType(DataType):
+class ProductData(DataType):
     # The product description contains one or more null-terminated strings.
     # According to the specification, only the first string is used, and all
     # subsequent strings should be ignored.
@@ -2287,9 +2287,9 @@ class ProductDataType(DataType):
                ]
 
 
-class ExtProductDataType(DataType):
-    """The ExtProductDataType contains zero or more null-terminated strings. The
-    host should ignore all these strings; they are used during manufacturing to
+class ExtProductData(DataType):
+    """The ExtProductData contains zero or more null-terminated strings. The host
+    should ignore all these strings; they are used during manufacturing to
     identify other properties of the device and are not formatted for display to
     the end user.
 
@@ -2298,8 +2298,8 @@ class ExtProductDataType(DataType):
                ]
 
 
-class ProtocolDataType(DataType):
-    """The ProtocolDataType is comprised of a one-byte tag field and a two-byte data
+class ProtocolData(DataType):
+    """The ProtocolData is comprised of a one-byte tag field and a two-byte data
     field. The tag identifies which kind of ID is contained in the data field,
     and the data field contains the actual ID.
 
@@ -2337,19 +2337,19 @@ class ProtocolDataType(DataType):
         return self._tag.get(chr(self.tag))
 
 
-class ProtocolArrayType(DataType):
-    """The ProtocolArrayType is a list of ProtocolDataType structures.
+class ProtocolArray(DataType):
+    """The ProtocolArray is a list of ProtocolData structures.
 
     """
-    _protocol_data_fmt = ProtocolDataType.get_format()
+    _protocol_data_fmt = ProtocolData.get_format()
     _fields = [('protocol_array', f'{{{_protocol_data_fmt}}}'),
                ]
 
     def get_protocol_data(self):
-        return [ ProtocolDataType(*protocol_data) for protocol_data in self.protocol_array ]
+        return [ ProtocolData(*protocol_data) for protocol_data in self.protocol_array ]
 
 
-class PositionType(DataType):
+class Position(DataType):
     """The Position type is used to indicate latitude and longitude in semicircles,
     where 2 31 semicircles equal 180 degrees. North latitudes and East
     longitudes are indicated with positive numbers; South latitudes and West
@@ -2380,11 +2380,11 @@ class PositionType(DataType):
         return semi * (math.pi / 2 ** 31)
 
     def as_degrees(self):
-        return DegreePositionType(lat=self.to_degrees(self.lat),
+        return DegreePosition(lat=self.to_degrees(self.lat),
                                   lon=self.to_degrees(self.lon))
 
     def as_radians(self):
-        return RadianPositionType(lat=self.to_radians(self.lat),
+        return RadianPosition(lat=self.to_radians(self.lat),
                                   lon=self.to_radians(self.lon))
 
     def is_valid(self):
@@ -2397,7 +2397,7 @@ class PositionType(DataType):
         return not ( self.lat == -129 and self.lon == -129 )
 
 
-class RadianPositionType(DataType):
+class RadianPosition(DataType):
     """The Radian Position type is used to indicate latitude and longitude in
     radians, where π radians equal 180 degrees. North latitudes and East
     longitudes are indicated with positive numbers; South latitudes and West
@@ -2428,15 +2428,15 @@ class RadianPositionType(DataType):
         return radians * (2 ** 31 / math.pi)
 
     def as_degrees(self):
-        return DegreePositionType(lat=self.to_degrees(self.lat),
+        return DegreePosition(lat=self.to_degrees(self.lat),
                                   lon=self.to_degrees(self.lon))
 
     def as_semicircles(self):
-        return PositionType(lat=self.to_semicircles(self.lat),
+        return Position(lat=self.to_semicircles(self.lat),
                             lon=self.to_semicircles(self.lon))
 
 
-class DegreePositionType(DataType):
+class DegreePosition(DataType):
     """The Degree Position type is used to indicate latitude and longitude in
     degrees. North latitudes and East longitudes are indicated with positive
     numbers; South latitudes and West longitudes are indicated with negative
@@ -2463,15 +2463,15 @@ class DegreePositionType(DataType):
         return degrees * (math.pi / 180)
 
     def as_semicircles(self):
-        return PositionType(lat=self.to_semicircles(self.lat),
+        return Position(lat=self.to_semicircles(self.lat),
                             lon=self.to_semicircles(self.lon))
 
     def as_radians(self):
-        return RadianPositionType(lat=self.to_radians(self.lat),
+        return RadianPosition(lat=self.to_radians(self.lat),
                                   lon=self.to_radians(self.lon))
 
 
-class TimeType(DataType):
+class Time(DataType):
     _epoch = datetime(1989, 12, 31, 12, 0)  # 12:00 am December 31, 1989 UTC
     _fields = [('time', 'I'),  # timestamp, invalid if 0xFFFFFFFF
                ]
@@ -2506,7 +2506,7 @@ class TimeType(DataType):
         return not self.time == 4294967295
 
 
-class SymbolType(DataType):
+class Symbol(DataType):
     _fields = [('smbl', 'H'),    # symbol id
                ]
     _smbl = {
@@ -2938,7 +2938,7 @@ class SymbolType(DataType):
         return self._smbl.get(self.smbl)
 
 
-class WptType(DataType):
+class Wpt(DataType):
 
     def is_valid_ident(self):
         return self.is_valid_charset(self.re_upcase_digit, self.ident)
@@ -2964,8 +2964,8 @@ class WptType(DataType):
         return self.is_valid_charset(pattern, self.cc)
 
 
-class D100(WptType):
-    _posn_fmt = PositionType.get_format()
+class D100(Wpt):
+    _posn_fmt = Position.get_format()
     _fields = [('ident', '6s'),             # identifier
                ('posn', f'({_posn_fmt})'),  # position
                ('unused', 'I'),             # should be set to zero
@@ -2979,11 +2979,11 @@ class D100(WptType):
         self.cmnt = cmnt
 
     def get_posn(self):
-        return PositionType(*self.posn)
+        return Position(*self.posn)
 
 
 class D101(D100):
-    _posn_fmt = PositionType.get_format()
+    _posn_fmt = Position.get_format()
     _fields = [('ident', '6s'),             # identifier
                ('posn', f'({_posn_fmt})'),  # position
                ('unused', 'I'),             # should be set to zero
@@ -2998,7 +2998,7 @@ class D101(D100):
         self.smbl = smbl
 
     def get_symbol(self):
-        return SymbolType(self.smbl)
+        return Symbol(self.smbl)
 
     def get_smbl(self):
         symbol = self.get_symbol()
@@ -3014,8 +3014,8 @@ class D101(D100):
 
 
 class D102(D101):
-    _posn_fmt = PositionType.get_format()
-    _smbl_fmt = SymbolType.get_format()
+    _posn_fmt = Position.get_format()
+    _smbl_fmt = Symbol.get_format()
     _fields = [('ident', '6s'),             # identifier
                ('posn', f'({_posn_fmt})'),  # position
                ('unused', 'I'),             # should be set to zero
@@ -3026,7 +3026,7 @@ class D102(D101):
 
 
 class D103(D100):
-    _posn_fmt = PositionType.get_format()
+    _posn_fmt = Position.get_format()
     _fields = [('ident', '6s'),             # identifier
                ('posn', f'({_posn_fmt})'),  # position
                ('unused', 'I'),             # should be set to zero
@@ -3075,8 +3075,8 @@ class D103(D100):
 
 
 class D104(D101):
-    _posn_fmt = PositionType.get_format()
-    _smbl_fmt = SymbolType.get_format()
+    _posn_fmt = Position.get_format()
+    _smbl_fmt = Symbol.get_format()
     _fields = [('ident', '6s'),             # identifier
                ('posn', f'({_posn_fmt})'),  # position
                ('unused', 'I'),             # should be set to zero
@@ -3103,8 +3103,8 @@ class D104(D101):
 
 
 class D105(D101):
-    _posn_fmt = PositionType.get_format()
-    _smbl_fmt = SymbolType.get_format()
+    _posn_fmt = Position.get_format()
+    _smbl_fmt = Symbol.get_format()
     _fields = [('posn', f'({_posn_fmt})'),  # position
                ('smbl', f'{_smbl_fmt}'),    # symbol id
                ('wpt_ident', 'n'),          # waypoint identifier
@@ -3116,8 +3116,8 @@ class D105(D101):
 
 
 class D106(D101):
-    _posn_fmt = PositionType.get_format()
-    _smbl_fmt = SymbolType.get_format()
+    _posn_fmt = Position.get_format()
+    _smbl_fmt = Symbol.get_format()
     _fields = [('wpt_class', 'B'),          # class
                ('subclass', '(13B)'),       # subclass
                ('posn', f'({_posn_fmt})'),  # position
@@ -3135,7 +3135,7 @@ class D106(D101):
 
 
 class D107(D103):
-    _posn_fmt = PositionType.get_format()
+    _posn_fmt = Position.get_format()
     _fields = [('ident', '6s'),             # identifier
                ('posn', f'({_posn_fmt})'),  # position
                ('unused', 'I'),             # should be set to zero
@@ -3172,8 +3172,8 @@ class D107(D103):
 
 
 class D108(D103):
-    _posn_fmt = PositionType.get_format()
-    _smbl_fmt = SymbolType.get_format()
+    _posn_fmt = Position.get_format()
+    _smbl_fmt = Symbol.get_format()
     _fields = [('wpt_class', 'B'),          # class
                ('color', 'B'),              # waypoint color
                ('dspl', 'B'),               # display option
@@ -3259,7 +3259,7 @@ class D108(D103):
         return self._color.get(self.color, 255)
 
     def get_symbol(self):
-        return SymbolType(self.smbl)
+        return Symbol(self.smbl)
 
     def get_smbl(self):
         symbol = self.get_symbol()
@@ -3291,8 +3291,8 @@ class D108(D103):
 
 
 class D109(D108):
-    _smbl_fmt = SymbolType.get_format()
-    _posn_fmt = PositionType.get_format()
+    _smbl_fmt = Symbol.get_format()
+    _posn_fmt = Position.get_format()
     _fields = [('dtyp', 'B'),               # data packet type (0x01 for d109)
                ('wpt_class', 'B'),          # class
                ('dspl_color', 'B'),         # display & color
@@ -3352,9 +3352,9 @@ class D109(D108):
 
 
 class D110(D109):
-    _smbl_fmt = SymbolType.get_format()
-    _posn_fmt = PositionType.get_format()
-    _time_fmt = TimeType.get_format()
+    _smbl_fmt = Symbol.get_format()
+    _posn_fmt = Position.get_format()
+    _time_fmt = Time.get_format()
     _fields = [('dtyp', 'B'),               # data packet type (0x01 for D110)
                ('wpt_class', 'B'),          # class
                ('dspl_color', 'B'),         # display & color
@@ -3457,7 +3457,7 @@ class D110(D109):
         return self._dspl.get(dspl, 0)
 
     def get_datetime(self):
-        return TimeType(self.time).get_datetime()
+        return Time(self.time).get_datetime()
 
     def get_wpt_cat(self):
         """Return a list of waypoint categories.
@@ -3500,7 +3500,7 @@ class D110(D109):
         return not self.time == 4294967295
 
 
-class WptCatType(DataType):
+class WptCat(DataType):
 
     def is_valid(self):
         """Return whether the waypoint category is valid.
@@ -3512,7 +3512,7 @@ class WptCatType(DataType):
         self.name[0] != 0
 
 
-class D120(WptCatType):
+class D120(WptCat):
     _fields = [('name', '17s'),  # category name
                ]
 
@@ -3520,8 +3520,8 @@ class D120(WptCatType):
         self.name = name
 
 
-class D150(WptType):
-    _posn_fmt = PositionType.get_format()
+class D150(Wpt):
+    _posn_fmt = Position.get_format()
     _fields = [('ident', '6s'),             # identifier
                ('cc', '2s'),                # country code
                ('wpt_class', 'B'),          # class
@@ -3555,7 +3555,7 @@ class D150(WptType):
         self.cmnt = cmnt
 
     def get_posn(self):
-        return PositionType(*self.posn)
+        return Position(*self.posn)
 
     def get_wpt_class(self):
         """Return the waypoint class value.
@@ -3567,7 +3567,7 @@ class D150(WptType):
 
 
 class D151(D150):
-    _posn_fmt = PositionType.get_format()
+    _posn_fmt = Position.get_format()
     _fields = [('ident', '6s'),             # identifier
                ('posn', f'({_posn_fmt})'),  # position
                ('unused', 'I'),             # should be set to zero
@@ -3606,7 +3606,7 @@ class D152(D150):
 
 
 class D154(D101, D150):
-    _smbl_fmt = SymbolType.get_format()
+    _smbl_fmt = Symbol.get_format()
     _fields = D150._fields + [('smbl', f'{_smbl_fmt}')]  # symbol id
 
     _wpt_class = {0: 'apt_wpt_class',     # airport waypoint class
@@ -3627,7 +3627,7 @@ class D154(D101, D150):
 
 
 class D155(D101, D150):
-    _smbl_fmt = SymbolType.get_format()
+    _smbl_fmt = Symbol.get_format()
     _fields = D150._fields + [('smbl', f'{_smbl_fmt}'),    # symbol id
                               ('dspl', 'B'),               # display option
                               ]
@@ -3655,7 +3655,7 @@ class D155(D101, D150):
         return self._dspl.get(self.dspl, 1)
 
 
-class RteHdrType(DataType):
+class RteHdr(DataType):
 
     def is_valid_ident(self):
         pattern = self.re_upcase_digit_space_hyphen
@@ -3666,7 +3666,7 @@ class RteHdrType(DataType):
         return self.is_valid_charset(pattern, self.cmnt)
 
 
-class D200(RteHdrType):
+class D200(RteHdr):
     _fields = [('nmbr', 'B'),  # route number
                ]
 
@@ -3674,7 +3674,7 @@ class D200(RteHdrType):
         self.nmbr = nmbr
 
 
-class D201(RteHdrType):
+class D201(RteHdr):
     _fields = [('nmbr', 'B'),    # route number
                ('cmnt', '20s'),  # comment
                ]
@@ -3684,7 +3684,7 @@ class D201(RteHdrType):
         self.cmnt = cmnt
 
 
-class D202(RteHdrType):
+class D202(RteHdr):
     _fields = [('ident', 'n'),  # identifier
                ]
 
@@ -3692,14 +3692,14 @@ class D202(RteHdrType):
         self.ident = ident
 
 
-class RteLinkType(DataType):
+class RteLink(DataType):
 
     def is_valid_ident(self):
         pattern = self.re_upcase_digit_space_hyphen
         self.is_valid_charset(pattern, self.ident)
 
 
-class D210(RteLinkType):
+class D210(RteLink):
     _fields = [('lnk_class', 'H'),     # link class
                ('subclass', '(18B)'),  # subclass
                ('ident', 'n'),         # identifier
@@ -3722,13 +3722,13 @@ class D210(RteLinkType):
         return self._lnk_class.get(self.lnk_class, 0)
 
 
-class TrkPointType(DataType):
+class TrkPoint(DataType):
 
     def get_posn(self):
-        return PositionType(*self.posn)
+        return Position(*self.posn)
 
     def get_datetime(self):
-        return TimeType(self.time).get_datetime()
+        return Time(self.time).get_datetime()
 
     def is_valid_time(self):
         """Return whether the time is valid.
@@ -3744,9 +3744,9 @@ class TrkPointType(DataType):
                      self.time == 4294967167 )   # 0x7FFFFFFF
 
 
-class D300(TrkPointType):
-    _posn_fmt = PositionType.get_format()
-    _time_fmt = TimeType.get_format()
+class D300(TrkPoint):
+    _posn_fmt = Position.get_format()
+    _time_fmt = Time.get_format()
     _fields = [('posn', f'({_posn_fmt})'),  # position
                ('time', f'{_time_fmt}'),    # time, invalid if 0xFFFFFFFF
                ('new_trk', '?'),            # new track segment?
@@ -3759,8 +3759,8 @@ class D300(TrkPointType):
 
 
 class D301(D300):
-    _posn_fmt = PositionType.get_format()
-    _time_fmt = TimeType.get_format()
+    _posn_fmt = Position.get_format()
+    _time_fmt = Time.get_format()
     _fields = [('posn', f'({_posn_fmt})'),  # position
                ('time', f'{_time_fmt}'),    # time, invalid if 0xFFFFFFFF
                ('alt', 'f'),                # altitude in meters
@@ -3791,8 +3791,8 @@ class D301(D300):
 
 
 class D302(D300):
-    _posn_fmt = PositionType.get_format()
-    _time_fmt = TimeType.get_format()
+    _posn_fmt = Position.get_format()
+    _time_fmt = Time.get_format()
     _fields = [('posn', f'({_posn_fmt})'),  # position
                ('time', f'{_time_fmt}'),    # time, invalid if 0xFFFFFFFF
                ('alt', 'f'),                # altitude in meters, invalid if 1.0e25
@@ -3833,8 +3833,8 @@ class D302(D300):
 
 
 class D303(D301):
-    _posn_fmt = PositionType.get_format()
-    _time_fmt = TimeType.get_format()
+    _posn_fmt = Position.get_format()
+    _time_fmt = Time.get_format()
     _fields = [('posn', f'({_posn_fmt})'),  # position
                ('time', f'{_time_fmt}'),    # time, invalid if 0xFFFFFFFF
                ('alt', 'f'),                # altitude in meters, invalid if 1.0e25
@@ -3894,13 +3894,13 @@ class D304(D303):
         return not self.cadence == 255
 
 
-class TrkHdrType(DataType):
+class TrkHdr(DataType):
 
     def is_valid_trk_ident(self):
         return self.is_valid_charset(self.re_upcase_digit_space_hyphen, self.trk_ident)
 
 
-class D310(TrkHdrType):
+class D310(TrkHdr):
     _fields = [('dspl', '?'),       # display on the map?
                ('color', 'B'),      # color
                ('trk_ident', 'n'),  # track identifier
@@ -3936,7 +3936,7 @@ class D310(TrkHdrType):
         return self._color.get(self.color, 255)
 
 
-class D311(TrkHdrType):
+class D311(TrkHdr):
     _fields = [('index', 'H'),  # unique among all tracks received from device
                ]
 
@@ -3966,11 +3966,11 @@ class D312(D310):
               }
 
 
-class PrxWptType(WptType):
+class PrxWpt(Wpt):
     pass
 
 
-class D400(PrxWptType, D100):
+class D400(PrxWpt, D100):
     _fields = D100._fields + [('dst', 'f')]  # proximity distance (meters)
 
     def __init__(self, dst=0, **kwargs):
@@ -3978,7 +3978,7 @@ class D400(PrxWptType, D100):
         self.dst = dst
 
 
-class D403(PrxWptType, D103):
+class D403(PrxWpt, D103):
     _fields = D103._fields + [('dst', 'f')]  # proximity distance (meters)
 
     def __init__(self, dst=0, **kwargs):
@@ -3986,7 +3986,7 @@ class D403(PrxWptType, D103):
         self.dst = dst
 
 
-class D450(PrxWptType, D150):
+class D450(PrxWpt, D150):
     _fields = [('idx', 'i')  # proximity index
                ] + \
                D150._fields + \
@@ -3998,7 +3998,7 @@ class D450(PrxWptType, D150):
         self.dst = dst
 
 
-class AlmanacType(DataType):
+class Almanac(DataType):
 
     def is_valid(self):
         """Return whether the data is valid.
@@ -4010,7 +4010,7 @@ class AlmanacType(DataType):
         """
         return not self.wn < 0
 
-class D500(AlmanacType):
+class D500(Almanac):
     _fields = [('wn', 'H'),     # week number (weeks)
                ('toa', 'f'),    # almanac data reference time (s)
                ('af0', 'f'),    # clock correction coefficient (s)
@@ -4076,7 +4076,7 @@ class D551(D501):
         return self.svid + 1
 
 
-class DateTimeType(DataType):
+class DateTime(DataType):
     def get_datetime(self):
         """Return a datetime object of the time.
 
@@ -4093,7 +4093,7 @@ class DateTimeType(DataType):
         return str(datetime)
 
 
-class D600(DateTimeType):
+class D600(DateTime):
     _fields = [('month', 'B'),   # month (1-12)
                ('day', 'B'),     # day (1-31)
                ('year', 'H'),    # year (1990 means 1990)
@@ -4103,24 +4103,24 @@ class D600(DateTimeType):
                ]
 
 
-class FlightBookRecordType(DataType):
+class FlightBookRecord(DataType):
 
     def get_takeoff_datetime(self):
-        return TimeType(self.takeoff_time).get_datetime()
+        return Time(self.takeoff_time).get_datetime()
 
     def get_landing_datetime(self):
-        return TimeType(self.landing_time).get_datetime()
+        return Time(self.landing_time).get_datetime()
 
     def get_takeoff_posn(self):
-        return PositionType(*self.takeoff_posn)
+        return Position(*self.takeoff_posn)
 
     def get_landing_posn(self):
-        return PositionType(*self.landing_posn)
+        return Position(*self.landing_posn)
 
 
-class D650(FlightBookRecordType):
-    _time_fmt = TimeType.get_format()
-    _posn_fmt = PositionType.get_format()
+class D650(FlightBookRecord):
+    _time_fmt = Time.get_format()
+    _posn_fmt = Position.get_format()
     _fields = [('takeoff_time', f'{_time_fmt}'),    # Time flight started
                ('landing_time', f'{_time_fmt}'),    # Time flight ended
                ('takeoff_posn', f'({_posn_fmt})'),  # Takeoff lat/lon
@@ -4139,11 +4139,11 @@ class D650(FlightBookRecordType):
                ]
 
 
-class D700(RadianPositionType):
-    _fields = RadianPositionType._fields
+class D700(RadianPosition):
+    _fields = RadianPosition._fields
 
 
-class PVTDataType(DataType):
+class PVTData(DataType):
 
     def is_legacy(self, product_description):
         """Return whether the device uses a legacy software version.
@@ -4205,7 +4205,7 @@ class PVTDataType(DataType):
             return False
 
     def get_posn(self):
-        return RadianPositionType(*self.posn)
+        return RadianPosition(*self.posn)
 
     def get_msl_alt(self):
         """Return the altitude above mean sea level.
@@ -4229,11 +4229,11 @@ class PVTDataType(DataType):
     def get_fix(self, product_description=None):
         """Return the fix value.
 
-        The default enumerated values for the “fix” member of the D800
-        PVTDataType are shown below. It is important for the host to inspect
-        this value to ensure that other data members in the D800 PVTDataType are
-        valid. No indication is given as to whether the device is in simulator
-        mode versus having an actual position fix.
+        The default enumerated values for the “fix” member of the D800 PVTData
+        are shown below. It is important for the host to inspect this value to
+        ensure that other data members in the D800 PVTData are valid. No
+        indication is given as to whether the device is in simulator mode versus
+        having an actual position fix.
 
         Some legacy devices use values for fix that are one more than the
         default.
@@ -4246,8 +4246,8 @@ class PVTDataType(DataType):
         return self._fix.get(fix)
 
 
-class D800(PVTDataType):
-    _posn_fmt = RadianPositionType.get_format()
+class D800(PVTData):
+    _posn_fmt = RadianPosition.get_format()
     _fields = [('alt', 'f'),                # altitude above WGS 84 ellipsoid (meters)
                ('epe', 'f'),                # estimated position error, 2 sigma (meters)
                ('eph', 'f'),                # epe, but horizontal only (meters)
@@ -4271,21 +4271,21 @@ class D800(PVTDataType):
             }
 
 
-class LapType(DataType):
+class Lap(DataType):
 
     def get_start_datetime(self):
-        return TimeType(self.start_time).get_datetime()
+        return Time(self.start_time).get_datetime()
 
     def get_begin(self):
-        return PositionType(*self.begin)
+        return Position(*self.begin)
 
     def get_end(self):
-        return PositionType(*self.end)
+        return Position(*self.end)
 
 
-class D906(LapType):
-    _time_fmt = TimeType.get_format()
-    _posn_fmt = PositionType.get_format()
+class D906(Lap):
+    _time_fmt = Time.get_format()
+    _posn_fmt = Position.get_format()
     _fields = [('start_time', f'{_time_fmt}'),
                ('total_time', 'I'),          # In hundredths of a second
                ('total_dist', 'f'),          # In meters
@@ -4297,7 +4297,7 @@ class D906(LapType):
                ]
 
 
-class StepType(DataType):
+class Step(DataType):
     _fields = [('custom_name', '16s'),            # Null-terminated step name
                ('target_custom_zone_low', 'f'),   # See below
                ('target_custom_zone_high', 'f'),  # See below
@@ -4310,7 +4310,7 @@ class StepType(DataType):
                ]
 
 
-class RunType(DataType):
+class Run(DataType):
     _fields = [('track_index', 'I'),      # Index of associated track
                ('first_lap_index', 'I'),  # Index of first associated lap
                ('last_lap_index', 'I'),   # Index of last associated lap
@@ -4333,7 +4333,7 @@ class VirtualPartner(DataType):
                 ])
 
 
-class WorkoutType(DataType):
+class Workout(DataType):
     _fields = [('num_valid_steps', 'I'),  # Number of valid steps (1-20)
                ('steps', '/0[32c]'),      # Steps
                ('name', '16s'),           # Null-terminated workout name
@@ -4347,23 +4347,23 @@ class WorkoutType(DataType):
     def get_steps(self):
         steps = []
         for data in self.steps:
-            step = StepType()
+            step = Step()
             step.unpack(data)
             steps.append(step)
         return steps
 
 
-class D1000(RunType):
-    _fields = RunType._fields + \
+class D1000(Run):
+    _fields = Run._fields + \
         [('unused', 'H')  # Unused. Set to 0.
          ] + \
          VirtualPartner._fields + \
-         WorkoutType._fields
+         Workout._fields
 
 
-class D1001(LapType):
-    _time_fmt = TimeType.get_format()
-    _posn_fmt = PositionType.get_format()
+class D1001(Lap):
+    _time_fmt = Time.get_format()
+    _posn_fmt = Position.get_format()
     _fields = [('index', 'I'),                  # Unique among all laps received from device
                ('start_time', f'{_time_fmt}'),  # Start of lap time
                ('total_time', 'I'),             # Duration of lap, in hundredths of a second
@@ -4381,18 +4381,18 @@ class D1001(LapType):
                   }
 
 
-class D1002(WorkoutType):
+class D1002(Workout):
     pass
 
 
-class WorkoutOccurrenceType(DataType):
+class WorkoutOccurrence(DataType):
     _fields = [('workout_name', '16s'),  # Null-terminated workout name
                ('day', 'I'),             # Day on which the workout falls
                ]
 
 
-class D1003(WorkoutOccurrenceType):
-    _fields = WorkoutOccurrenceType._fields
+class D1003(WorkoutOccurrence):
+    _fields = WorkoutOccurrence._fields
 
 
 class HeartRateZones(DataType):
@@ -4417,7 +4417,7 @@ class Activities(DataType):
                ]
 
 
-class FitnessUserProfileType(DataType):
+class FitnessUserProfile(DataType):
     _fields = [('weight', 'f'),       # User’s weight, in kilograms
                ('birth_year', 'H'),   # No base value (i.e. 1990 means 1990)
                ('birth_month', 'B'),  # 1 = January, etc.
@@ -4432,7 +4432,7 @@ class FitnessUserProfileType(DataType):
         return self._gender.get(self.gender)
 
 
-class D1004(FitnessUserProfileType):
+class D1004(FitnessUserProfile):
     pass
 
 
@@ -4447,11 +4447,11 @@ class D1005(WorkoutLimits):
     pass
 
 
-class CourseType(DataType):
+class Course(DataType):
     pass
 
 
-class D1006(CourseType):
+class D1006(Course):
     _fields = [('index', 'H'),          # Unique among courses on device
                ('unused', 'H'),         # Unused. Set to 0.
                ('course_name', '16s'),  # Null-terminated, unique course name
@@ -4459,17 +4459,17 @@ class D1006(CourseType):
                ]
 
 
-class CourseLapType(DataType):
+class CourseLap(DataType):
 
     def get_begin(self):
-        return PositionType(*self.begin)
+        return Position(*self.begin)
 
     def get_end(self):
-        return PositionType(*self.end)
+        return Position(*self.end)
 
 
-class D1007(CourseLapType):
-    _posn_fmt = PositionType.get_format()
+class D1007(CourseLap):
+    _posn_fmt = Position.get_format()
     _fields = [('course_index', 'H'),        # Index of associated course
                ('lap_index', 'H'),           # This lap’s index in the course
                ('total_time', 'L'),          # In hundredths of a second
@@ -4483,12 +4483,12 @@ class D1007(CourseLapType):
                ]
 
 
-class D1008(WorkoutType):
+class D1008(Workout):
     pass
 
 
-class D1009(RunType):
-    _fields = RunType._fields + [('multisport', 'B'),
+class D1009(Run):
+    _fields = Run._fields + [('multisport', 'B'),
                                  ('unused1', 'B'),
                                  ('unused2', 'H'),
                                  ('quick_workout_time', 'I'),
@@ -4496,9 +4496,9 @@ class D1009(RunType):
                                  ]
 
 
-class D1011(LapType):
-    _time_fmt = TimeType.get_format()
-    _posn_fmt = PositionType.get_format()
+class D1011(Lap):
+    _time_fmt = Time.get_format()
+    _posn_fmt = Position.get_format()
     _fields = [('index', 'H'),                  # Unique among all laps received from device
                ('unused', 'H'),                 # Unused. Set to 0.
                ('start_time', f'{_time_fmt}'),  # Start of lap time
@@ -4525,8 +4525,8 @@ class D1011(LapType):
         return self._trigger_method.get(self.trigger_method)
 
 
-class D1010(RunType):
-    _time_fmt = TimeType.get_format()
+class D1010(Run):
+    _time_fmt = Time.get_format()
     _fields = [('track_index', 'I'),      # Index of associated track
                ('first_lap_index', 'I'),  # Index of first associated lap
                ('last_lap_index', 'I'),   # Index of last associated lap
@@ -4537,7 +4537,7 @@ class D1010(RunType):
                ('time', f'{_time_fmt}'),  # Time result of virtual partner
                ('distance', 'f'),         # Distance result of virtual partner
                ] + \
-               WorkoutType._fields  # Workout
+               Workout._fields  # Workout
     _program_type = {0: 'none',
                      1: 'virtual_partner',  # Completed with Virtual Partner
                      2: 'workout',          # Completed as part of a workout
@@ -4545,11 +4545,11 @@ class D1010(RunType):
                      }
 
     def get_datetime(self):
-        return TimeType(self.time).get_datetime()
+        return Time(self.time).get_datetime()
 
 
-class CoursePointType(DataType):
-    _time_fmt = TimeType.get_format()
+class CoursePoint(DataType):
+    _time_fmt = Time.get_format()
     _fields = [('name', '11s'),                       # Null-terminated name
                ('unused1', 'B'),                      # Unused. Set to 0.
                ('course_index', 'H'),                 # Index of associated course
@@ -4576,17 +4576,17 @@ class CoursePointType(DataType):
                    }
 
     def get_track_point_datetime(self):
-        return TimeType(self.track_point_time).get_datetime()
+        return Time(self.track_point_time).get_datetime()
 
     def get_point_type(self):
         return self._point_type.get(self.point_type)
 
 
-class D1012(CoursePointType):
+class D1012(CoursePoint):
     pass
 
 
-class CourseLimitsType(DataType):
+class CourseLimits(DataType):
     _fields = [('max_courses', 'I'),         # Maximum courses
                ('max_course_laps', 'I'),     # Maximum course laps
                ('max_course_pnt', 'I'),      # Maximum course points
@@ -4594,12 +4594,12 @@ class CourseLimitsType(DataType):
                ]
 
 
-class D1013(CourseLimitsType):
+class D1013(CourseLimits):
     pass
 
 
-class ExternalTimeSyncDataType(DataType):
-    _time_fmt = TimeType.get_format()
+class ExternalTimeSyncData(DataType):
+    _time_fmt = Time.get_format()
     _fields = [('current_utc', f'{_time_fmt}'),  # Current UTC
                ('timezone_offset', 'i'),         # Local timezone in seconds from UTC
                ('is_dst_info_included', '?'),    # Is DST information valid?
@@ -4610,7 +4610,7 @@ class ExternalTimeSyncDataType(DataType):
 
     def get_datetime(self):
         "Return timezone aware datetime object."
-        datetime = TimeType(self.current_utc).get_datetime()
+        datetime = Time(self.current_utc).get_datetime()
         return datetime.replace(tzinfo=self.timezone_offset)
 
     def get_dst(self):
@@ -4624,11 +4624,11 @@ class ExternalTimeSyncDataType(DataType):
                 return timedelta(0)
 
 
-class D1051(ExternalTimeSyncDataType):
+class D1051(ExternalTimeSyncData):
     pass
 
 
-class MemPropertiesType(DataType):
+class MemProperties(DataType):
     _fields = [('mem_region', 'H'),  # flash memory region for supplementary map
                ('max_tiles', 'H'),   # maximum number of map tiles that can be stored
                ('mem_size', 'I'),    # memory size
@@ -4636,7 +4636,7 @@ class MemPropertiesType(DataType):
                ]
 
 
-class MemFileType(DataType):
+class MemFile(DataType):
     _fields = [('unknown', 'I'),
                ('mem_region', 'H'),  # flash memory region for supplementary map
                ('subfile', 'n'),     # subfile in the IMG container file format,
@@ -4649,19 +4649,19 @@ class MemFileType(DataType):
         self.subfile = subfile
 
 
-class MemDataType(DataType):
+class MemData(DataType):
     _fields = [('length', 'B'),
                ('data', '/0s'),
                ]
 
 
-class MemRecordType(DataType):
+class MemRecord(DataType):
     _fields = [('index', 'B'),  # index of the record (starting with 0)
                ('chunk', '$'),
                ]
 
 
-class MemChunkType(DataType):
+class MemChunk(DataType):
     _fields = [('offset', 'I'),
                ('chunk', '$'),
                ]
@@ -4671,14 +4671,14 @@ class MemChunkType(DataType):
         self.chunk = chunk
 
 
-class MapProductType(DataType):
+class MapProduct(DataType):
     _fields = [('pid', 'H'),   # product ID
                ('fid', 'H'),   # family ID
                ('name', 'n'),  # product name
                ]
 
 
-class MapSegmentType(DataType):
+class MapSegment(DataType):
     _fields = [('pid', 'H'),           # product ID
                ('fid', 'H'),           # family ID
                ('segment_id', 'I'),    # segment ID
@@ -4690,7 +4690,7 @@ class MapSegmentType(DataType):
                ]
 
 
-class MapUnknownType(DataType):
+class MapUnknown(DataType):
     _fields = [('pid', 'H'),       # product ID
                ('fid', 'H'),       # family ID
                ('unknown1', 'H'),
@@ -4698,19 +4698,19 @@ class MapUnknownType(DataType):
                ]
 
 
-class MapUnlockType(DataType):
+class MapUnlock(DataType):
     _fields = [('unlock_code', 'n'),  # Length is 25 characters. Characters are
                                       # upper case letters or digits
                ]
 
 
-class MapSetType(DataType):
+class MapSet(DataType):
     _fields = [('mapset_name', 'n'),
                ('auto_name', '?'),
                ]
 
 
-class MPSRecordType(DataType):
+class MPSRecord(DataType):
     _fields = [('type', 'B'),
                ('length', 'H'),
                ('content', '/1s'),
@@ -4740,24 +4740,24 @@ class MPSRecordType(DataType):
         type = self.get_type()
         if type == 'map_product_id':
             log.debug(f"Record 'F': Product")
-            datatype = MapProductType()
+            datatype = MapProduct()
         elif type == 'map_segment_id':
             log.debug(f"Record 'L': Map segment")
-            datatype = MapSegmentType()
+            datatype = MapSegment()
         elif type == 'map_unknown_id':
             log.debug(f"Record 'P': Unknown")
-            datatype = MapUnknownType()
+            datatype = MapUnknown()
         elif type == 'map_unlock_id':
             log.debug(f"Record 'U': Unlock")
-            datatype = MapUnlockType()
+            datatype = MapUnlock()
         elif type == 'map_set_id':
             log.debug(f"Record 'V': Mapset")
-            datatype = MapSetType()
+            datatype = MapSet()
         datatype.unpack(self.content)
         return datatype
 
 
-class MPSFileType(DataType):
+class MPSFile(DataType):
     """MPS file format.
 
     The Mapsource (MPS) file format contains a list of maps and their
@@ -4781,12 +4781,12 @@ class MPSFileType(DataType):
     |      2 to n | Record content   |
 
     """
-    _mps_record_fmt = MPSRecordType.get_format()
+    _mps_record_fmt = MPSRecord.get_format()
     _fields = [('records', f'{{{_mps_record_fmt}}}'),
                ]
 
     def get_records(self):
-        return [ MPSRecordType(*record) for record in self.records ]
+        return [ MPSRecord(*record) for record in self.records ]
 
 
 class RGBA(DataType):
@@ -4810,7 +4810,7 @@ class RGBA(DataType):
         self.unused = unused
 
 
-class ImagePropType(DataType):
+class ImageProp(DataType):
     _fields = [('idx', 'H'),         # image index
                ('writable', '?'),    # writable?
                ('image_type', 'B'),  # image type (0 for screenshot or 2 for icon)
@@ -4822,16 +4822,16 @@ class ImagePropType(DataType):
         self.image_type = image_type
 
 
-class ImageListType(DataType):
-    _image_prop_fmt = ImagePropType.get_format()
+class ImageList(DataType):
+    _image_prop_fmt = ImageProp.get_format()
     _fields = [('images', f'{{{_image_prop_fmt}}}'),
                ]
 
     def get_images(self):
-        return [ ImagePropType(*image) for image in self.images ]
+        return [ ImageProp(*image) for image in self.images ]
 
 
-class ImageNameType(DataType):
+class ImageName(DataType):
     _fields = (('name',  'n'),
                )
 
@@ -4864,12 +4864,12 @@ class ImageInformationHeader(DataType):
         return RGBA(*self.colors)
 
 
-class ImageIdType(DataType):
+class ImageId(DataType):
     _fields = (('id',  'I'),
                )
 
 
-class ImageColorTableType(DataType):
+class ImageColorTable(DataType):
     """BMP color table.
 
     The color table is a block of bytes listing the colors used by the image.
@@ -4884,7 +4884,7 @@ class ImageColorTableType(DataType):
     red, 0x00.
 
     """
-    _id_fmt = ImageIdType.get_format()
+    _id_fmt = ImageId.get_format()
     _rgba_fmt = RGBA.get_format()
     _fields = [('id', f'{_id_fmt}'),
                ('colors', f'{{{_rgba_fmt}}}'),
@@ -4901,8 +4901,8 @@ class ImageColorTableType(DataType):
         return palette
 
 
-class ImageChunkType(DataType):
-    _id_fmt = ImageIdType.get_format()
+class ImageChunk(DataType):
+    _id_fmt = ImageId.get_format()
     _fields = [('id', f'{_id_fmt}'),
                ('data', '$'),
                ]
@@ -4930,7 +4930,7 @@ class BGR(DataType):
         self.red = red
 
 
-class ScreenType(DataType):
+class Screen(DataType):
     """Screenshot format.
 
     The data structure seems to be derived from the Microsoft Windows Bitmap
@@ -4969,8 +4969,8 @@ class ScreenType(DataType):
         return self._section.get(self.section)
 
 
-class ScreenHeaderType(ScreenType):
-    _fields = ScreenType._fields + [('unknown1', 'I'),   # width in bytes?
+class ScreenHeader(Screen):
+    _fields = Screen._fields + [('unknown1', 'I'),   # width in bytes?
                                     ('bpp', 'I'),        # bits per pixel or color depth
                                     ('width', 'I'),      # width in pixels
                                     ('height', 'I'),     # heigth in pixels
@@ -4992,16 +4992,16 @@ class ScreenHeaderType(ScreenType):
             return 0
 
 
-class ScreenColorTableType(ScreenType):
+class ScreenColorTable(Screen):
     _bgr_fmt = BGR.get_format()
-    _fields = ScreenType._fields + [('color', f'{_bgr_fmt}')]
+    _fields = Screen._fields + [('color', f'{_bgr_fmt}')]
 
     def get_colors(self):
         return BGR(*self.color)
 
 
-class ScreenChunkType(ScreenType):
-    _fields = ScreenType._fields + [('chunk', '$')]
+class ScreenChunk(Screen):
+    _fields = Screen._fields + [('chunk', '$')]
 
 
 # Garmin models ==============================================

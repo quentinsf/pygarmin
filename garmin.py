@@ -114,9 +114,13 @@ class SerialLink(P000):
         self.timeout = 1
         self.baudrate = 9600
         self.max_retries = 5
-        self.ser = serial.Serial(port,
-                                 timeout=self.timeout,
-                                 baudrate=self.baudrate)
+
+    @cached_property
+    def ser(self):
+        try:
+            return serial.Serial(self.port, self.baudrate, timeout=self.timeout)
+        except serial.SerialException as e:
+            raise LinkError(e.strerror)
 
     def set_timeout(self, seconds):
         self.ser.timeout = self.timeout = seconds

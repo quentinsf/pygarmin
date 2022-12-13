@@ -37,6 +37,7 @@
    For the latest information about PyGarmin, please see
    https://github.com/quentinsf/pygarmin
 
+   (c) 2022 Folkert van der Beek <folkertvanderbeek@gmail.com>
    (c) 2007-2008 Bjorn Tillenius <bjorn.tillenius@gmail.com>
    (c) 2003 Quentin Stafford-Fraser <www.qandr.org/quentin>
    (c) 2000 James A. H. Skillen <jahs@jahs.net>

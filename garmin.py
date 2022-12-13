@@ -3,7 +3,7 @@
    This module implements the protocol used for communication by the Garmin GPS
    receivers. It is based on the official description available from Garmin at
 
-   http://www.garmin.com/support/commProtocol.html
+   https://www8.garmin.com/support/commProtocol.html
 
    The protocols used in the Garmin Device Interface are arranged in the
    following three layers:
@@ -32,7 +32,7 @@
    included index.html file.
 
    This is released under the Gnu General Public Licence. A copy of
-   this can be found at http://www.opensource.org/licenses/gpl-license.html
+   this can be found at https://opensource.org/licenses/gpl-license.html
 
    For the latest information about PyGarmin, please see
    https://github.com/quentinsf/pygarmin
@@ -436,7 +436,7 @@ class USBLink(P000):
         # is already active, then we don't have to select any configuration.
         # This prevents the configuration selection problem described in the
         # libusb documentation
-        # (http://libusb.sourceforge.net/api-1.0/libusb_caveats.html#configsel).
+        # (https://libusb.sourceforge.io/api-1.0/libusb_caveats.html#configsel).
         cfg = self.dev.get_active_configuration()
         if cfg.bConfigurationValue != self.configuration_value:
             self.dev.set_configuration(self.configuration_value)

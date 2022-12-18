@@ -1130,6 +1130,7 @@ class TransferProtocol:
             datatype = self.datatypes[i]()
             log.info(f"Datatype {type(datatype).__name__}")
             datatype.unpack(data)
+            log.info(f"{str(datatype)}")
             if pid in pids:
                 result.append(datatype)
             else:
@@ -1148,6 +1149,7 @@ class TransferProtocol:
             pid = packet['id']
             datatype = packet['data']
             datatype.pack()
+            log.info(f"{str(datatype)}")
             data = datatype.get_data()
             log.debug(f"> packet {pid:3}: {bytes.hex(data, sep=' ')}")
             self.link.send_packet(pid, data)

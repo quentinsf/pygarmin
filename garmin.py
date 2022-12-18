@@ -2444,7 +2444,7 @@ class RadianPosition(DataType):
 
     @staticmethod
     def to_semicircles(radians):
-        return radians * (2 ** 31 / math.pi)
+        return round(radians * (2 ** 31 / math.pi))
 
     def as_degrees(self):
         return DegreePosition(lat=self.to_degrees(self.lat),
@@ -2475,7 +2475,7 @@ class DegreePosition(DataType):
 
     @staticmethod
     def to_semicircles(degrees):
-        return degrees * (2 ** 31 / 180)
+        return round(degrees * (2 ** 31 / 180))
 
     @staticmethod
     def to_radians(degrees):

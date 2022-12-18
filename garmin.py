@@ -24,8 +24,9 @@
    At the Application layer, there are several protocols used to implement data
    transfers between a host and a device. They are carried over Link protocols.
 
-   The Physical, Link, and Application protocol IDs are 3-digit numbers prefixed
-   with P, L, and A respectively, and data type IDs are prefixed with D.
+   The Physical, Transmission, Link, and Application protocol IDs are 3-digit
+   numbers prefixed with P, T, L, and A respectively, and data type IDs are
+   prefixed with D.
 
    This code is partly from the Garmin IOSDK and partly from the sample code in
    the Linux garmin_gps driver. For documentation, see the source, and the

@@ -2544,7 +2544,7 @@ class Symbol(DataType):
         11: 'sym_knife',                          # white knife & fork symbol
         12: 'sym_light',                          # white light symbol
         13: 'sym_mug',                            # white mug symbol
-        14: 'sym_skull',                          # white skull and crossbones symbol*/
+        14: 'sym_skull',                          # white skull and crossbones symbol
         15: 'sym_square_grn',                     # green square symbol
         16: 'sym_square_red',                     # red square symbol
         17: 'sym_wbuoy',                          # white buoy waypoint symbol

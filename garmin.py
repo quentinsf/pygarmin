@@ -2370,7 +2370,7 @@ class ProtocolArray(DataType):
 
 class Position(DataType):
     """The Position type is used to indicate latitude and longitude in semicircles,
-    where 2 31 semicircles equal 180 degrees. North latitudes and East
+    where 2^31 semicircles equal 180 degrees. North latitudes and East
     longitudes are indicated with positive numbers; South latitudes and West
     longitudes are indicated with negative numbers.
 

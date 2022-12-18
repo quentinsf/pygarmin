@@ -126,9 +126,11 @@ converts a Position into a DegreePosition data type.
 ## More details
 
 There are 3 levels of protocol documented:
-| Application    | (highest level) |
-| Link layer     |                 |
-| Physical layer | (lowest level)  |
+| Layer       | Level   |
+|-------------|---------|
+| Application | highest |
+| Link        |         |
+| Physical    | lowest  |
 
 The specification documents the various different versions of these under labels
 of Pxxx, Lxxx, Axxx etc, where xxx is a number, and this convention is followed

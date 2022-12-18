@@ -28,22 +28,30 @@
    numbers prefixed with P, T, L, and A respectively, and data type IDs are
    prefixed with D.
 
-   This code is partly from the Garmin IOSDK and partly from the sample code in
-   the Linux garmin_gps driver. For documentation, see the source, and the
-   included index.html file.
+   This file is part of the pygarmin distribution
+   (https://github.com/quentinsf/pygarmin).
 
-   This is released under the Gnu General Public Licence. A copy of
-   this can be found at https://opensource.org/licenses/gpl-license.html
+   Copyright 2022 Folkert van der Beek <folkertvanderbeek@gmail.com>
+   Copyright 2007-2008 Bjorn Tillenius <bjorn.tillenius@gmail.com>
+   Copyright 2003 Quentin Stafford-Fraser <www.qandr.org/quentin>
+   Copyright 2000 James A. H. Skillen <jahs@jahs.net>
+   Copyright 2001 Raymond Penners <raymond@dotsphinx.com>
+   Copyright 2001 Tom Grydeland <Tom.Grydeland@phys.uit.no>
 
-   For the latest information about PyGarmin, please see
-   https://github.com/quentinsf/pygarmin
+   This program is free software: you can redistribute it and/or modify it under
+   the terms of the GNU General Public License as published by the Free Software
+   Foundation, version 3.
 
-   (c) 2022 Folkert van der Beek <folkertvanderbeek@gmail.com>
-   (c) 2007-2008 Bjorn Tillenius <bjorn.tillenius@gmail.com>
-   (c) 2003 Quentin Stafford-Fraser <www.qandr.org/quentin>
-   (c) 2000 James A. H. Skillen <jahs@jahs.net>
-   (c) 2001 Raymond Penners <raymond@dotsphinx.com>
-   (c) 2001 Tom Grydeland <Tom.Grydeland@phys.uit.no>
+   This program is distributed in the hope that it will be useful, but WITHOUT
+   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+   FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+   details.
+
+   You should have received a copy of the GNU General Public License along with
+   this program. If not, see <http://www.gnu.org/licenses/>.
+
+   This is released under the Gnu General Public Licence. A copy of this can be
+   found at https://opensource.org/licenses/gpl-license.html
 
 """
 

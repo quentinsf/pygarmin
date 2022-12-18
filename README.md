@@ -165,6 +165,7 @@ Thanks are due to, amongst others:
 * [Bjorn Tillenius](http://tillenius.me/)
 * Hyrum K. Wright
 * Cedric Dutoit
+* Folkert van der Beek (for a major rewrite in Dec 2022)
 
 and probably others, to whom our apologies!
 

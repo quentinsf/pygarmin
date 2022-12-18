@@ -2400,11 +2400,11 @@ class Position(DataType):
 
     def as_degrees(self):
         return DegreePosition(lat=self.to_degrees(self.lat),
-                                  lon=self.to_degrees(self.lon))
+                              lon=self.to_degrees(self.lon))
 
     def as_radians(self):
         return RadianPosition(lat=self.to_radians(self.lat),
-                                  lon=self.to_radians(self.lon))
+                              lon=self.to_radians(self.lon))
 
     def is_valid(self):
         """Return whether the position is valid.

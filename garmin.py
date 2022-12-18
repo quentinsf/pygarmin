@@ -70,9 +70,8 @@ import serial
 import sys
 import usb
 
-
 # Set default logging handler to avoid "No handler found" warnings.
-log = logging.getLogger('pygarmin')
+log = logging.getLogger('garmin')
 log.addHandler(logging.NullHandler())
 
 

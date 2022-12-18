@@ -156,6 +156,10 @@ This program is free software: you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
 Foundation, version 3.
 
+In the past, it has been released under the GNU General Public License version 2,
+and some contributions have been made under that license.
+You may use it under the terms of the GPLv2 if you prefer.
+
 ## Acknowledgements
 
 Thanks are due to, amongst others:

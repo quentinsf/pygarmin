@@ -4,21 +4,31 @@
    This is a console user application for communicating with Garmin GPS
    receivers.
 
+   This file is part of the pygarmin distribution
+   (https://github.com/quentinsf/pygarmin).
+
+   Copyright 2022 Folkert van der Beek <folkertvanderbeek@gmail.com>
+
+   This program is free software: you can redistribute it and/or modify it under
+   the terms of the GNU General Public License as published by the Free Software
+   Foundation, version 3.
+
+   This program is distributed in the hope that it will be useful, but WITHOUT
+   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+   FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+   details.
+
+   You should have received a copy of the GNU General Public License along with
+   this program. If not, see <http://www.gnu.org/licenses/>.
+
    This is released under the Gnu General Public Licence. A copy of this can be
-   found at http://www.opensource.org/licenses/gpl-license.html
-
-   For the latest information about PyGarmin, please see
-   https://github.com/quentinsf/pygarmin
-
-   (c) 2022      Folkert van der Beek <folkertvanderbeek@gmail.com>
-   (c) 2007      Bjorn Tillenius <bjorn.tillenius@gmail.com>
-   (c) 2000-2003 James A. H. Skillen <jahs@jahs.net>
-   (c) 2001      Raymond Penners <raymond@dotsphinx.com>
+   found at https://opensource.org/licenses/gpl-license.html
 
 """
 __version__ = '0.1'
 
 import argparse
+from garmin import garmin
 import gpxpy
 import json
 import logging
@@ -31,7 +41,7 @@ from tabulate import tabulate
 from tqdm import tqdm
 import xml.etree.ElementTree as ET
 import io
-from garmin import *
+
 
 logging_levels = {
     0: logging.NOTSET,
@@ -42,7 +52,7 @@ logging_levels = {
     5: logging.DEBUG,
 }
 
-log = logging.getLogger('pygarmin')
+log = logging.getLogger('garmin')
 log.addHandler(logging.StreamHandler())
 
 
@@ -371,7 +381,7 @@ class GPXWaypoints(GPX):
         nsmap = { gpxx: 'https://www8.garmin.com/xmlschemas/GpxExtensions/v3/GpxExtensionsv3.xsd' }
         gpx.nsmap = nsmap
         for point in waypoints:
-            if isinstance(point, WptType) and point.get_posn().is_valid():
+            if isinstance(point, garmin.Wpt) and point.get_posn().is_valid():
                 # Possible fields: ('posn', 'color', 'lnk_ident', 'city',
                 # 'attr', 'facility', 'dspl_color', 'dst', 'dpth', 'cc', 'cmnt',
                 # 'wpt_cat', 'alt', 'state', 'time', 'unused', 'cross_road',
@@ -448,7 +458,7 @@ class GPXRoutes(GPX):
         nsmap = { gpxx: 'https://www8.garmin.com/xmlschemas/GpxExtensions/v3/GpxExtensionsv3.xsd' }
         gpx.nsmap = nsmap
         for point in routes:
-            if isinstance(point, RteHdrType):
+            if isinstance(point, garmin.RteHdr):
                 # Possible fields: ('nmbr', 'cmnt', 'ident')
                 gpx_route = gpxpy.gpx.GPXRoute()
                 number = point.get_dict().get('nmbr')
@@ -460,7 +470,7 @@ class GPXRoutes(GPX):
                 if comment is not None:
                     gpx_route.comment = comment.decode(encoding='latin_1')
                 gpx.routes.append(gpx_route)
-            elif isinstance(point, WptType):
+            elif isinstance(point, garmin.Wpt):
                 # Possible fields: ('dist', 'state', 'wpt_ident', 'subclass',
                 # 'dst', 'facility', 'dtyp', 'dspl_color', 'cross_road',
                 # 'wpt_cat', 'attr', 'color', 'smbl', 'addr', 'ete', 'alt',
@@ -505,7 +515,7 @@ class GPXRoutes(GPX):
                             subclass.text = subclass_hex
                     gpx_point.extensions.append(route_point_extension)
                     gpx_route.points.append(gpx_point)
-            elif isinstance(point, RteLinkType):
+            elif isinstance(point, garmin.RteLink):
                 pass
         return gpx
 
@@ -525,7 +535,7 @@ class GPXTracks(GPX):
                   gpxtpx: 'http://www8.garmin.com/xmlschemas/TrackPointExtensionv2.xsd' }
         gpx.nsmap = nsmap
         for point in tracks:
-            if isinstance(point, TrkHdrType):
+            if isinstance(point, garmin.TrkHdr):
                 # Possible fields: ('color', 'trk_ident', 'index', 'dspl')
                 gpx_track = gpxpy.gpx.GPXTrack()
                 name = point.trk_ident
@@ -538,7 +548,7 @@ class GPXTracks(GPX):
                         display_color = ET.SubElement(track_extension, f'{{{gpxx}}}DisplayColor')
                         display_color.text = self._display_color.get('color')
                 gpx_track.extensions.append(track_extension)
-            elif isinstance(point, TrkPointType):
+            elif isinstance(point, garmin.TrkPoint):
                 # Possible fields: ('new_trk', 'alt', 'heart_rate', 'sensor',
                 # 'dpth', 'cadence', 'posn', 'temp', 'time', 'distance')
                 if len(gpx.tracks) == 0:
@@ -679,9 +689,9 @@ class Pygarmin:
 
 
     def get_gps(self, port):
-        phys = USBLink() if port == 'usb:' else SerialLink(port)
+        phys = garmin.USBLink() if port == 'usb:' else garmin.SerialLink(port)
         log.info(f"listening on port {port}")
-        return Garmin(phys)
+        return garmin.Garmin(phys)
 
     def info(self, args):
         info = "Product information\n"
@@ -725,7 +735,7 @@ class Pygarmin:
             info = "Map information\n"
             info += "===============\n"
             for record in records:
-                if isinstance(record, MapSegmentType):
+                if isinstance(record, garmin.MapSegment):
                     info += "Map segment description\n"
                     info += "-----------------------\n"
                     info += f"Product ID: {record.pid}\n"
@@ -735,17 +745,17 @@ class Pygarmin:
                     info += f"Segment name: {str(record.segment_name, 'latin_1')}\n"
                     info += f"Area name: {str(record.area_name, 'latin_1')}\n"
                     info += "\n"
-                elif isinstance(record, MapSetType):
+                elif isinstance(record, garmin.MapSet):
                     info += "Map set description\n"
                     info += "-------------------\n"
                     info += f"Mapset name: {str(record.mapset_name, 'latin_1')}\n"
                     info += "\n"
-                elif isinstance(record, MapUnlockType):
+                elif isinstance(record, garmin.MapUnlock):
                     info += "Map unlock description\n"
                     info += "----------------------\n"
                     info += f"Unlock code: {str(unlock_code, 'latin_1')}\n"
                     info += "\n"
-                elif isinstance(record, MapProductType):
+                elif isinstance(record, garmin.MapProduct):
                     info += "Map product description\n"
                     info += "-----------------------\n"
                     info += f"Product ID: {record.pid}\n"

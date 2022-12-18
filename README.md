@@ -76,7 +76,7 @@ OK. Here's a simple Python program.
     import logging
     from garmin import garmin
 
-    log = logging.getLogger('pygarmin')
+    log = logging.getLogger('garmin')
     log.addHandler(logging.StreamHandler())
     log.setLevel(logging.INFO)
 

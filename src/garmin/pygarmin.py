@@ -28,7 +28,6 @@
 __version__ = '0.1'
 
 import argparse
-from garmin import garmin
 import gpxpy
 import json
 import logging
@@ -41,6 +40,7 @@ from tabulate import tabulate
 from tqdm import tqdm
 import xml.etree.ElementTree as ET
 import io
+import garmin
 
 
 logging_levels = {

@@ -1,4 +1,10 @@
 # Changelog
+## [1.0.1] 2022-12-21
+- Made the pygarmin script a submodule
+- Improved docstrings
+- Switched from Markdown to ReStructuredText
+- Added documentation using Sphinx
+
 ## [1.0]
 - Improved coding style to conform to the PEP8 style guide
 - Improved logging

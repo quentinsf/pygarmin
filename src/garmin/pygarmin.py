@@ -42,14 +42,11 @@ import xml.etree.ElementTree as ET
 import io
 import garmin
 
-
 logging_levels = {
     0: logging.NOTSET,
-    1: logging.CRITICAL,
-    2: logging.ERROR,
-    3: logging.WARNING,
-    4: logging.INFO,
-    5: logging.DEBUG,
+    1: logging.WARNING,
+    2: logging.INFO,
+    3: logging.DEBUG,
 }
 
 log = logging.getLogger('garmin')
@@ -670,7 +667,7 @@ class Pygarmin:
         'A600': 'Date And Time Initialization Protocol',
         'A650': 'Flightbook Transfer Protocol',
         'A700': 'Position Initialization Protocol',
-        'A800': 'Pvt Protocol',
+        'A800': 'PVT Protocol',
         'A900': 'Map Transfer Protocol',
         'A902': 'Map Unlock Protocol',
         'A906': 'Lap Transfer Protocol',
@@ -1073,290 +1070,302 @@ class Pygarmin:
             else:
                 log.error(f"Image {image['name']} with index {idx} is not writable")
 
-def main():
-    parser = argparse.ArgumentParser(prog='pygarmin',
-                                     description=
-"""Communicate with a Garmin GPS device. Pygarmin supports bi-directional
-transfer of maps, waypoints, routes, track logs, proximity waypoints, and
-satellite almanac.
+parser = argparse.ArgumentParser(prog='pygarmin',
+                                 description=
+"""Command line application to communicate with a Garmin GPS device.
+
+Pygarmin can retrieve information from the device, such as the product
+description including the unit ID, the supported protocols, memory properties,
+and information on the installed maps. supports bi-directional transfer of
+waypoints, routes, track logs, proximity waypoints, maps and images such as
+custom waypoint icons. It is able to receive laps, runs, satellite almanac,
+current time, current position, and screenshots. It can continuously receive
+real-time position, velocity, and time (PVT).
 
 The port is specified with the -p PORT option. To communicate with a Garmin GPS
 serially, use the name of that serial port such as /dev/ttyUSB0, /dev/cu.serial,
 or COM1. To communicate via USB use usb: as the port on all OSes.
 """)
-    parser.add_argument('-D',
-                        '--debug',
-                        type=int,
-                        default=3,
-                        help="Set debug level (default: 3)")
-    parser.add_argument('-v',
-                        '--version',
-                        action='store_true',
-                        help="Dump version and exit")
-    parser.add_argument('--progress',
-                        action=argparse.BooleanOptionalAction,
-                        default=True,
-                        help="Show progress bar")
-    parser.add_argument('-p',
-                        '--port',
-                        default='usb:',
-                        help="Set the device name (default: usb:)")
-    subparsers = parser.add_subparsers(help="Command help")
-    info = subparsers.add_parser('info', help="Return product description")
-    info.set_defaults(command='info')
-    info.add_argument('filename',
-                      nargs='?',
-                      type=argparse.FileType(mode='w'),
-                      default=sys.stdout,
-                      # Write output to <file> instead of stdout.
-                      help="Set output file")
-    protocols = subparsers.add_parser('protocols', help="Return protocol capabilities")
-    protocols.set_defaults(command='protocols')
-    protocols.add_argument('filename',
+parser.add_argument('-v',
+                    '--verbosity',
+                    action='count',
+                    default=0,
+                    help="Increase output verbosity")
+parser.add_argument('-D',
+                    '--debug',
+                    action='store_const',
+                    const=3,
+                    default=0,
+                    help="Enable debugging")
+parser.add_argument('--version',
+                    action='store_true',
+                    help="Dump version and exit")
+parser.add_argument('--progress',
+                    action=argparse.BooleanOptionalAction,
+                    default=True,
+                    help="Show progress bar")
+parser.add_argument('-p',
+                    '--port',
+                    default='usb:',
+                    help="Set the device name (default: usb:)")
+subparsers = parser.add_subparsers(help="Command help")
+info = subparsers.add_parser('info', help="Return product description")
+info.set_defaults(command='info')
+info.add_argument('filename',
+                  nargs='?',
+                  type=argparse.FileType(mode='w'),
+                  default=sys.stdout,
+                  # Write output to <file> instead of stdout.
+                  help="Set output file")
+protocols = subparsers.add_parser('protocols', help="Return protocol capabilities")
+protocols.set_defaults(command='protocols')
+protocols.add_argument('filename',
+                       nargs='?',
+                       type=argparse.FileType(mode='w'),
+                       default=sys.stdout,
+                       help="Set output file")
+memory = subparsers.add_parser('memory', help="Return memory info")
+memory.set_defaults(command='memory')
+memory.add_argument('filename',
+                    nargs='?',
+                    type=argparse.FileType(mode='w'),
+                    default=sys.stdout,
+                    help="Set output file")
+map = subparsers.add_parser('map', help="Return map info")
+map.set_defaults(command='map')
+map.add_argument('filename',
+                 nargs='?',
+                 type=argparse.FileType(mode='w'),
+                 default=sys.stdout,
+                 help="Set output file")
+get_waypoints = subparsers.add_parser('get-waypoints', help="Download waypoints")
+get_waypoints.set_defaults(command='get_waypoints')
+get_waypoints.add_argument('-t',
+                           '--format',
+                           choices=['txt', 'garmin', 'gpx'],
+                           default='garmin',
+                           help="Set output format. ``txt`` returns a JSON string that consists of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype. ``gpx`` returns a string in GPS Exchange Format (GPX).")
+get_waypoints.add_argument('filename',
                            nargs='?',
                            type=argparse.FileType(mode='w'),
                            default=sys.stdout,
                            help="Set output file")
-    memory = subparsers.add_parser('memory', help="Return memory info")
-    memory.set_defaults(command='memory')
-    memory.add_argument('filename',
+put_waypoints = subparsers.add_parser('put-waypoints', help="Upload waypoints")
+put_waypoints.set_defaults(command='put_waypoints')
+put_waypoints.add_argument('-t',
+                           '--format',
+                           choices=['txt', 'garmin'],
+                           default='garmin',
+                           help="Set input format. ``txt`` returns a JSON string that consists of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype.")
+put_waypoints.add_argument('filename',
+                           nargs='?',
+                           type=argparse.FileType(mode='r'),
+                           default=sys.stdin,
+                           help="Set input file")
+get_routes = subparsers.add_parser('get-routes', help="Download routes")
+get_routes.set_defaults(command='get_routes')
+get_routes.add_argument('-t',
+                        '--format',
+                        choices=['txt', 'garmin', 'gpx'],
+                        default='garmin',
+                        help="Set output format. ``txt`` returns a JSON string that consists of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype. ``gpx`` returns a string in GPS Exchange Format (GPX).")
+get_routes.add_argument('filename',
                         nargs='?',
                         type=argparse.FileType(mode='w'),
                         default=sys.stdout,
                         help="Set output file")
-    map = subparsers.add_parser('map', help="Return map info")
-    map.set_defaults(command='map')
-    map.add_argument('filename',
-                     nargs='?',
-                     type=argparse.FileType(mode='w'),
-                     default=sys.stdout,
-                     help="Set output file")
-    get_waypoints = subparsers.add_parser('get-waypoints', help="Download waypoints")
-    get_waypoints.set_defaults(command='get_waypoints')
-    get_waypoints.add_argument('-t',
-                               '--format',
-                               choices=['txt', 'garmin', 'gpx'],
-                               default='garmin',
-                               help="Set output format")
-    get_waypoints.add_argument('filename',
-                               nargs='?',
-                               type=argparse.FileType(mode='w'),
-                               default=sys.stdout,
-                               help="Set output file")
-    put_waypoints = subparsers.add_parser('put-waypoints', help="Upload waypoints")
-    put_waypoints.set_defaults(command='put_waypoints')
-    put_waypoints.add_argument('-t',
-                               '--format',
-                               choices=['txt', 'garmin'],
-                               default='garmin',
-                               help="Set input format")
-    put_waypoints.add_argument('filename',
-                               nargs='?',
-                               type=argparse.FileType(mode='r'),
-                               default=sys.stdin,
-                               help="Set input file")
-    get_routes = subparsers.add_parser('get-routes', help="Download routes")
-    get_routes.set_defaults(command='get_routes')
-    get_routes.add_argument('-t',
-                            '--format',
-                            choices=['txt', 'garmin', 'gpx'],
-                            default='garmin',
-                            help="Set output format")
-    get_routes.add_argument('filename',
-                            nargs='?',
-                            type=argparse.FileType(mode='w'),
-                            default=sys.stdout,
-                            help="Set output file")
-    put_routes = subparsers.add_parser('put-routes', help="Upload routes")
-    put_routes.set_defaults(command='put_routes')
-    put_routes.add_argument('-t',
-                            '--format',
-                            choices=['txt', 'garmin'],
-                            default='garmin',
-                            help="Set input format")
-    put_routes.add_argument('filename',
-                            nargs='?',
-                            type=argparse.FileType(mode='r'),
-                            default=sys.stdin,
-                            help="Set input file")
-    get_tracks = subparsers.add_parser('get-tracks', help="Download tracks")
-    get_tracks.set_defaults(command='get_tracks')
-    get_tracks.add_argument('-t',
-                            '--format',
-                            choices=['txt', 'garmin', 'gpx'],
-                            default='garmin',
-                            help="Set output format")
-    get_tracks.add_argument('filename',
-                            nargs='?',
-                            type=argparse.FileType(mode='w'),
-                            default=sys.stdout,
-                            help="Set output file")
-    put_tracks = subparsers.add_parser('put-tracks', help="Upload tracks")
-    put_tracks.set_defaults(command='put_tracks')
-    put_tracks.add_argument('-t',
-                            '--format',
-                            choices=['txt', 'garmin'],
-                            default='garmin',
-                            help="Set input format")
-    put_tracks.add_argument('filename',
-                            nargs='?',
-                            type=argparse.FileType(mode='r'),
-                            default=sys.stdin,
-                            help="Set input file")
-    get_proximities = subparsers.add_parser('get-proximities', help="Download proximities")
-    get_proximities.set_defaults(command='get_proximities')
-    get_proximities.add_argument('-t',
-                                 '--format',
-                                 choices=['txt', 'garmin', 'gpx'],
-                                 default='garmin',
-                                 help="Set output format")
-    get_proximities.add_argument('filename',
-                                 nargs='?',
-                                 type=argparse.FileType(mode='w'),
-                                 default=sys.stdout,
-                                 help="Set output file")
-    put_proximities = subparsers.add_parser('put-proximities', help="Upload proximities")
-    put_proximities.set_defaults(command='put_proximities')
-    put_proximities.add_argument('-t',
-                                 '--format',
-                                 choices=['txt', 'garmin'],
-                                 default='garmin',
-                                 help="Set input format")
-    put_proximities.add_argument('filename',
-                                 nargs='?',
-                                 type=argparse.FileType(mode='r'),
-                                 default=sys.stdin,
-                                 help="Set input file")
-    get_almanac = subparsers.add_parser('get-almanac', help="Download almanac")
-    get_almanac.set_defaults(command='get_almanac')
-    get_almanac.add_argument('-t',
+put_routes = subparsers.add_parser('put-routes', help="Upload routes")
+put_routes.set_defaults(command='put_routes')
+put_routes.add_argument('-t',
+                        '--format',
+                        choices=['txt', 'garmin'],
+                        default='garmin',
+                        help="Set input format. ``txt`` returns a JSON string that consists of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype.")
+put_routes.add_argument('filename',
+                        nargs='?',
+                        type=argparse.FileType(mode='r'),
+                        default=sys.stdin,
+                        help="Set input file")
+get_tracks = subparsers.add_parser('get-tracks', help="Download tracks")
+get_tracks.set_defaults(command='get_tracks')
+get_tracks.add_argument('-t',
+                        '--format',
+                        choices=['txt', 'garmin', 'gpx'],
+                        default='garmin',
+                        help="Set output format. ``txt`` returns a JSON string that consists of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype. ``gpx`` returns a string in GPS Exchange Format (GPX).")
+get_tracks.add_argument('filename',
+                        nargs='?',
+                        type=argparse.FileType(mode='w'),
+                        default=sys.stdout,
+                        help="Set output file")
+put_tracks = subparsers.add_parser('put-tracks', help="Upload tracks")
+put_tracks.set_defaults(command='put_tracks')
+put_tracks.add_argument('-t',
+                        '--format',
+                        choices=['txt', 'garmin'],
+                        default='garmin',
+                        help="Set input format. ``txt`` returns a JSON string that consists of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype.")
+put_tracks.add_argument('filename',
+                        nargs='?',
+                        type=argparse.FileType(mode='r'),
+                        default=sys.stdin,
+                        help="Set input file")
+get_proximities = subparsers.add_parser('get-proximities', help="Download proximities")
+get_proximities.set_defaults(command='get_proximities')
+get_proximities.add_argument('-t',
                              '--format',
-                             choices=['txt', 'garmin'],
+                             choices=['txt', 'garmin', 'gpx'],
                              default='garmin',
-                             help="Set output format")
-    get_almanac.add_argument('filename',
+                             help="Set output format. ``txt`` returns a JSON string that consists of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype. ``gpx`` returns a string in GPS Exchange Format (GPX).")
+get_proximities.add_argument('filename',
                              nargs='?',
                              type=argparse.FileType(mode='w'),
                              default=sys.stdout,
                              help="Set output file")
-    time = subparsers.add_parser('time', help="Download current date and time")
-    time.set_defaults(command='time')
-    time.add_argument('-t',
+put_proximities = subparsers.add_parser('put-proximities', help="Upload proximities")
+put_proximities.set_defaults(command='put_proximities')
+put_proximities.add_argument('-t',
+                             '--format',
+                             choices=['txt', 'garmin'],
+                             default='garmin',
+                             help="Set input format. ``txt`` returns a JSON string that consists of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype.")
+put_proximities.add_argument('filename',
+                             nargs='?',
+                             type=argparse.FileType(mode='r'),
+                             default=sys.stdin,
+                             help="Set input file")
+get_almanac = subparsers.add_parser('get-almanac', help="Download almanac")
+get_almanac.set_defaults(command='get_almanac')
+get_almanac.add_argument('-t',
+                         '--format',
+                         choices=['txt', 'garmin'],
+                         default='garmin',
+                         help="Set output format. ``txt`` returns a JSON string that consists of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype.")
+get_almanac.add_argument('filename',
+                         nargs='?',
+                         type=argparse.FileType(mode='w'),
+                         default=sys.stdout,
+                         help="Set output file")
+time = subparsers.add_parser('time', help="Download current date and time")
+time.set_defaults(command='time')
+time.add_argument('-t',
+                  '--format',
+                  choices=['txt', 'garmin'],
+                  default='garmin',
+                  help="Set output format. ``txt`` returns a JSON string that consists of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype.")
+time.add_argument('filename',
+                  nargs='?',
+                  type=argparse.FileType(mode='w'),
+                  default=sys.stdout,
+                  help="Set output file")
+position = subparsers.add_parser('position', help="Download current position")
+position.set_defaults(command='position')
+position.add_argument('-t',
                       '--format',
                       choices=['txt', 'garmin'],
                       default='garmin',
-                      help="Set output format")
-    time.add_argument('filename',
+                      help="Set output format. ``txt`` returns a JSON string that consists of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype.")
+position.add_argument('filename',
                       nargs='?',
                       type=argparse.FileType(mode='w'),
                       default=sys.stdout,
                       help="Set output file")
-    position = subparsers.add_parser('position', help="Download current position")
-    position.set_defaults(command='position')
-    position.add_argument('-t',
-                          '--format',
-                          choices=['txt', 'garmin'],
-                          default='garmin',
-                          help="Set output format")
-    position.add_argument('filename',
-                          nargs='?',
-                          type=argparse.FileType(mode='w'),
-                          default=sys.stdout,
-                          help="Set output file")
-    pvt = subparsers.add_parser('pvt', help="Download pvt")
-    pvt.set_defaults(command='pvt')
-    pvt.add_argument('-t',
-                     '--format',
-                     choices=['txt', 'garmin', 'tpv'],
-                     default='garmin',
-                     help="Set output format")
-    pvt.add_argument('filename',
-                     nargs='?',
-                     type=argparse.FileType(mode='w'),
-                     default=sys.stdout,
+pvt = subparsers.add_parser('pvt', help="Download pvt")
+pvt.set_defaults(command='pvt')
+pvt.add_argument('-t',
+                 '--format',
+                 choices=['txt', 'garmin', 'tpv'],
+                 default='garmin',
+                 help="Set output format. ``txt`` returns a JSON string that consists of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype. ``tpv`` returns a TPV object based on the GPSD JSON protocol.")
+pvt.add_argument('filename',
+                 nargs='?',
+                 type=argparse.FileType(mode='w'),
+                 default=sys.stdout,
+                 help="Set output file")
+get_laps = subparsers.add_parser('get-laps', help="Download laps")
+get_laps.set_defaults(command='get_laps')
+get_laps.add_argument('-t',
+                      '--format',
+                      choices=['txt', 'garmin'],
+                      default='garmin',
+                      help="Set output format. ``txt`` returns a JSON string that consists of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype.")
+get_laps.add_argument('filename',
+                      nargs='?',
+                      type=argparse.FileType(mode='w'),
+                      default=sys.stdout,
+                      help="Set output file")
+get_runs = subparsers.add_parser('get-runs', help="Download runs")
+get_runs.set_defaults(command='get_runs')
+get_runs.add_argument('-t',
+                      '--format',
+                      choices=['txt', 'garmin'],
+                      default='garmin',
+                      help="Set output format. ``txt`` returns a JSON string that consists of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype.")
+get_runs.add_argument('filename',
+                      nargs='?',
+                      type=argparse.FileType(mode='w'),
+                      default=sys.stdout,
+                      help="Set output file")
+get_map = subparsers.add_parser('get-map', help="Download map")
+get_map.set_defaults(command='get_map')
+get_map.add_argument('filename',
+                     default='gmapsupp.img',
                      help="Set output file")
-    get_laps = subparsers.add_parser('get-laps', help="Download laps")
-    get_laps.set_defaults(command='get_laps')
-    get_laps.add_argument('-t',
-                          '--format',
-                          choices=['txt', 'garmin'],
-                          default='garmin',
-                          help="Set output format")
-    get_laps.add_argument('filename',
-                          nargs='?',
-                          type=argparse.FileType(mode='w'),
-                          default=sys.stdout,
-                          help="Set output file")
-    get_runs = subparsers.add_parser('get-runs', help="Download runs")
-    get_runs.set_defaults(command='get_runs')
-    get_runs.add_argument('-t',
-                          '--format',
-                          choices=['txt', 'garmin'],
-                          default='garmin',
-                          help="Set output format")
-    get_runs.add_argument('filename',
-                          nargs='?',
-                          type=argparse.FileType(mode='w'),
-                          default=sys.stdout,
-                          help="Set output file")
-    get_map = subparsers.add_parser('get-map', help="Download map")
-    get_map.set_defaults(command='get_map')
-    get_map.add_argument('filename',
-                         default='gmapsupp.img',
-                         help="Set output file")
-    put_map = subparsers.add_parser('put-map', help="Upload map")
-    put_map.set_defaults(command='put_map')
-    put_map.add_argument('filename',
-                         help="Set input file")
-    del_map = subparsers.add_parser('del-map', help="Delete map")
-    del_map.set_defaults(command='del_map')
-    get_screenshot = subparsers.add_parser('get-screenshot', help="Capture screenshot")
-    get_screenshot.set_defaults(command='get_screenshot')
-    get_screenshot.add_argument('-t',
-                                '--format',
-                                help="Set image file format")
-    get_screenshot.add_argument('filename',
-                                default='Screenshot.bmp',
-                                help="Set image file name")
-    get_image_types = subparsers.add_parser('get-image-types', help="List image types")
-    get_image_types.add_argument('filename',
-                                 nargs='?',
-                                 type=argparse.FileType(mode='w'),
-                                 default=sys.stdout,
-                                 help="Set output file")
-    get_image_types.set_defaults(command='get_image_types')
-    get_image_list = subparsers.add_parser('get-image-list', help="List images")
-    get_image_list.add_argument('filename',
-                                 nargs='?',
-                                 type=argparse.FileType(mode='w'),
-                                 default=sys.stdout,
-                                 help="Set output file")
-    get_image_list.set_defaults(command='get_image_list')
-    get_image = subparsers.add_parser('get-image', help="Download image")
-    get_image.add_argument('-t',
-                           '--format',
-                           help="Set image file format")
-    get_image.add_argument('-i',
-                           '--index',
-                           type=int,
-                           nargs='*',
-                           help="Indices of the image list to get")
-    get_image.add_argument('filename',
-                           nargs='?',
-                           help="Filename or directory to save images. A filename pattern can contain %%d (or any formatting string using the %% operator), since %%d is replaced by the image index. Example: waypoint%%03d.png")
-    get_image.set_defaults(command='get_image')
-    put_image = subparsers.add_parser('put-image', help="Upload image")
-    put_image.add_argument('-i',
-                           '--index',
-                           type=int,
-                           nargs='*',
-                           help="Indices of the image list to put")
-    put_image.add_argument('filename',
-                           nargs='+',
-                           help="Set input file")
-    put_image.set_defaults(command='put_image')
+put_map = subparsers.add_parser('put-map', help="Upload map")
+put_map.set_defaults(command='put_map')
+put_map.add_argument('filename',
+                     help="Set input file")
+del_map = subparsers.add_parser('del-map', help="Delete map")
+del_map.set_defaults(command='del_map')
+get_screenshot = subparsers.add_parser('get-screenshot', help="Capture screenshot")
+get_screenshot.set_defaults(command='get_screenshot')
+get_screenshot.add_argument('-t',
+                            '--format',
+                            help="Set image file format")
+get_screenshot.add_argument('filename',
+                            default='Screenshot.bmp',
+                            help="Set image file name")
+get_image_types = subparsers.add_parser('get-image-types', help="List image types")
+get_image_types.add_argument('filename',
+                             nargs='?',
+                             type=argparse.FileType(mode='w'),
+                             default=sys.stdout,
+                             help="Set output file")
+get_image_types.set_defaults(command='get_image_types')
+get_image_list = subparsers.add_parser('get-image-list', help="List images")
+get_image_list.add_argument('filename',
+                             nargs='?',
+                             type=argparse.FileType(mode='w'),
+                             default=sys.stdout,
+                             help="Set output file")
+get_image_list.set_defaults(command='get_image_list')
+get_image = subparsers.add_parser('get-image', help="Download image")
+get_image.add_argument('-t',
+                       '--format',
+                       help="Set image file format")
+get_image.add_argument('-i',
+                       '--index',
+                       type=int,
+                       nargs='*',
+                       help="Indices of the image list to get")
+get_image.add_argument('filename',
+                       nargs='?',
+                       help="Filename or directory to save images. A filename pattern can contain %%d (or any formatting string using the %% operator), since %%d is replaced by the image index. Example: waypoint%%03d.png")
+get_image.set_defaults(command='get_image')
+put_image = subparsers.add_parser('put-image', help="Upload image")
+put_image.add_argument('-i',
+                       '--index',
+                       type=int,
+                       nargs='*',
+                       help="Indices of the image list to put")
+put_image.add_argument('filename',
+                       nargs='+',
+                       help="Set input file")
+put_image.set_defaults(command='put_image')
+
+def main():
     args = parser.parse_args()
-    logging_level = logging_levels.get(args.debug)
+    logging_level = logging_levels.get(max(args.verbosity, args.debug))
     log.setLevel(logging_level)
     log.info(f"Version {__version__}")
     if hasattr(args, 'command'):

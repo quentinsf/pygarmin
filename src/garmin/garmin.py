@@ -2110,7 +2110,7 @@ class ScreenshotTransfer:
         self.link.send_packet(self.link.pid_command_data, self.command.cmnd_transfer_screen)
         log.info("Expect screen data")
         packet = self.link.expect_packet(self.link.pid_screen_data)
-        datatype = ScreenHeader()
+        datatype = ScreenshotHeader()
         datatype.unpack(packet['data'])
         dimensions = datatype.get_dimensions()
         pixel_size = datatype.get_size()
@@ -2138,7 +2138,7 @@ class ScreenshotTransfer:
         color_table = bytes()
         while received_bytes < color_table_size:
             packet = self.link.expect_packet(self.link.pid_screen_data)
-            datatype = ScreenChunk()
+            datatype = ScreenshotChunk()
             datatype.unpack(packet['data'])
             section = datatype.get_section()
             if section == 'color_table':
@@ -2152,7 +2152,7 @@ class ScreenshotTransfer:
         pixel_data = bytes()
         while received_bytes < total_bytes:
             packet = self.link.expect_packet(self.link.pid_screen_data)
-            datatype = ScreenChunk()
+            datatype = ScreenshotChunk()
             datatype.unpack(packet['data'])
             section = datatype.get_section()
             if section == 'pixel_data':
@@ -4162,7 +4162,7 @@ class D700(RadianPosition):
     _fields = RadianPosition._fields
 
 
-class PVTData(DataType):
+class PVT(DataType):
 
     def is_legacy(self, product_description):
         """Return whether the device uses a legacy software version.
@@ -4265,7 +4265,7 @@ class PVTData(DataType):
         return self._fix.get(fix)
 
 
-class D800(PVTData):
+class D800(PVT):
     _posn_fmt = RadianPosition.get_format()
     _fields = [('alt', 'f'),                # altitude above WGS 84 ellipsoid (meters)
                ('epe', 'f'),                # estimated position error, 2 sigma (meters)
@@ -4949,7 +4949,7 @@ class BGR(DataType):
         self.red = red
 
 
-class Screen(DataType):
+class Screenshot(DataType):
     """Screenshot format.
 
     The data structure seems to be derived from the Microsoft Windows Bitmap
@@ -4988,8 +4988,8 @@ class Screen(DataType):
         return self._section.get(self.section)
 
 
-class ScreenHeader(Screen):
-    _fields = Screen._fields + [('unknown1', 'I'),   # width in bytes?
+class ScreenshotHeader(Screenshot):
+    _fields = Screenshot._fields + [('unknown1', 'I'),   # width in bytes?
                                     ('bpp', 'I'),        # bits per pixel or color depth
                                     ('width', 'I'),      # width in pixels
                                     ('height', 'I'),     # heigth in pixels
@@ -5011,16 +5011,16 @@ class ScreenHeader(Screen):
             return 0
 
 
-class ScreenColorTable(Screen):
+class ScreenshotColorTable(Screenshot):
     _bgr_fmt = BGR.get_format()
-    _fields = Screen._fields + [('color', f'{_bgr_fmt}')]
+    _fields = Screenshot._fields + [('color', f'{_bgr_fmt}')]
 
     def get_colors(self):
         return BGR(*self.color)
 
 
-class ScreenChunk(Screen):
-    _fields = Screen._fields + [('chunk', '$')]
+class ScreenshotChunk(Screenshot):
+    _fields = Screenshot._fields + [('chunk', '$')]
 
 
 # Garmin models ==============================================
@@ -5332,7 +5332,7 @@ class Garmin:
         self.map_unlock = self._create_protocol('map_unlock_protocol', self.link, self.command)
         self.lap_transfer = self._create_protocol('lap_transfer_protocol', self.link, self.command)
         self.run_transfer = self._create_protocol('run_transfer_protocol', self.link, self.command)
-        self.screen_transfer = ScreenshotTransfer(self.link, self.command)
+        self.screenshot_transfer = ScreenshotTransfer(self.link, self.command)
         self.image_transfer = ImageTransfer(self.link, self.command)
 
     @staticmethod
@@ -5541,7 +5541,7 @@ class Garmin:
             self.transmission.set_baudrate(current_baudrate)
 
     def get_screenshot(self, callback=None):
-        return self.screen_transfer.get_image(callback)
+        return self.screenshot_transfer.get_image(callback)
 
     def get_image_types(self):
         return self.image_transfer.get_image_types()

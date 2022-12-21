@@ -8,9 +8,11 @@
    The protocols used in the Garmin Device Interface are arranged in the
    following three layers:
 
-   | Application | (highest) |
-   | Link        |           |
-   | Physical    | (lowest)  |
+   ============= ===========
+    Application   (highest)
+    Link
+    Physical      (lowest)
+   ============= ===========
 
    The Physical link protocol for serial is based on RS-232 and uses DLE/ETX
    framing. The Physical protocol for USB uses packetization intrinsic
@@ -107,9 +109,14 @@ class P000:
 class SerialLink(P000):
     """Protocol to communicate over a serial link.
 
-    Support for the Garmin USB-serial protocol needs a Linux kernel with the
-    garmin_gps kernel module which is part of the official kernels since version
-    2.6.11.
+    The port is opened on object creation.
+
+    The ``port`` value is a device name depending on operating system, e.g.
+    /dev/ttyUSB0 on GNU/Linux, /dev/cu.serial on macOS or COM1 on Windows.
+
+    Support for the Garmin USB-serial protocol on GNU/Linux needs the
+    ``garmin_gps`` kernel module which is part of the official kernels since
+    version 2.6.11.
 
     """
     # Control characters
@@ -200,15 +207,18 @@ class SerialLink(P000):
         data bytes, followed by a three-byte trailer (Checksum, DLE, and ETX).
 
         Serial Packet Format
-        | Byte Number | Byte Description    | Notes                                                          |
-        |-------------+---------------------+----------------------------------------------------------------|
-        | 0           | Data Link Escape    | ASCII DLE character (16 decimal)                               |
-        | 1           | Packet ID           | identifies the type of packet                                  |
-        | 2           | Size of Packet Data | number of bytes of packet data (bytes 3 to n-4)                |
-        | 3 to n-4    | Packet Data         | 0 to 255 bytes                                                 |
-        | n-3         | Checksum            | 2's complement of the sum of all bytes from byte 1 to byte n-4 |
-        | n-2         | Data Link Escape    | ASCII DLE character (16 decimal)                               |
-        | n-1         | End of Text         | ASCII ETX character (3 decimal)                                |
+
+        ============= ===================== ================================================================
+         Byte Number   Byte Description      Notes
+        ============= ===================== ================================================================
+         0             Data Link Escape      ASCII DLE character (16 decimal)
+         1             Packet ID             identifies the type of packet
+         2             Size of Packet Data   number of bytes of packet data (bytes 3 to n-4)
+         3 to n-4      Packet Data           0 to 255 bytes
+         n-3           Checksum              2's complement of the sum of all bytes from byte 1 to byte n-4
+         n-2           Data Link Escape      ASCII DLE character (16 decimal)
+         n-1           End of Text           ASCII ETX character (3 decimal)
+        ============= ===================== ================================================================
 
         """
         log.debug("Pack packet...")
@@ -382,7 +392,7 @@ class USBLink(P000):
     """Implementation of the Garmin USB protocol.
 
     Support for the Garmin USB protocol needs libusb 1.0 and probably removing
-    and blacklisting the garmin_gps kernel module. It will talk to the first
+    and blacklisting the ``garmin_gps`` kernel module. It will talk to the first
     Garmin GPS device it finds.
 
     """
@@ -511,14 +521,18 @@ class USBLink(P000):
         """Pack an USB packet.
 
         USB Packet Format:
-        | Byte Number | Byte Description | Notes                                          |
-        |-------------+------------------+------------------------------------------------|
-        |           0 | Packet Type      | USB Protocol Layer = 0, Application Layer = 20 |
-        |         1-3 | Reserved         | must be set to 0                               |
-        |         4-5 | Packet ID        |                                                |
-        |         6-7 | Reserved         | must be set to 0                               |
-        |        8-11 | Data size        |                                                |
-        |         12+ | Data             |                                                |
+
+        ============= ================== ================================================
+         Byte Number   Byte Description   Notes
+        ============= ================== ================================================
+                   0   Packet Type        USB Protocol Layer = 0, Application Layer = 20
+                 1-3   Reserved           must be set to 0
+                 4-5   Packet ID
+                 6-7   Reserved           must be set to 0
+                8-11   Data size
+                 12+   Data
+        ============= ================== ================================================
+
         """
         log.debug("Pack packet")
         if isinstance(data, bytes):
@@ -613,9 +627,12 @@ class USBLink(P000):
         again. No data is associated with this packet.
 
         Start Session Packet
-        | N | Direction      | Packet ID         | Packet Data Type |
-        |---+----------------+-------------------+------------------|
-        | 0 | Host to Device | pid_start_session | n/a              |
+
+        === ================ =================== ==================
+         N   Direction        Packet ID           Packet Data Type
+        === ================ =================== ==================
+         0   Host to Device   pid_start_session   n/a
+        === ================ =================== ==================
 
         """
         log.info("Send Start Session packet")
@@ -633,9 +650,12 @@ class USBLink(P000):
         well.
 
         Session Started Packet
-        | N | Direction      | Packet ID           | Packet Data Type |
-        |---+----------------+---------------------+------------------|
-        | 0 | Device to Host | pid_session_started | uint32           |
+
+        === ================ ===================== ==================
+         N   Direction        Packet ID             Packet Data Type
+        === ================ ===================== ==================
+         0   Device to Host   pid_session_started   uint32
+        === ================ ===================== ==================
 
         """
         log.info("Read Session Started packet")
@@ -801,14 +821,17 @@ class A000:
     connected device, which enables the host to determine the protocols
     and data types supported by the device.
 
-    Packet sequence
-    |   N | Direction      | Packet ID            | Packet Data Type |
-    |-----+----------------+----------------------+------------------|
-    |   0 | Host to Device | pid_product_rqst     | ignored          |
-    |   1 | Device to Host | pid_product_data     | ProductData      |
-    |   2 | Device to Host | pid_ext_product_data | ExtProductData   |
-    |   … | …              | …                    | …                |
-    | N-1 | Device to Host | pid_ext_product_data | ExtProductData   |
+    Packet sequence:
+
+    ===== ================ ====================== ==================
+       N   Direction        Packet ID              Packet Data Type
+    ===== ================ ====================== ==================
+       0   Host to Device   pid_product_rqst       ignored
+       1   Device to Host   pid_product_data       ProductData
+       2   Device to Host   pid_ext_product_data   ExtProductData
+       …   …                …                      …
+     n-1   Device to Host   pid_ext_product_data   ExtProductData
+    ===== ================ ====================== ==================
 
     """
 
@@ -837,10 +860,13 @@ class A001:
     will send a list of all supported protocols and data types after completion
     of the A000 Product Data Protocol.
 
-    Packet sequence
-    | N | Direction      | Packet ID          | Packet Data Type |
-    |---+----------------+--------------------+------------------|
-    | 0 | Device to Host | pid_protocol_array | ProtocolArray    |
+    Packet sequence:
+
+    === ================ ==================== ==================
+     N   Direction        Packet ID            Packet Data Type
+    === ================ ==================== ==================
+     0   Device to Host   pid_protocol_array   ProtocolArray
+    === ================ ==================== ==================
 
     """
 
@@ -896,10 +922,13 @@ class CommandProtocol:
     The Device Command protocols are used to send commands to the device. An
     unimplemented command will not cause an error, but is ignored.
 
-    Device Command Protocol Packet Sequence
-    | N | Direction          | Packet ID        | Packet Data Type |
-    |---+--------------------+------------------+------------------|
-    | 0 | Device1 to Device2 | pid_command_data | Command          |
+    Packet sequence:
+
+    === ==================== ================== ==================
+     N   Direction            Packet ID          Packet Data Type
+    === ==================== ================== ==================
+     0   Device1 to Device2   pid_command_data   Command
+    === ==================== ================== ==================
 
     """
     cmnd_abort_transfer = None
@@ -1081,14 +1110,16 @@ class TransferProtocol:
     in between (packet 1 through n-2) each contain data records using a
     device-specific data type.
 
-    | N   | Direction          | Packet ID      | Packet Data Type |
-    |-----+--------------------+----------------+------------------|
-    | 0   | Device1 to Device2 | pid_records    | Records          |
-    | 1   | Device1 to Device2 | <Data Pid>     | <D0>             |
-    | 2   | Device1 to Device2 | <Data Pid>     | <D0>             |
-    | …   | …                  | …              | …                |
-    | n-2 | Device1 to Device2 | <Data Pid>     | <D0>             |
-    | n-1 | Device1 to Device2 | pid_xfer_cmplt | Command          |
+    ===== ==================== ================ ==================
+       N   Direction            Packet ID        Packet Data Type
+    ===== ==================== ================ ==================
+       0   Device1 to Device2   pid_records      Records
+       1   Device1 to Device2   <Data Pid>       <D0>
+       2   Device1 to Device2   <Data Pid>       <D0>
+       …   …                    …                …
+     n-2   Device1 to Device2   <Data Pid>       <D0>
+     n-1   Device1 to Device2   pid_xfer_cmplt   Command
+    ===== ==================== ================ ==================
 
     Other protocols are able to send or receive multiple sets of data. The
     second packet (packet 1) contains header information that uniquely
@@ -1097,15 +1128,17 @@ class TransferProtocol:
     can be transferred by appending another set of packets with header
     information and data records (like packets 1 through n-2).
 
-    |   N | Direction          | Packet ID      | Packet Data Type |
-    |-----+--------------------+----------------+------------------|
-    |   0 | Device1 to Device2 | pid_records    | Records          |
-    |   1 | Device1 to Device2 | <Header Pid>   | <D0>             |
-    |   2 | Device1 to Device2 | <Data Pid>     | <D1>             |
-    |   3 | Device1 to Device2 | <Data Pid>     | <D1>             |
-    |   … | …                  | …              | …                |
-    | n-2 | Device1 to Device2 | <Data Pid>     | <D1>             |
-    | n-1 | Device1 to Device2 | pid_xfer_cmplt | Command          |
+    ===== ==================== ================ ==================
+       N   Direction            Packet ID        Packet Data Type
+    ===== ==================== ================ ==================
+       0   Device1 to Device2   pid_records      Records
+       1   Device1 to Device2   <Header Pid>     <D0>
+       2   Device1 to Device2   <Data Pid>       <D1>
+       3   Device1 to Device2   <Data Pid>       <D1>
+       …   …                    …                …
+     n-2   Device1 to Device2   <Data Pid>       <D1>
+     n-1   Device1 to Device2   pid_xfer_cmplt   Command
+    ===== ==================== ================ ==================
 
     """
 
@@ -1162,15 +1195,18 @@ class TransferProtocol:
 class A100(TransferProtocol):
     """Waypoint Transfer Protocol.
 
-    Packet sequence
-    | N   | Direction          | Packet ID      | Packet Data Type |
-    |-----+--------------------+----------------+------------------|
-    | 0   | Device1 to Device2 | pid_records    | Records          |
-    | 1   | Device1 to Device2 | pid_wpt_data   | <D0>             |
-    | 2   | Device1 to Device2 | pid_wpt_data   | <D0>             |
-    | …   | …                  | …              | …                |
-    | n-2 | Device1 to Device2 | pid_wpt_data   | <D0>             |
-    | n-1 | Device1 to Device2 | pid_xfer_cmplt | Command          |
+    Packet sequence:
+
+    ===== ==================== ================ ==================
+       N   Direction            Packet ID        Packet Data Type
+    ===== ==================== ================ ==================
+       0   Device1 to Device2   pid_records      Records
+       1   Device1 to Device2   pid_wpt_data     <D0>
+       2   Device1 to Device2   pid_wpt_data     <D0>
+       …   …                    …                …
+     n-2   Device1 to Device2   pid_wpt_data     <D0>
+     n-1   Device1 to Device2   pid_xfer_cmplt   Command
+    ===== ==================== ================ ==================
 
     """
 
@@ -1203,15 +1239,18 @@ class A100(TransferProtocol):
 class A101(TransferProtocol):
     """Waypoint Transfer Protocol.
 
-    Packet sequence
-    | N   | Direction          | Packet ID      | Packet Data Type |
-    |-----+--------------------+----------------+------------------|
-    | 0   | Device1 to Device2 | pid_records    | Records          |
-    | 1   | Device1 to Device2 | pid_wpt_cat    | <D0>             |
-    | 2   | Device1 to Device2 | pid_wpt_cat    | <D0>             |
-    | …   | …                  | …              | …                |
-    | n-2 | Device1 to Device2 | pid_wpt_cat    | <D0>             |
-    | n-1 | Device1 to Device2 | pid_xfer_cmplt | Command          |
+    Packet sequence:
+
+    ===== ==================== ================ ==================
+       N   Direction            Packet ID        Packet Data Type
+    ===== ==================== ================ ==================
+       0   Device1 to Device2   pid_records      Records
+       1   Device1 to Device2   pid_wpt_cat      <D0>
+       2   Device1 to Device2   pid_wpt_cat      <D0>
+       …   …                    …                …
+     n-2   Device1 to Device2   pid_wpt_cat      <D0>
+     n-1   Device1 to Device2   pid_xfer_cmplt   Command
+    ===== ==================== ================ ==================
 
     """
 
@@ -1243,16 +1282,19 @@ class A101(TransferProtocol):
 class A200(TransferProtocol):
     """Route Transfer Protocol.
 
-    A200 Route Transfer Protocol Packet Sequence
-    |   N | Direction          | Packet ID        | Packet Data Type |
-    |-----+--------------------+------------------+------------------|
-    |   0 | Device1 to Device2 | pid_records      | Records          |
-    |   1 | Device1 to Device2 | pid_rte_hdr      | <D0>             |
-    |   2 | Device1 to Device2 | pid_rte_wpt_data | <D1>             |
-    |   3 | Device1 to Device2 | pid_rte_wpt_data | <D1>             |
-    |   … | …                  | …                | …                |
-    | n-2 | Device1 to Device2 | pid_rte_wpt_data | <D1>             |
-    | n-1 | Device1 to Device2 | pid_xfer_cmplt   | Command          |
+    Packet sequence:
+
+    ===== ==================== ================== ==================
+       N   Direction            Packet ID          Packet Data Type
+    ===== ==================== ================== ==================
+       0   Device1 to Device2   pid_records        Records
+       1   Device1 to Device2   pid_rte_hdr        <D0>
+       2   Device1 to Device2   pid_rte_wpt_data   <D1>
+       3   Device1 to Device2   pid_rte_wpt_data   <D1>
+       …   …                    …                  …
+     n-2   Device1 to Device2   pid_rte_wpt_data   <D1>
+     n-1   Device1 to Device2   pid_xfer_cmplt     Command
+    ===== ==================== ================== ==================
 
     """
 
@@ -1297,18 +1339,21 @@ class A200(TransferProtocol):
 class A201(TransferProtocol):
     """Route Transfer Protocol.
 
-    Packet Sequence
-    |   N | Direction          | Packet ID         | Packet Data Type |
-    |-----+--------------------+-------------------+------------------|
-    |   0 | Device1 to Device2 | pid_records       | Records          |
-    |   1 | Device1 to Device2 | pid_rte_hdr       | <D0>             |
-    |   2 | Device1 to Device2 | pid_rte_wpt_data  | <D1>             |
-    |   3 | Device1 to Device2 | pid_rte_link_data | <D2>             |
-    |   4 | Device1 to Device2 | pid_rte_wpt_data  | <D1>             |
-    |   5 | Device1 to Device2 | pid_rte_link_data | <D2>             |
-    |   … | …                  | …                 | …                |
-    | n-2 | Device1 to Device2 | pid_rte_wpt_data  | <D1>             |
-    | n-1 | Device1 to Device2 | pid_xfer_cmplt    | Command          |
+    Packet sequence:
+
+    ===== ==================== =================== ==================
+       N   Direction            Packet ID           Packet Data Type
+    ===== ==================== =================== ==================
+       0   Device1 to Device2   pid_records         Records
+       1   Device1 to Device2   pid_rte_hdr         <D0>
+       2   Device1 to Device2   pid_rte_wpt_data    <D1>
+       3   Device1 to Device2   pid_rte_link_data   <D2>
+       4   Device1 to Device2   pid_rte_wpt_data    <D1>
+       5   Device1 to Device2   pid_rte_link_data   <D2>
+       …   …                    …                   …
+     n-2   Device1 to Device2   pid_rte_wpt_data    <D1>
+     n-1   Device1 to Device2   pid_xfer_cmplt      Command
+    ===== ==================== =================== ==================
 
     """
 
@@ -1347,15 +1392,18 @@ class A201(TransferProtocol):
 class A300(TransferProtocol):
     """Track Log Transfer Protocol.
 
-    A300 Track Log Transfer Protocol Packet Sequence
-    | N   | Direction          | Packet ID      | Packet Data Type |
-    |-----+--------------------+----------------+------------------|
-    | 0   | Device1 to Device2 | pid_records    | Records          |
-    | 1   | Device1 to Device2 | pid_trk_data   | <D0>             |
-    | 2   | Device1 to Device2 | pid_trk_data   | <D0>             |
-    | …   | …                  | …              | …                |
-    | n-2 | Device1 to Device2 | pid_trk_data   | <D0>             |
-    | n-1 | Device1 to Device2 | pid_xfer_cmplt | Command          |
+    Packet sequence:
+
+    ===== ==================== ================ ==================
+       N   Direction            Packet ID        Packet Data Type
+    ===== ==================== ================ ==================
+       0   Device1 to Device2   pid_records      Records
+       1   Device1 to Device2   pid_trk_data     <D0>
+       2   Device1 to Device2   pid_trk_data     <D0>
+       …   …                    …                …
+     n-2   Device1 to Device2   pid_trk_data     <D0>
+     n-1   Device1 to Device2   pid_xfer_cmplt   Command
+    ===== ==================== ================ ==================
 
     """
 
@@ -1387,16 +1435,19 @@ class A300(TransferProtocol):
 class A301(TransferProtocol):
     """Track Log Transfer Protocol.
 
-    A301 Track Log Transfer Protocol Packet Sequence
-    |   N | Direction          | Packet ID      | Packet Data Type |
-    |-----+--------------------+----------------+------------------|
-    |   0 | Device1 to Device2 | pid_records    | Records          |
-    |   1 | Device1 to Device2 | pid_trk_hdr    | <D0>             |
-    |   2 | Device1 to Device2 | pid_trk_data   | <D1>             |
-    |   3 | Device1 to Device2 | pid_trk_data   | <D1>             |
-    |   … | …                  | …              | …                |
-    | n-2 | Device1 to Device2 | pid_trk_data   | <D1>             |
-    | n-1 | Device1 to Device2 | pid_xfer_cmplt | Command          |
+    Packet sequence:
+
+    ===== ==================== ================ ==================
+       N   Direction            Packet ID        Packet Data Type
+    ===== ==================== ================ ==================
+       0   Device1 to Device2   pid_records      Records
+       1   Device1 to Device2   pid_trk_hdr      <D0>
+       2   Device1 to Device2   pid_trk_data     <D1>
+       3   Device1 to Device2   pid_trk_data     <D1>
+       …   …                    …                …
+     n-2   Device1 to Device2   pid_trk_data     <D1>
+     n-1   Device1 to Device2   pid_xfer_cmplt   Command
+    ===== ==================== ================ ==================
 
     """
 
@@ -1455,15 +1506,18 @@ class A302(A301):
 class A400(TransferProtocol):
     """Proximity Waypoint Transfer Protocol.
 
-    A400 Proximity Waypoint Transfer Protocol Packet Sequence
-    | N   | Direction          | Packet ID        | Packet Data Type |
-    |-----+--------------------+------------------+------------------|
-    | 0   | Device1 to Device2 | pid_records      | Records          |
-    | 1   | Device1 to Device2 | pid_prx_wpt_data | <D0>             |
-    | 2   | Device1 to Device2 | pid_prx_wpt_data | <D0>             |
-    | …   | …                  | …                | …                |
-    | n-2 | Device1 to Device2 | pid_prx_wpt_data | <D0>             |
-    | n-1 | Device1 to Device2 | pid_xfer_cmplt   | Command          |
+    Packet sequence:
+
+    ===== ==================== ================== ==================
+       N   Direction            Packet ID          Packet Data Type
+    ===== ==================== ================== ==================
+       0   Device1 to Device2   pid_records        Records
+       1   Device1 to Device2   pid_prx_wpt_data   <D0>
+       2   Device1 to Device2   pid_prx_wpt_data   <D0>
+       …   …                    …                  …
+     n-2   Device1 to Device2   pid_prx_wpt_data   <D0>
+     n-1   Device1 to Device2   pid_xfer_cmplt     Command
+    ===== ==================== ================== ==================
 
     """
 
@@ -1495,15 +1549,18 @@ class A400(TransferProtocol):
 class A500(TransferProtocol):
     """Almanac Transfer Protocol.
 
-    A500 Almanac Transfer Protocol Packet Sequence
-    | N   | Direction          | Packet ID        | Packet Data Type |
-    |-----+--------------------+------------------+------------------|
-    | 0   | Device1 to Device2 | pid_records      | Records          |
-    | 1   | Device1 to Device2 | pid_almanac_data | <D0>             |
-    | 2   | Device1 to Device2 | pid_almanac_data | <D0>             |
-    | …   | …                  | …                | …                |
-    | n-2 | Device1 to Device2 | pid_almanac_data | <D0>             |
-    | n-1 | Device1 to Device2 | pid_xfer_cmplt   | Command          |
+    Packet sequence:
+
+    ===== ==================== ================== ==================
+       N   Direction            Packet ID          Packet Data Type
+    ===== ==================== ================== ==================
+       0   Device1 to Device2   pid_records        Records
+       1   Device1 to Device2   pid_almanac_data   <D0>
+       2   Device1 to Device2   pid_almanac_data   <D0>
+       …   …                    …                  …
+     n-2   Device1 to Device2   pid_almanac_data   <D0>
+     n-1   Device1 to Device2   pid_xfer_cmplt     Command
+    ===== ==================== ================== ==================
 
     Some device-specific data types do not include a satellite ID to relate each
     data packet to a particular satellite in the GPS constellation. For these
@@ -1523,10 +1580,13 @@ class A500(TransferProtocol):
 class A600(TransferProtocol):
     """Date and Time Initialization Protocol.
 
-    A600 Date and Time Initialization Protocol Packet Sequence
-    | N | Direction          | Packet ID          | Packet Data Type |
-    |---+--------------------+--------------------+------------------|
-    | 0 | Device1 to Device2 | pid_date_time_data | <D0>             |
+    Packet sequence:
+
+    === ==================== ==================== ==================
+     N   Direction            Packet ID            Packet Data Type
+    === ==================== ==================== ==================
+     0   Device1 to Device2   pid_date_time_data   <D0>
+    === ==================== ==================== ==================
 
     """
 
@@ -1551,15 +1611,18 @@ class A601(TransferProtocol):
 class A650(TransferProtocol):
     """Flightbook Transfer Protocol.
 
-    A650 FlightBook Transfer Protocol Packet Sequence
-    | N   | Direction      | Packet ID             | Packet Data Type |
-    |-----+----------------+-----------------------+------------------|
-    | 0   | Host to Device | pid_command_data      | Command          |
-    | 1   | Device to Host | pid_records           | Records          |
-    | 2   | Device to Host | pid_flightbook_record | <D0>             |
-    | …   | …              | …                     | …                |
-    | n-2 | Device to Host | pid_flightbook_record | <D0>             |
-    | n-1 | Device to Host | pid_xfer_cmplt        | Command          |
+    Packet sequence:
+
+    ===== ================ ======================= ==================
+       N   Direction        Packet ID               Packet Data Type
+    ===== ================ ======================= ==================
+       0   Host to Device   pid_command_data        Command
+       1   Device to Host   pid_records             Records
+       2   Device to Host   pid_flightbook_record   <D0>
+       …   …                …                       …
+     n-2   Device to Host   pid_flightbook_record   <D0>
+     n-1   Device to Host   pid_xfer_cmplt          Command
+    ===== ================ ======================= ==================
 
     """
 
@@ -1573,10 +1636,13 @@ class A650(TransferProtocol):
 class A700(TransferProtocol):
     """Position initialisation protocol.
 
-    A700 Position Initialization Protocol Packet Sequence
-    | N | Direction          | Packet ID         | Packet Data Type |
-    |---+--------------------+-------------------+------------------|
-    | 0 | Device1 to Device2 | pid_position_data | <D0>             |
+    Packet sequence:
+
+     === ==================== =================== ==================
+      N   Direction            Packet ID           Packet Data Type
+     === ==================== =================== ==================
+      0   Device1 to Device2   pid_position_data   <D0>
+     === ==================== =================== ==================
 
     """
 
@@ -1605,10 +1671,13 @@ class A800(TransferProtocol):
     According to the specification the ACK and NAK packets are optional, but the
     device will not retransmit a PVT packet in response to receiving a NAK.
 
-    A800 PVT Protocol Packet Sequence
-    | N | Direction                         | Packet ID    | Packet Data Type |
-    |---+-----------------------------------+--------------+------------------|
-    | 0 | Device to Host (ACK/NAK optional) | pid_pvt_data | <D0>             |
+    Packet sequence:
+
+    === =================================== ============== ==================
+     N   Direction                           Packet ID      Packet Data Type
+    === =================================== ============== ==================
+     0   Device to Host (ACK/NAK optional)   pid_pvt_data   <D0>
+    === =================================== ============== ==================
 
     """
 
@@ -1656,14 +1725,16 @@ class A900:
     On devices without mass storage mode, maps are stored in the internal flash
     memory of the device. Some of the memory regions are:
 
-    | Region |  Hex | Map Name                     | Filename     |
-    |--------+------+------------------------------+--------------|
-    |      3 | 0x03 | Device Base Map              | gmapbmap.img |
-    |     10 | 0x0a | Supplementary map            | gmapsupp.img |
-    |     14 | 0x0e | Firmware/System Software     | fw_all.bin   |
-    |     16 | 0x10 | Logo/Splash Screen           | logo.bin     |
-    |     49 | 0x31 | Primary or Pre Installed Map | gmapprom.img |
-    |     50 | 0x32 | OEM Installed Map            | gmapoem.img  |
+    ======== ====== ============================== ==============
+     Region    Hex   Map Name                       Filename
+    ======== ====== ============================== ==============
+          3   0x03   Device Base Map                gmapbmap.img
+         10   0x0a   Supplementary map              gmapsupp.img
+         14   0x0e   Firmware/System Software       fw_all.bin
+         16   0x10   Logo/Splash Screen             logo.bin
+         49   0x31   Primary or Pre Installed Map   gmapprom.img
+         50   0x32   OEM Installed Map              gmapoem.img
+    ======== ====== ============================== ==============
 
     These regions are derived from the Garmin RGN firmware update file format
     (confusingly, the RGN subfiles within Garmin IMG files share the same name,
@@ -1679,15 +1750,18 @@ class A900:
     write enable latch, which is indicated by the WEL response. The write
     disable command WRDI clears it.
 
-    A900 Map Transfer Protocol Packet Sequence
-    | N   | Direction      | Packet ID     | Packet Data Type |
-    |-----+----------------+---------------+------------------|
-    | 0   | Host to Device | pid_mem_wren  | Region           |
-    | 1   | Device to Host | pid_mem_wel   |                  |
-    | 2   | Device to Host | pid_mem_write | MemChunk         |
-    | …   | …              | …             | …                |
-    | n-2 | Device to Host | pid_mem_write | MemChunk         |
-    | n-1 | Device to Host | pid_mem_wrdi  | Region           |
+    Packet sequence:
+
+    ===== ================ =============== ==================
+       N   Direction        Packet ID       Packet Data Type
+    ===== ================ =============== ==================
+       0   Host to Device   pid_mem_wren    Region
+       1   Device to Host   pid_mem_wel
+       2   Device to Host   pid_mem_write   MemChunk
+       …   …                …               …
+     n-2   Device to Host   pid_mem_write   MemChunk
+     n-1   Device to Host   pid_mem_wrdi    Region
+    ===== ================ =============== ==================
 
     """
 
@@ -2170,15 +2244,18 @@ class ScreenshotTransfer:
 class A906(TransferProtocol):
     """Lap Transfer Protocol.
 
-    A906 Lap Transfer Protocol Packet Sequence
-    | N   | Direction      | Packet ID      | Packet Data Type |
-    |-----+----------------+----------------+------------------|
-    | 0   | Device to Host | pid_records    | Records          |
-    | 1   | Device to Host | pid_lap        | <D0>             |
-    | 2   | Device to Host | pid_lap        | <D0>             |
-    | …   | …              | …              | …                |
-    | n-2 | Device to Host | pid_lap        | <D0>             |
-    | n-1 | Device to Host | pid_xfer_cmplt | Command          |
+    Packet sequence:
+
+    ===== ================ ================ ==================
+       N   Direction        Packet ID        Packet Data Type
+    ===== ================ ================ ==================
+       0   Device to Host   pid_records      Records
+       1   Device to Host   pid_lap          <D0>
+       2   Device to Host   pid_lap          <D0>
+       …   …                …                …
+     n-2   Device to Host   pid_lap          <D0>
+     n-1   Device to Host   pid_xfer_cmplt   Command
+    ===== ================ ================ ==================
 
     """
 
@@ -2192,28 +2269,31 @@ class A906(TransferProtocol):
 class A1000(TransferProtocol):
     """Run Transfer Protocol.
 
-    A1000 Run Transfer Protocol Packet Sequence
-    | N   | Direction      | Packet ID        | Packet Data Type |
-    |-----+----------------+------------------+------------------|
-    | 0   | Host to Device | pid_command_data | Command          |
-    | 1   | Device to Host | pid_records      | Records          |
-    | 2   | Device to Host | pid_run          | <D0>             |
-    | …   | …              | …                | …                |
-    | k-2 | Device to Host | pid_run          | <D0>             |
-    | k-1 | Device to Host | pid_xfer_cmplt   | Command          |
-    | k   | Host to Device | pid_command_data | Command          |
-    | k+1 | Device to Host | pid_records      | Records          |
-    | k+2 | Device to Host | pid_lap          | Lap              |
-    | …   | …              | …                | …                |
-    | m-2 | Device to Host | pid_lap          | Lap              |
-    | m-1 | Device to Host | pid_xfer_cmplt   | Command          |
-    | m   | Host to Device | pid_command_data | Command          |
-    | m+1 | Device to Host | pid_records      | Records          |
-    | m+2 | Device to Host | pid_trk_hdr      | TrkHdr           |
-    | m+3 | Device to Host | pid_trk_data     | TrkPoint         |
-    | …   | …              | …                | …                |
-    | n-2 | Device to Host | pid_trk_data     | TrkPoint         |
-    | n-1 | Device to Host | pid_xfer_cmplt   | Command          |
+    Packet sequence:
+
+    ===== ================ ================== ==================
+       N   Direction        Packet ID          Packet Data Type
+    ===== ================ ================== ==================
+       0   Host to Device   pid_command_data   Command
+       1   Device to Host   pid_records        Records
+       2   Device to Host   pid_run            <D0>
+       …   …                …                  …
+     k-2   Device to Host   pid_run            <D0>
+     k-1   Device to Host   pid_xfer_cmplt     Command
+       k   Host to Device   pid_command_data   Command
+     k+1   Device to Host   pid_records        Records
+     k+2   Device to Host   pid_lap            Lap
+       …   …                …                  …
+     m-2   Device to Host   pid_lap            Lap
+     m-1   Device to Host   pid_xfer_cmplt     Command
+       m   Host to Device   pid_command_data   Command
+     m+1   Device to Host   pid_records        Records
+     m+2   Device to Host   pid_trk_hdr        TrkHdr
+     m+3   Device to Host   pid_trk_data       TrkPoint
+       …   …                …                  …
+     n-2   Device to Host   pid_trk_data       TrkPoint
+     n-1   Device to Host   pid_xfer_cmplt     Command
+    ===== ================ ================== ==================
 
     """
 
@@ -4177,23 +4257,25 @@ class PVT(DataType):
         description. The list of devices and the last software version in which
         these different values are used is:
 
-        | Device                | Last Version |
-        |-----------------------+--------------|
-        | eMap                  |         2.64 |
-        | GPSMAP 162            |         2.62 |
-        | GPSMAP 295            |         2.19 |
-        | eTrex                 |         2.10 |
-        | eTrex Summit          |         2.07 |
-        | StreetPilot III       |         2.10 |
-        | eTrex Japanese        |         2.10 |
-        | eTrex Venture/Mariner |         2.20 |
-        | eTrex Europe          |         2.03 |
-        | GPS 152               |         2.01 |
-        | eTrex Chinese         |         2.01 |
-        | eTrex Vista           |         2.12 |
-        | eTrex Summit Japanese |         2.01 |
-        | eTrex Summit          |         2.24 |
-        | eTrex GolfLogix       |         2.49 |
+        ======================= ==============
+         Device                  Last Version
+        ======================= ==============
+         eMap                            2.64
+         GPSMAP 162                      2.62
+         GPSMAP 295                      2.19
+         eTrex                           2.10
+         eTrex Summit                    2.07
+         StreetPilot III                 2.10
+         eTrex Japanese                  2.10
+         eTrex Venture/Mariner           2.20
+         eTrex Europe                    2.03
+         GPS 152                         2.01
+         eTrex Chinese                   2.01
+         eTrex Vista                     2.12
+         eTrex Summit Japanese           2.01
+         eTrex Summit                    2.24
+         eTrex GolfLogix                 2.49
+        ======================= ==============
 
         """
         devices = {
@@ -4248,11 +4330,11 @@ class PVT(DataType):
     def get_fix(self, product_description=None):
         """Return the fix value.
 
-        The default enumerated values for the “fix” member of the D800 PVTData
-        are shown below. It is important for the host to inspect this value to
-        ensure that other data members in the D800 PVTData are valid. No
-        indication is given as to whether the device is in simulator mode versus
-        having an actual position fix.
+        The default enumerated values for the “fix” member of the D800 PVT are
+        shown below. It is important for the host to inspect this value to
+        ensure that other data members in the D800 PVT are valid. No indication
+        is given as to whether the device is in simulator mode versus having an
+        actual position fix.
 
         Some legacy devices use values for fix that are one more than the
         default.
@@ -4792,12 +4874,15 @@ class MPSFile(DataType):
     The file consists of a sequence of variable sized records with the following
     structure:
 
-    General record structure
-    | Byte Number | Byte Description |
-    |-------------+------------------|
-    |           0 | Record type      |
-    |           1 | Record length    |
-    |      2 to n | Record content   |
+    General record structure:
+
+    ============= ==================
+     Byte Number   Byte Description
+    ============= ==================
+               0   Record type
+               1   Record length
+          2 to n   Record content
+    ============= ==================
 
     """
     _mps_record_fmt = MPSRecord.get_format()
@@ -5248,26 +5333,26 @@ class Garmin:
 
     The class provides methods to communicate with the hardware.
 
-    Most GNU/Linux distributions use a kernel module called 'garmin_gps' to make
-    a USB Garmin device accessible via a serial port. In order to communicate
-    with a Windows computer via a serial link, Garmin USB drivers need to be
-    installed. To communicate with a Garmin device connected to the serial port
-    "/dev/ttyUSB0", you could try this:
+    Most GNU/Linux distributions use a kernel module called ``garmin_gps`` to
+    make a USB Garmin device accessible via a serial port. In order to
+    communicate with a Windows computer via a serial link, Garmin USB drivers
+    need to be installed. To communicate with a Garmin device connected to the
+    serial port ``/dev/ttyUSB0``, you could try this:
 
-    >>> import garmin
+    >>> from garmin import garmin
     >>> port = '/dev/ttyUSB0'
-    >>> phys = SerialLink(port)
-    >>> gps = Garmin(phys)
+    >>> phys = garmin.SerialLink(port)
+    >>> gps = garmin.Garmin(phys)
     >>> print(gps.product_data)
 
     Alternatively, internal USB support can be used. For this to work on
-    GNU/Linux, you probably should remove and blacklist the garmin_gps kernel
-    module.
+    GNU/Linux, you probably should remove and blacklist the ``garmin_gps``
+    kernel module.
 
-    >>> import garmin
-    >>> phys = USBLink()
-    >>> gps = Garmin(phys)
-    >>> gps.product_data
+    >>> from garmin import garmin
+    >>> phys = garmin.USBLink()
+    >>> gps = garmin.Garmin(phys)
+    >>> print(gps.product_data)
 
     """
     protocol_keys = {
@@ -5306,33 +5391,58 @@ class Garmin:
 
     def __init__(self, physicalLayer):
         self.phys = physicalLayer
+        #: Basic Link Protocol
         self.link = L000(self.phys)
+        #: Product Data Protocol
         self.product_data_protocol = A000(self.link)
         self.product_data = self.product_data_protocol.get_product_data()
+        #: Product ID
         self.product_id = self.product_data.product_id
+        #: Software version
         self.software_version = self.product_data.software_version / 100
+        #: Product description
         self.product_description = self.product_data.product_description
         self.protocol_capability = A001(self.link)
+        #: Protocol capabilities and device-specific data types
         self.supported_protocols = self._get_protocols()
         self.registered_protocols = self._register_protocols(self.supported_protocols)
+        #: Link Protocol
         self.link = self._create_protocol('link_protocol', self.phys)
+        #: Device Command Protocol
         self.command = self._create_protocol('device_command_protocol', self.link)
+        #: Transmission Protocol
         self.transmission = self._create_protocol('transmission_protocol', self.phys, self.link, self.command)
+        #: Waypoint Transfer Protocol
         self.waypoint_transfer = self._create_protocol('waypoint_transfer_protocol', self.link, self.command)
+        #: Waypoint Category Transfer Protocol
         self.waypoint_category_transfer = self._create_protocol('waypoint_category_transfer_protocol', self.link, self.command)
+        #: Route Transfer Protocol
         self.route_transfer = self._create_protocol('route_transfer_protocol', self.link, self.command)
+        #: Track Log Transfer Protocol
         self.track_log_transfer = self._create_protocol('track_log_transfer_protocol', self.link, self.command)
+        #: Proximity Waypoint Transfer Protocol
         self.proximity_waypoint_transfer = self._create_protocol('proximity_waypoint_transfer_protocol', self.link, self.command)
+        #: Almanac Transfer Protocol
         self.almanac_transfer = self._create_protocol('almanac_transfer_protocol', self.link, self.command)
+        #: Date And Time Initialization Protocol
         self.date_and_time_initialization = self._create_protocol('date_and_time_initialization_protocol', self.link, self.command)
+        #: Flightbook Transfer Protocol
         self.flightbook_transfer = self._create_protocol('flightbook_transfer_protocol', self.link, self.command)
+        #: Position Initialization Protocol
         self.position_initialization = self._create_protocol('position_initialization_protocol', self.link, self.command)
+        #: PVT Protocol
         self.pvt = self._create_protocol('pvt_protocol', self.link, self.command)
+        #: Map Transfer Protocol
         self.map_transfer = self._create_protocol('map_transfer_protocol', self.link, self.command)
+        #: Map Unlock Protocol
         self.map_unlock = self._create_protocol('map_unlock_protocol', self.link, self.command)
+        #: Lap Transfer Protocol
         self.lap_transfer = self._create_protocol('lap_transfer_protocol', self.link, self.command)
+        #: Run Transfer Protocol
         self.run_transfer = self._create_protocol('run_transfer_protocol', self.link, self.command)
+        #: Screenshot Transfer Protocol
         self.screenshot_transfer = ScreenshotTransfer(self.link, self.command)
+        #: Image Transfer Protocol
         self.image_transfer = ImageTransfer(self.link, self.command)
 
     @staticmethod
@@ -5429,43 +5539,127 @@ class Garmin:
         return unit_id
 
     def get_waypoints(self, callback=None):
+        """Download waypoints.
+
+        :param callback: optional callback function
+        :type callback: function or None
+        :return: list of waypoint datatypes
+        :rtype: list
+
+        """
         return self.waypoint_transfer.get_data(callback)
 
     def put_waypoints(self, data, callback=None):
+        """Upload waypoints.
+
+        :param data: data
+        :type data: list of waypoint datatypes
+        :param callback: optional callback function
+        :type callback: function or None
+        :return: None
+
+        """
         return self.waypoint_transfer.put_data(data, callback)
 
     def get_routes(self, callback=None):
+        """Download routes.
+
+        :param callback: optional callback function
+        :type callback: function or None
+        :return: list of route datatypes
+        :rtype: list
+
+        """
         return self.route_transfer.get_data(callback)
 
     def put_routes(self, data, callback=None):
+        """Upload routes.
+
+        :param data: data
+        :type data: list of route datatypes
+        :param callback: optional callback function
+        :type callback: function or None
+        :return: None
+
+        """
         return self.route_transfer.put_data(data, callback)
 
     def get_tracks(self, callback=None):
+        """Download tracks.
+
+        :param callback: optional callback function
+        :type callback: function or None
+        :return: list of track datatypes
+        :rtype: list
+
+        """
         if self.track_log_transfer is None:
             raise GarminError("Protocol track_log_transfer_protocol is not supported")
         return self.track_log_transfer.get_data(callback)
 
     def put_tracks(self, data, callback=None):
+        """Upload tracks.
+
+        :param data: data
+        :type data: list of track datatypes
+        :param callback: optional callback function
+        :type callback: function or None
+        :return: None
+
+        """
         if self.track_log_transfer is None:
             raise GarminError("Protocol track_log_transfer_protocol is not supported")
         return self.track_log_transfer.put_data(data, callback)
 
     def get_proximities(self, callback=None):
+        """Download proximities.
+
+        :param callback: optional callback function
+        :type callback: function or None
+        :return: list of proximity datatypes
+        :rtype: list
+
+        """
         if self.proximity_waypoint_transfer is None:
             raise GarminError("Protocol proximity_waypoint_transfer_protocol is not supported")
         return self.proximity_waypoint_transfer.get_data(callback)
 
     def put_proximities(self, data, callback=None):
+        """Upload proximities.
+
+        :param data: data
+        :type data: list of proximity datatypes
+        :param callback: optional callback function
+        :type callback: function or None
+        :return: None
+
+        """
         if self.proximity_waypoint_transfer is None:
             raise GarminError("Protocol proximity_waypoint_transfer_protocol is not supported")
         return self.proximity_waypoint_transfer.put_data(data, callback)
 
     def get_laps(self, callback=None):
+        """Download laps.
+
+        :param callback: optional callback function
+        :type callback: function or None
+        :return: list of lap datatypes
+        :rtype: list
+
+        """
         if self.lap_transfer is None:
             raise GarminError("Protocol lap_transfer_protocol is not supported")
         return self.lap_transfer.get_data(callback)
 
     def get_runs(self, callback=None):
+        """Download runs.
+
+        :param callback: optional callback function
+        :type callback: function or None
+        :return: list of run datatypes
+        :rtype: list
+
+        """
         if self.run_transfer is None:
             raise GarminError("Protocol run_transfer_protocol is not supported")
         return self.run_transfer.get_data(callback)
@@ -5477,6 +5671,14 @@ class Garmin:
         return self.date_and_time_initialization.get_data(callback)
 
     def get_flightbook(self, callback=None):
+        """Download flightbooks.
+
+        :param callback: optional callback function
+        :type callback: function or None
+        :return: list of flightbook datatypes
+        :rtype: list
+
+        """
         if self.flightbook_transfer is None:
             raise GarminError("Protocol flightbook_transfer_protocol is not supported")
         return self.flightbook_transfer.get_data(callback)
@@ -5485,27 +5687,70 @@ class Garmin:
         return self.position_initialization.get_data(callback)
 
     def pvt_on(self):
+        """Turn on PVT mode.
+
+        In PVT mode the device will transmit packets approximately once per
+        second
+
+        """
         log.info(f"Start transmitting PVT data")
         return self.pvt.data_on()
 
     def pvt_off(self):
+        """Turn off PVT mode."""
         log.info("Stop transmitting PVT data")
         return self.pvt.data_off()
 
     def get_pvt(self, callback=None):
+        """Get real-time position, velocity, and time (PVT).
+
+        :param callback: optional callback function
+        :type callback: function or None
+        :return: PVT datatype
+        :rtype: garmin.PVT
+
+        """
         return self.pvt.get_data(callback)
 
     def del_map(self):
+        """Delete map."""
         if self.map_transfer is None:
             raise GarminError("Protocol map_transfer_protocol is not supported")
         return self.map_transfer._write_memory(None)
 
     def get_map(self, callback=None):
+        """Download map.
+
+        The map is received as raw data and is in Garmin IMG format.
+
+        :param callback: optional callback function
+        :type callback: function or None
+        :raise GarminError: if the map_transfer_protocol is not supported.
+        :return: map
+        :rtype: bytes
+
+        """
         if self.map_transfer is None:
             raise GarminError("Protocol map_transfer_protocol is not supported")
         return self.map_transfer.get_map(callback)
 
     def put_map(self, data, key=None, callback=None):
+        """Upload map.
+
+        The map is sent as raw data and should be in Garmin IMG format. Multiple
+        IMG files should be merged into one file called ``"gmapsupp.img"``. To
+        upload a locked map, the encryption key has to be specified.
+
+        :param data: Garmin IMG
+        :type data: str or io.BufferedReader or bytes
+        :param key: optional encryption key
+        :type key: str or None
+        :param callback: optional callback function
+        :type callback: function or None
+        :raise GarminError: if the map_transfer_protocol is not supported.
+        :return: None
+
+        """
         if self.map_transfer is None:
             raise GarminError("Protocol map_transfer_protocol is not supported")
         if isinstance(data, str):
@@ -5541,25 +5786,88 @@ class Garmin:
             self.transmission.set_baudrate(current_baudrate)
 
     def get_screenshot(self, callback=None):
+        """Capture screenshot.
+
+        The map is received as raw data and is in Garmin IMG format.
+
+        :param callback: optional callback function
+        :type callback: function or None
+        :return: image file of the device's display
+        :rtype: PIL.Image
+
+        """
         return self.screenshot_transfer.get_image(callback)
 
     def get_image_types(self):
+        """Get image types.
+
+        Return a list of image types that are allowed to be retrieved or
+        updated. Each image type is represented as a dict of the index and name
+        of the image type.
+
+        :return: supported image types
+        :rtype: list[dict]
+
+        """
         return self.image_transfer.get_image_types()
 
     def get_image_list(self):
+        """Get image list.
+
+        Return a list of images that are allowed to be retrieved or updated.
+        Each image is represented as a dict of the image type index, image
+        index, writable status, and image name. The image type name the image
+        belongs to can be looked up with :func:`Garmin.get_image_types`.
+
+        :return: supported images
+        :rtype: list[dict]
+
+        """
         return self.image_transfer.get_image_list()
 
     def get_image(self, idx, callback=None):
+        """Download image.
+
+        It is possible to get a screenshot from most GPS models. Certain newer
+        models also allow you to get other image types, like the splash screen
+        or waypoint symbols.
+
+        The index of the image can be looked up with
+        :func:`Garmin.get_image_list`.
+
+        :param idx: index of image to download
+        :type idx: int
+        :param callback: optional callback function
+        :type callback: function or None
+        :return: image file of the device's display
+        :rtype: PIL.Image
+
+        """
         return self.image_transfer.get_image(idx, callback)
 
     def put_image(self, idx, data, callback=None):
+        """Upload image.
+
+        The index of the image can be looked up with
+        :func:`Garmin.get_image_list`.
+
+        :param idx: index of image to upload
+        :type idx: int
+        :param data: image data to upload
+        :type data: PIL.Image
+        :param callback: optional callback function
+        :type callback: function or None
+
+        """
         with PIL.Image.open(data) as image:
             self.image_transfer.put_image(idx, image, callback)
 
     def abort_transfer(self):
+        """Abort transfer"""
         log.info("Abort transfer")
         self.command.abort_transfer()
 
     def turn_power_off(self):
+        """Turn power off"""
         log.info("Turn power off")
         self.command.turn_power_off()

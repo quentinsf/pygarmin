@@ -9,6 +9,13 @@ module and a command line application that implement the protocol used by
 `Garmin <https://www.garmin.com/>`_ GPS devices. It is based on the official
 `protocol specification <https://www8.garmin.com/support/commProtocol.html>`_.
 
+Documentation
+-------------
+
+For API documentation, usage and examples see the files in the ``docs``
+directory. The documentation is also hosted on `Read the Docs
+<https://pygarmin.readthedocs.io/en/latest/>_`.
+
 Installing
 ----------
 

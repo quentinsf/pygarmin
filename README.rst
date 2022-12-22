@@ -14,7 +14,7 @@ Documentation
 
 For API documentation, usage and examples see the files in the ``docs``
 directory. The documentation is also hosted on `Read the Docs
-<https://pygarmin.readthedocs.io/en/latest/>_`.
+<https://pygarmin.readthedocs.io/en/latest/>`_.
 
 Installing
 ----------

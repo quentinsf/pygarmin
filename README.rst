@@ -4,8 +4,6 @@ PyGarmin
 .. figure:: pygarmin.png
    :alt: PyGarmin
 
-   PyGarmin
-
 The **Pygarmin** distribution provides a `Python <https://www.python.org/>`_
 module and a command line application that implement the protocol used by
 `Garmin <https://www.garmin.com/>`_ GPS devices. It is based on the official

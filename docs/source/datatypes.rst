@@ -3,6 +3,7 @@ Garmin datatypes
 
 .. toctree::
 
+   base_datatype
    common_datatypes
    product_datatypes
    protocol_datatypes

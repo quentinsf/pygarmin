@@ -2305,54 +2305,125 @@ class A1000(TransferProtocol):
 
 
 class DataType():
+    """Base datatype.
+
+    Datatypes must derive from the DataType base class. It uses the ``rawutil``
+    module to pack and unpack binary data. Each subclass must define a _fields
+    attribute. _fields must be a list of 2-tuples, containing a field name and a
+    field type. The field type must be a ``rawutil`` `format character
+    <https://github.com/Tyulis/rawutil#elements>`_.
+
+    """
     byteorder = 'little'
+    #: binary data
     data = bytes()
-    epoch = datetime(1989, 12, 31, 12, 0)  # 12:00 am December 31, 1989 UTC
+    #: ``datetime`` of 12:00 am December 31, 1989 UTC
+    epoch = datetime(1989, 12, 31, 12, 0)
+    #: regex matching upper-case letters and numbers
     re_upcase_digit = r'[A-Z0-9]'
+    #: regex matching upper-case letters, numbers and space
     re_upcase_digit_space = r'[A-Z0-9 ]'
+    #: regex matching upper-case letters, numbers, space and hyphen
     re_upcase_digit_space_hyphen = r'[A-Z0-9 _]'
+    #: regex matching any ASCII character
     re_ascii = r'[\x20-\x7E]'
 
     @classmethod
     def get_keys(cls):
+        """Return the list of keys of the structure fields.
+
+        :return: list of _field keys
+        :rtype: list[str]
+
+        """
         keys = list(zip(*cls._fields))[0]
         return keys
 
     @classmethod
     def get_format(cls):
+        """Return the format string of the structure fields.
+
+        :return: ``rawutil`` format string
+        :rtype: str
+
+        """
         fmt_chars = list(zip(*cls._fields))[1]
         fmt = ' '.join(fmt_chars)
         return fmt
 
     @classmethod
     def get_struct(cls):
+        """Return a ``rawutil.Struct`` object with the structure fields.
+
+        :return: struct object
+        :rtype: ``rawutil.Struct``
+
+        """
         struct = rawutil.Struct(cls.get_format(),
                                 names=cls.get_keys())
         struct.setbyteorder(cls.byteorder)
         return struct
 
     def get_dict(self):
+        """Return a dictionary with the datatype properties.
+
+        :return: dictionary with datatype properties
+        :rtype: dict
+        """
         keys = self.get_keys()
         return {key: self.__dict__.get(key) for key in keys}
 
     def get_values(self):
+        """Return the list of values of the datatype properties.
+
+        :return: list of values
+        :rtype: list
+
+        """
         return list(self.get_dict().values())
 
     def get_data(self):
+        """Return the packed data.
+
+        :return: packed data
+        :rtype: bytes
+
+        """
+
         return self.data
 
     def unpack(self, data):
+        """Unpack binary data according to the structure.
+
+        :param data: binary data
+        :type data: bytes
+        :return: None
+
+        """
         struct = self.get_struct()
         values = struct.unpack(data)
         self.data = data
         self.__dict__.update(values._asdict())
 
     def pack(self):
+        """Pack the datatype properties in the format defined by the structure.
+
+        """
         struct = self.get_struct()
         values = self.get_values()
         self.data = struct.pack(*values)
 
     def is_valid_charset(self, pattern, bytes):
+        """Return whether the bytes string matches the regex pattern.
+
+        :param pattern: regular expression
+        :type pattern: str
+        :param bytes: bytestring
+        :type bytes: bytes
+        :return: True if bytes matches pattern, otherwise False
+        :rtype: bool
+
+        """
         string = bytes.decode()
         matches = [re.search(pattern, char) for char in string]
         return all(matches)
@@ -2489,7 +2560,7 @@ class Position(DataType):
     def is_valid(self):
         """Return whether the position is valid.
 
-        A waypoint is invalid if both the “lat” and “lon” members are equal to
+        A waypoint is invalid if both the ``lat`` and ``lon`` members are equal to
         0x7FFFFFFF (-129).
 
         """
@@ -2585,10 +2656,10 @@ class Time(DataType):
     def get_datetime(self):
         """Return a datetime object of the time.
 
-        The “time” member indicates the number of seconds since 12:00 am
+        The ``time`` member indicates the number of seconds since 12:00 am
         December 31, 1989 UTC.
 
-        A value of 0xFFFFFFFF (4294967295) indicates that the “time” member is
+        A value of 0xFFFFFFFF (4294967295) indicates that the ``time`` member is
         unsupported or unknown.
 
         """
@@ -2599,7 +2670,7 @@ class Time(DataType):
     def is_valid(self):
         """Return whether the time is valid.
 
-        A “time” value of 0xFFFFFFFF that this parameter is not supported or unknown.
+        A ``time`` value of 0xFFFFFFFF that this parameter is not supported or unknown.
 
         """
         return not self.time == 4294967295
@@ -3106,7 +3177,7 @@ class D101(D100):
     def is_valid_dst(self):
         """Return whether the proximity distance is valid.
 
-        A “dst” value of 1.0e25 indicates that this parameter is not supported or unknown.
+        A ``dst`` value of 1.0e25 indicates that this parameter is not supported or unknown.
 
         """
         return not f"{self.dst:.1e}" == "1.0e+25"
@@ -3264,7 +3335,7 @@ class D107(D103):
     def is_valid_dst(self):
         """Return whether the proximity distance is valid.
 
-        A “dst” value of 1.0e25 indicates that this parameter is not supported or unknown.
+        A ``dst`` value of 1.0e25 indicates that this parameter is not supported or unknown.
 
         """
         return not f"{self.dst:.1e}" == "1.0e+25"
@@ -3367,7 +3438,7 @@ class D108(D103):
     def is_valid_alt(self):
         """Return whether the altitude is valid.
 
-        A “alt” value of 1.0e25 indicates that this parameter is not supported or unknown.
+        A ``alt`` value of 1.0e25 indicates that this parameter is not supported or unknown.
 
         """
         return not f"{self.alt:.1e}" == "1.0e+25"
@@ -3375,7 +3446,7 @@ class D108(D103):
     def is_valid_dpth(self):
         """Return whether the depth is valid.
 
-        A “dpth” value of 1.0e25 indicates that this parameter is not supported or unknown.
+        A ``dpth`` value of 1.0e25 indicates that this parameter is not supported or unknown.
 
         """
         return not f"{self.dpth:.1e}" == "1.0e+25"
@@ -3383,7 +3454,7 @@ class D108(D103):
     def is_valid_dist(self):
         """Return whether the proximity distance is valid.
 
-        A “dist” value of 1.0e25 indicates that this parameter is not supported or unknown.
+        A ``dist`` value of 1.0e25 indicates that this parameter is not supported or unknown.
 
         """
         return not f"{self.dist:.1e}" == "1.0e+25"
@@ -3423,7 +3494,7 @@ class D109(D108):
     def get_color(self):
         """Return the color value.
 
-        The “dspl_color” member contains three fields; bits 0-4 specify the color,
+        The ``dspl_color`` member contains three fields; bits 0-4 specify the color,
         bits 5-6 specify the waypoint display attribute and bit 7 is unused and
         must be 0.
 
@@ -3437,7 +3508,7 @@ class D109(D108):
     def get_dspl(self):
         """Return the display attribute value.
 
-        The “dspl_color” member contains three fields; bits 0-4 specify the
+        The ``dspl_color`` member contains three fields; bits 0-4 specify the
         color, bits 5-6 specify the waypoint display attribute and bit 7 is
         unused and must be 0.
 
@@ -3529,7 +3600,7 @@ class D110(D109):
     def get_color(self):
         """Return the color value.
 
-        The “dspl_color” member contains three fields; bits 0-4 specify the color,
+        The ``dspl_color`` member contains three fields; bits 0-4 specify the color,
         bits 5-6 specify the waypoint display attribute and bit 7 is unused and
         must be 0.
 
@@ -3543,7 +3614,7 @@ class D110(D109):
     def get_dspl(self):
         """Return the display attribute value.
 
-        The “dspl_color” member contains three fields; bits 0-4 specify the
+        The ``dspl_color`` member contains three fields; bits 0-4 specify the
         color, bits 5-6 specify the waypoint display attribute and bit 7 is
         unused and must be 0.
 
@@ -3561,7 +3632,7 @@ class D110(D109):
     def get_wpt_cat(self):
         """Return a list of waypoint categories.
 
-        The “wpt_cat” member contains a 16 bits that provide category membership
+        The ``wpt_cat`` member contains a 16 bits that provide category membership
         information for the waypoint. If a bit is set then the waypoint is a
         member of the corresponding category.
 
@@ -3576,7 +3647,7 @@ class D110(D109):
     def is_valid(self):
         """Return whether the waypoint is valid.
 
-        A waypoint is invalid if the “lat” member of the “posn” member contains
+        A waypoint is invalid if the ``lat`` member of the ``posn`` member contains
         a value greater than 2^30 or less than -2^30
 
         """
@@ -3585,7 +3656,7 @@ class D110(D109):
     def is_valid_temp(self):
         """Return whether the temperature is valid.
 
-        A “temp” value of 1.0e25 indicates that this parameter is not supported or unknown.
+        A ``temp`` value of 1.0e25 indicates that this parameter is not supported or unknown.
 
         """
         return not f"{self.temp:.1e}" == "1.0e+25"
@@ -3593,7 +3664,7 @@ class D110(D109):
     def is_valid_time(self):
         """Return whether the time is valid.
 
-        A “time” value of 0xFFFFFFFF that this parameter is not supported or unknown.
+        A ``time`` value of 0xFFFFFFFF that this parameter is not supported or unknown.
 
         """
         return not self.time == 4294967295
@@ -3604,7 +3675,7 @@ class WptCat(DataType):
     def is_valid(self):
         """Return whether the waypoint category is valid.
 
-        A waypoint category is invalid if the “name” member contains a value
+        A waypoint category is invalid if the ``name`` member contains a value
         with a null byte in the first character.
 
         """
@@ -3875,7 +3946,7 @@ class D301(D300):
     def is_valid_alt(self):
         """Return whether the altitude is valid.
 
-        A “alt” value of 1.0e25 indicates that this parameter is not supported or unknown.
+        A ``alt`` value of 1.0e25 indicates that this parameter is not supported or unknown.
 
         """
         return not f"{self.alt:.1e}" == "1.0e+25"
@@ -3883,7 +3954,7 @@ class D301(D300):
     def is_valid_dpth(self):
         """Return whether the depth is valid.
 
-        A “dpth” value of 1.0e25 indicates that this parameter is not supported or unknown.
+        A ``dpth`` value of 1.0e25 indicates that this parameter is not supported or unknown.
 
         """
         return not f"{self.dpth:.1e}" == "1.0e+25"
@@ -3909,7 +3980,7 @@ class D302(D300):
     def is_valid_alt(self):
         """Return whether the altitude is valid.
 
-        A “alt” value of 1.0e25 indicates that this parameter is not supported or unknown.
+        A ``alt`` value of 1.0e25 indicates that this parameter is not supported or unknown.
 
         """
         return not f"{self.alt:.1e}" == "1.0e+25"
@@ -3917,7 +3988,7 @@ class D302(D300):
     def is_valid_dpth(self):
         """Return whether the depth is valid.
 
-        A “dpth” value of 1.0e25 indicates that this parameter is not supported or unknown.
+        A ``dpth`` value of 1.0e25 indicates that this parameter is not supported or unknown.
 
         """
         return not f"{self.dpth:.1e}" == "1.0e+25"
@@ -3925,7 +3996,7 @@ class D302(D300):
     def is_valid_temp(self):
         """Return whether the temperature is valid.
 
-        A “temp” value of 1.0e25 indicates that this parameter is not supported or unknown.
+        A ``temp`` value of 1.0e25 indicates that this parameter is not supported or unknown.
 
         """
         return not f"{self.temp:.1e}" == "1.0e+25"
@@ -3949,7 +4020,7 @@ class D303(D301):
     def is_valid_alt(self):
         """Return whether the altitude is valid.
 
-        A “alt” value of 1.0e25 indicates that this parameter is not supported or unknown.
+        A ``alt`` value of 1.0e25 indicates that this parameter is not supported or unknown.
 
         """
         return not f"{self.alt:.1e}" == "1.0e+25"
@@ -3957,7 +4028,7 @@ class D303(D301):
     def is_valid_heart_rate(self):
         """Return whether the heart rate is valid.
 
-        A “heart_rate” value of 0 indicates that this parameter is not supported or unknown.
+        A ``heart_rate`` value of 0 indicates that this parameter is not supported or unknown.
 
         """
         return not self.heart_rate == 0
@@ -3979,7 +4050,7 @@ class D304(D303):
     def is_valid_distance(self):
         """Return whether the distance is valid.
 
-        A “distance” value of 0 indicates that this parameter is not supported or unknown.
+        A ``distance`` value of 0 indicates that this parameter is not supported or unknown.
 
         """
         return not self.distance == 0
@@ -3987,7 +4058,7 @@ class D304(D303):
     def is_valid_cadence(self):
         """Return whether the cadence is valid.
 
-        A “cadence” value of 0xFF indicates that this parameter is not supported or unknown.
+        A ``cadence`` value of 0xFF indicates that this parameter is not supported or unknown.
 
         """
         return not self.cadence == 255
@@ -4152,8 +4223,8 @@ class D550(D500):
     def get_prn(self):
         """Return the PRN.
 
-        The “svid” member identifies a satellite in the GPS constellation as
-        follows: PRN-01 through PRN-32 are indicated by “svid” equal to 0
+        The ``svid`` member identifies a satellite in the GPS constellation as
+        follows: PRN-01 through PRN-32 are indicated by ``svid`` equal to 0
         through 31, respectively.
 
         """
@@ -4167,8 +4238,8 @@ class D551(D501):
     def get_prn(self):
         """Return the PRN.
 
-        The “svid” member identifies a satellite in the GPS constellation as
-        follows: PRN-01 through PRN-32 are indicated by “svid” equal to 0
+        The ``svid`` member identifies a satellite in the GPS constellation as
+        follows: PRN-01 through PRN-32 are indicated by ``svid`` equal to 0
         through 31, respectively.
 
         """
@@ -4311,8 +4382,8 @@ class PVT(DataType):
     def get_msl_alt(self):
         """Return the altitude above mean sea level.
 
-        To find the altitude above mean sea level, add “msl_hght” (height of the
-        WGS 84 ellipsoid above mean sea level) to “alt” (altitude above the WGS
+        To find the altitude above mean sea level, add ``msl_hght`` (height of the
+        WGS 84 ellipsoid above mean sea level) to ``alt`` (altitude above the WGS
         84 ellipsoid).
 
         """
@@ -4330,7 +4401,7 @@ class PVT(DataType):
     def get_fix(self, product_description=None):
         """Return the fix value.
 
-        The default enumerated values for the “fix” member of the D800 PVT are
+        The default enumerated values for the ``fix`` member of the D800 PVT are
         shown below. It is important for the host to inspect this value to
         ensure that other data members in the D800 PVT are valid. No indication
         is given as to whether the device is in simulator mode versus having an

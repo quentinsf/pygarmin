@@ -1,6 +1,12 @@
 Changelog
 =========
 
+[1.0.4] 2022-12-23
+------------------
+
+- Improve documentation
+- Add usage of pygarmin application to project description
+
 [1.0.3] 2022-12-23
 ------------------
 

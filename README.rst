@@ -110,7 +110,7 @@ Download the images with index 1, 2, and 3 and save them as PNG files with the d
 
 Upload an image as a custom waypoint symbol with index 1, and don't show the progress bar::
 
-   pygarmin --no-progress put-image Waypoint Symbol 000.bmp -i 1
+   pygarmin --no-progress put-image Waypoint\ Symbol\ 000.bmp -i 1
 
 Download the currently installed map from the device and save it as "*gmapsupp.img*" to the current directory::
 

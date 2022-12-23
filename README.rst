@@ -44,10 +44,87 @@ And install the requirements using the below command:
 
    $ pip install -r requirements.txt
 
-Background
-----------
+Pygarmin application
+====================
 
-PyGarmin is a set of `Python <https://www.python.org/>`__ classes which
+Description
+-----------
+
+*Pygarmin* is a command line application that can retrieve data from and
+transfer data to a Garmin GPS device connected by a serial or USB port.
+
+The port is specified with the -p PORT option. To communicate with a Garmin GPS
+serially, use the name of that serial port such as /dev/ttyUSB0, /dev/cu.serial,
+or COM1. To communicate via USB use usb: as the port on all OSes. For this to
+work on GNU/Linux, you probably should remove and blacklist the ``garmin_gps``
+kernel module. Some protocols won't work at all with a serial connection, like
+the transfer of images and maps. So your best bet is to use the internal USB
+support.
+
+The functionality is split into a number of sub-commands, like ``pygarmin info``
+to return a product description, ``pygarmin get-waypoints`` to download the
+waypoints, and ``pygarmin put-map`` to upload a new map.
+
+Examples
+--------
+
+Show help message::
+
+   pygarmin --help
+
+Show help on the ``get-almanac`` command::
+
+   pygarmin get-almanac -h
+
+Show product description with debugging enabled::
+
+   pygarmin --debug info
+
+Show information on the currently installed maps, use the serial port and be very verbose::
+
+   pygarmin -p /dev/ttyUSB0 -vv map
+
+Download all waypoints in gpx format to the file waypoints.gpx::
+
+   pygarmin get-waypoints waypoints.gpx -t gpx
+
+Print real-time position, velocity, and time (PVT) to stdout::
+
+   pygarmin pvt -t tpv
+
+List the images types::
+
+   pygarmin get-image-types
+
+List all images::
+
+   pygarmin get-image-list
+
+Download all images and save them according to the given filename pattern::
+
+   pygarmin get-image ~/icons/waypoint%03d.png
+
+Download the images with index 1, 2, and 3 and save them as PNG files with the default filenames to the current directory::
+
+   pygarmin get-image -t png -i 1 2 3
+
+Upload an image as a custom waypoint symbol with index 1, and don't show the progress bar::
+
+   pygarmin --no-progress put-image Waypoint Symbol 000.bmp -i 1
+
+Download the currently installed map from the device and save it as "*gmapsupp.img*" to the current directory::
+
+   pygarmin get-map
+
+Upload the map "*gmapsupp.img*"::
+
+   pygarmin put-map gmapsupp.img
+
+
+Garmin module
+=============
+
+The *garmin module* is a set of `Python <https://www.python.org/>`__ classes which
 implement the protocol used by `Garmin <https://www.garmin.com/>`__ GPS
 receivers to talk to each other and to other machines. It is based on the
 official `protocol specification
@@ -96,24 +173,22 @@ Here’s a simple Python program:
    gps = garmin.Garmin(phys)
 
    # Get the waypoints from the GPS
-   # (This may take a little while)
    waypoints = gps.get_waypoints()
 
    # Get the tracks from the GPS
-   # (This may take a little while)
    tracks = gps.get_tracks()
 
    # Print the waypoints
-   print("# Waypoints:")
+   print("Waypoints:")
    for waypoint in waypoints:
        posn = waypoint.get_posn()
        degrees = posn.as_degrees()
        lat = degrees.lat
        lon = degrees.lon
-       print(waypoint.ident, lat, lon, waypoint.cmnt, waypoint.get_smbl())
+       print(waypoint.ident, lat, lon, waypoint.cmnt)
 
    # Print the tracks
-   print("# Tracks:")
+   print("Tracks:")
    for track in tracks:
        print(track)
 
@@ -121,8 +196,7 @@ Here’s a simple Python program:
    print("Upload a new waypoint:")
    waypoint = {'ident': 'CHURCH',
                'cmnt': 'LA SAGRADA FAMILIA',
-               'posn': [493961671, 25937164],
-               'smbl': 8236}
+               'posn': [493961671, 25937164]}
    gps.put_waypoints(waypoint)
 
 This should work for most models, because all waypoints will have an identity, a
@@ -132,35 +206,8 @@ scaled to fill a signed long integer). The static method
 ``Position.to_degrees()`` converts a semicircle integer into a degree float and
 the ``as_degrees()`` method converts a Position into a DegreePosition data type.
 
-More details
-------------
-
-There are 3 levels of protocol documented:
-
-============= =========
- Layer         Level
-============= =========
- Application   highest
- Link
- Physical      lowest
-============= =========
-
-The specification documents the various different versions of these
-under labels of Pxxx, Lxxx, Axxx etc, where xxx is a number, and this
-convention is followed in the code. There are also various data types,
-named Dxxx. Roughly speaking, the Physical protocols specify RS232, the
-Link protocols specify a packet structure for sending messages to and
-fro, and the Application protocols specify what can actually go in those
-packets.
-
-For example, a Garmin GPS 38 will talk to your computer over physical
-layer P000 (RS232) using a packet structure defined by link layer L001.
-If you want to transfer waypoints to and from it, they will be sent
-using application layer A100 (a waypoint transfer protocol), and the
-actual waypoints transferred will be of type D100.
-
 License
--------
+=======
 
 This program is free software: you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
@@ -171,7 +218,7 @@ version 2, and some contributions have been made under that license. You
 may use it under the terms of the GPLv2 if you prefer.
 
 Acknowledgements
-----------------
+================
 
 Thanks are due to, amongst others:
 

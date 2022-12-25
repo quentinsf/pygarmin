@@ -31,8 +31,8 @@ Or to upgrade to the most recent version:
 
    $ pip install pygarmin --upgrade
 
-To follow or contribute to emacs-zotero development, you can browse or clone the
-Git repository `on Github <https://github.com/quentinsf/pygarmin>`_:
+To follow or contribute to pygarmin development, you can browse or clone the Git
+repository `on Github <https://github.com/quentinsf/pygarmin>`_:
 
 .. code-block:: console
 

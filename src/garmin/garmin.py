@@ -197,7 +197,6 @@ class SerialLink(P000):
         # 2's complement of the sum of all bytes from byte 1 to byte n-3
         if checksum != self.checksum(packet[1:-3]):
             raise LinkError("Invalid packet: checksum failed")
-
         return {'id': id, 'data': data}
 
     def pack(self, pid, data):
@@ -251,7 +250,6 @@ class SerialLink(P000):
             + self.escape(bytes([checksum])) \
             + bytes([self.dle]) \
             + bytes([self.etx])
-
         return packet
 
     def read(self):
@@ -291,7 +289,6 @@ class SerialLink(P000):
                     raise LinkError("Invalid packet: doesn't end with DLE and ETX character")
             else:
                 packet += bytes([buffer.pop(0)])
-
         return bytes(packet)
 
     def write(self, buffer):
@@ -314,10 +311,8 @@ class SerialLink(P000):
                 log.info(e)
                 self.send_nak()
                 retries += 1
-
         if retries > self.max_retries:
             raise LinkError("Maximum retries exceeded")
-
         return packet
 
     def send_packet(self, pid, data, acknowledge=True):
@@ -334,7 +329,6 @@ class SerialLink(P000):
             except LinkError as e:
                 log.error(e)
                 retries += 1
-
         if retries > self.max_retries:
             raise LinkError("Maximum retries exceeded")
 
@@ -439,7 +433,6 @@ class USBLink(P000):
         dev = usb.core.find(idVendor=self.idVendor)
         if dev is None:
             raise LinkError("Garmin device not found")
-
         return dev
 
     @cached_property
@@ -459,7 +452,6 @@ class USBLink(P000):
         if cfg.bConfigurationValue != self.configuration_value:
             self.dev.set_configuration(self.configuration_value)
             cfg = self.dev.get_active_configuration()
-
         return cfg
 
     @cached_property
@@ -481,8 +473,7 @@ class USBLink(P000):
         and cache the resulting value for future use.
 
         """
-        ep = usb.util.find_descriptor(self.intf,
-                                           bEndpointAddress=self.Interrupt_IN)
+        ep = usb.util.find_descriptor(self.intf, bEndpointAddress=self.Interrupt_IN)
         return ep
 
     @cached_property
@@ -494,8 +485,7 @@ class USBLink(P000):
 
         """
 
-        ep = usb.util.find_descriptor(self.intf,
-                                           bEndpointAddress=self.Bulk_OUT)
+        ep = usb.util.find_descriptor(self.intf, bEndpointAddress=self.Bulk_OUT)
         return ep
 
     def unpack(self, buffer):
@@ -508,13 +498,10 @@ class USBLink(P000):
         # reserved_2 = buffer[6:8]  # unused
         size = buffer[8:12]
         data = buffer[12:]
-
         id = int.from_bytes(id, byteorder='little')
         size = int.from_bytes(size, byteorder='little')
-
         if size != len(data):
             raise ProtocolError("Invalid packet: wrong size of packet data")
-
         return {'id': id, 'data': data}
 
     def pack(self, layer, pid, data=None):
@@ -547,17 +534,14 @@ class USBLink(P000):
         else:
             datatype = type(data).__name__
             raise ProtocolError(f"Invalid data type: should be 'bytes' or 'int', but is {datatype}")
-
         size = len(data)
         log.debug(f"Data size: {size}")
-
         packet = bytes([layer]) \
             + bytes([0]) * 3 \
             + pid.to_bytes(2, byteorder='little') \
             + bytes([0]) * 2 \
             + size.to_bytes(4, byteorder='little') \
             + data
-
         return packet
 
     def read(self):
@@ -570,7 +554,6 @@ class USBLink(P000):
             buffer = self.dev.read(endpoint, size, timeout=timeout)
         except usb.core.USBError as e:
             raise LinkError(e.strerror)
-
         # pyusb returns an array object, but we want a bytes object
         return buffer.tobytes()
 
@@ -596,10 +579,8 @@ class USBLink(P000):
             except LinkError as e:
                 log.info(e)
                 retries += 1
-
         if retries > self.max_retries:
             raise LinkError("Maximum retries exceeded")
-
         return packet
 
     def send_packet(self, pid, data):
@@ -614,7 +595,6 @@ class USBLink(P000):
             except LinkError as e:
                 log.error(e)
                 retries += 1
-
         if retries > self.max_retries:
             raise LinkError("Maximum retries exceeded")
 
@@ -665,7 +645,6 @@ class USBLink(P000):
                 log.info("Received Session Started packet")
                 break
 
-
     def start_session(self):
         """Start USB session and return the unit ID.
 
@@ -711,7 +690,6 @@ class L000:
                     log.debug(f"Extra Product Data: {property[0].decode()}")
             else:
                 break
-
         return packet
 
     def expect_packet(self, pid):
@@ -721,7 +699,6 @@ class L000:
         packet = self.read_packet()
         if packet['id'] != pid:
             raise ProtocolError(f"Expected {pid:3}, got {packet['id']:3}")
-
         return packet
 
 
@@ -848,7 +825,6 @@ class A000:
         log.info(f"Product ID: {datatype.product_id}")
         log.info(f"Software version: {datatype.software_version:.2f}")
         log.info(f"Product description: {datatype.product_description.decode()}")
-
         return datatype
 
 
@@ -912,7 +888,6 @@ class A001:
                 protocols[-1].append(protocol_datatype)
             else:
                 log.info(f"Got unknown protocol or datatype '{protocol_datatype}'. Ignoring...")
-
         return protocols
 
 
@@ -1184,7 +1159,6 @@ class TransferProtocol:
             gps.link.send_packet(pid, data)
             if callback:
                 callback(datatype, idx+1, packet_count)
-
         gps.link.send_packet(gps.link.pid_xfer_cmplt, cmd)
 
 
@@ -1225,7 +1199,6 @@ class A100(TransferProtocol):
                 raise ProtocolError("Invalid class type: expected dict or {datatypes[0].__name__}")
             packet = {'id': pid, 'data': datatype}
             packets.append(packet)
-
         return TransferProtocol.put_data(self,
                                          gps.command.cmnd_transfer_wpt,
                                          packets,
@@ -1325,7 +1298,6 @@ class A200(TransferProtocol):
                     raise ProtocolError("Invalid class type: expected dict or {datatypes[0].__name__}")
                 packet = {'id': pid, 'data': datatype}
                 packets.append(packet)
-
         return TransferProtocol.put_data(self,
                                          gps.command.cmnd_transfer_rte,
                                          packets,
@@ -1421,7 +1393,6 @@ class A300(TransferProtocol):
                 raise ProtocolError("Invalid class type: expected dict or {datatypes[0].__name__}")
             packet = (pid, datatype)
             packets.append(packet)
-
         return TransferProtocol.put_data(self,
                                          gps.command.cmnd_transfer_trk,
                                          packets,
@@ -1478,7 +1449,6 @@ class A301(TransferProtocol):
                     raise ProtocolError("Invalid class type: expected dict or {datatypes[1].__name__}")
                 packet = (pid, datatype)
                 packets.append(packet)
-
         return TransferProtocol.put_data(self,
                                          gps.command.cmnd_transfer_trk,
                                          packets,
@@ -1535,7 +1505,6 @@ class A400(TransferProtocol):
                 raise ProtocolError("Invalid class type: expected dict or {datatypes[0].__name__}")
             packet = {'id': pid, 'data': datatype}
             packets.append(packet)
-
         return TransferProtocol.put_data(self,
                                          gps.command.cmnd_transfer_prx,
                                          packets,
@@ -1594,14 +1563,11 @@ class A600(TransferProtocol):
         datatype.unpack(packet['data'])
         if callback:
             callback(datatype, 1, 1)
-
         return datatype
 
 
 class A601(TransferProtocol):
-    """A601 implementation.
-
-    Used by GPSmap 60cs, no specifications as of 2004-09-26."""
+    """Undocumented application protocol."""
 
 
 class A650(TransferProtocol):
@@ -1650,7 +1616,6 @@ class A700(TransferProtocol):
         datatype.unpack(packet['data'])
         if callback:
             callback(datatype, 1, 1)
-
         return datatype
 
 
@@ -1691,26 +1656,19 @@ class A800(TransferProtocol):
         datatype.unpack(packet['data'])
         if callback:
             callback(datatype, 1, 1)
-
         return datatype
 
 
 class A801:
-    """A801 implementation.
-
-    Used by ?, no documentation as of 2001-05-30.
-    """
+    """Undocumented application protocol."""
 
 
 class A802:
-    """A802 implementation.
-
-    Used by ?, no documentation as of 2001-05-30.
-    """
+    """Undocumented application protocol."""
 
 
 class A900:
-    """A900 implementation.
+    """Map transfer protocol.
 
     This protocol is undocumented, but it appears to be a map transfer protocol.
     The implementation is derived from the GarminDev drivers of the abandoned
@@ -1902,7 +1860,7 @@ class A900:
 
 
 class A902:
-    """A902 implementation.
+    """Map unlock protocol.
 
     This protocol is undocumented, but it appears to be a map unlock protocol.
     The implementation is derived from the GarminDev drivers of the abandoned
@@ -1925,7 +1883,7 @@ class A902:
 
 
 class A903:
-    """Undocumented application protocol used by eTrex."""
+    """Undocumented application protocol."""
 
 
 class A904:
@@ -3610,7 +3568,7 @@ class D108(D103):
         self.cross_road = cross_road
 
     def get_wpt_class(self):
-        """return the waypoint class value.
+        """Return the waypoint class value.
 
         if an invalid value is received, the value will be user_wpt.
 
@@ -3618,7 +3576,7 @@ class D108(D103):
         return self._wpt_class.get(self.wpt_class, 0)
 
     def get_color(self):
-        """return the color value.
+        """Return the color value.
 
         """
         return self._color.get(self.color, 255)

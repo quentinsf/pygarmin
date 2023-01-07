@@ -4583,34 +4583,40 @@ class D1003(WorkoutOccurrence):
     _fields = WorkoutOccurrence._fields
 
 
-class HeartRateZones(DataType):
+class HeartRateZone(DataType):
     _fields = [('low_heart_rate', 'B'),   # In beats-per-minute, must be > 0
                ('high_heart_rate', 'B'),  # In beats-per-minute, must be > 0
                ('unused', 'H'),           # Unused. Set to 0.
                ]
 
 
-class SpeedZones(DataType):
+class SpeedZone(DataType):
     _fields = [('low_speed', 'f'),   # In meters-per-second
                ('high_speed', 'f'),  # In meters-per-second
                ('name', '16s'),      # Null-terminated speed-zone name
                ]
 
 
-class Activities(DataType):
-    _fields = [('gear_weight', 'f'),     # Weight of equipment in kilograms
-               ('max_heart_rate', 'B'),  # In beats-per-minute, must be > 0
-               ('unused1', 'B'),         # Unused. Set to 0.
-               ('unused2', 'H'),         # Unused. Set to 0.
+class Activity(DataType):
+    _heart_rate_zone_fmt = HeartRateZone.get_format()
+    _speed_zone_fmt = SpeedZone.get_format()
+    _fields = [('heart_rate_zones', f'5[{_heart_rate_zone_fmt}]'),
+               ('speed_zones', f'10[{_speed_zone_fmt}]'),
+               ('gear_weight', 'f'),                                # Weight of equipment in kilograms
+               ('max_heart_rate', 'B'),                             # In beats-per-minute, must be > 0
+               ('unused1', 'B'),                                    # Unused. Set to 0.
+               ('unused2', 'H'),                                    # Unused. Set to 0.
                ]
 
 
 class FitnessUserProfile(DataType):
-    _fields = [('weight', 'f'),       # User’s weight, in kilograms
-               ('birth_year', 'H'),   # No base value (i.e. 1990 means 1990)
-               ('birth_month', 'B'),  # 1 = January, etc.
-               ('birth_day', 'B'),    # 1 = first day of month, etc.
-               ('gender', 'B'),       # See below
+    _activity_fmt = Activity.get_format()
+    _fields = [('activities', f'3[{_activity_fmt}]'),
+               ('weight', 'f'),                        # User’s weight, in kilograms
+               ('birth_year', 'H'),                    # No base value (i.e. 1990 means 1990)
+               ('birth_month', 'B'),                   # 1 = January, etc.
+               ('birth_day', 'B'),                     # 1 = first day of month, etc.
+               ('gender', 'B'),                        # See below
                ]
     _gender = {0: 'female',
                1: 'male',

@@ -2455,6 +2455,8 @@ class A1012(TransferProtocol):
                                          callback=callback)
 
 
+class A1013(TransferProtocol):
+    """Undocumented application protocol."""
 
 
 class DataType():

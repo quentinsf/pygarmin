@@ -4817,6 +4817,10 @@ class ExternalTimeSyncData(DataType):
             else:
                 return timedelta(0)
 
+class D1015(D1011):
+    """Undocumented datatype."""
+    _fields = D1011._fields + [('unknown', '(5B)')]  # unknown additional bytes
+
 
 class D1051(ExternalTimeSyncData):
     pass

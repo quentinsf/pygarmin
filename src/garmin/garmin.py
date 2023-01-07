@@ -2289,6 +2289,16 @@ class A1000(TransferProtocol):
     """
 
     def get_data(self, callback=None):
+        runs = TransferProtocol.get_data(self,
+                                         gps.command.cmnd_transfer_runs,
+                                         gps.link.pid_run,
+                                         callback=callback)
+        laps = gps.lap_transfer.get_data(callback)
+        tracks = gps.track_log_transfer.get_data(callback)
+        return runs + laps + tracks
+
+
+    def get_data(self, callback=None):
         return TransferProtocol.get_data(self,
                                          gps.command.cmnd_transfer_runs,
                                          gps.link.pid_run,

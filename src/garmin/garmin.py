@@ -4710,7 +4710,7 @@ class D1001(Lap):
                ('start_time', f'{_time_fmt}'),  # Start of lap time
                ('total_time', 'I'),             # Duration of lap, in hundredths of a second
                ('total_dist', 'f'),             # Distance in meters
-               ('max_speed;', 'f'),             # In meters per second
+               ('max_speed', 'f'),              # In meters per second
                ('begin', f'({_posn_fmt})'),     # Invalid if both lat and lon are 0x7FFFFFFF
                ('end', f'({_posn_fmt})'),       # Invalid if both lat and lon are 0x7FFFFFFF
                ('calories', 'H'),               # Calories burned this lap

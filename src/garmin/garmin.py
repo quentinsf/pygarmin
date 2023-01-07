@@ -2298,11 +2298,205 @@ class A1000(TransferProtocol):
         return runs + laps + tracks
 
 
+class A1002(TransferProtocol):
+    """Workout Transfer Protocol.
+
+    Packet sequence:
+
+    ===== ==================== ======================== ==================
+       N   Direction            Packet ID                Packet Data Type
+    ===== ==================== ======================== ==================
+       0   Device1 to Device2   pid_command_data         Command
+       1   Device2 to Device1   pid_records              Records
+       2   Device2 to Device1   pid_workout              <D0>
+     …     …                    …                        …
+     m-2   Device2 to Device1   pid_workout              <D0>
+     m-1   Device2 to Device1   pid_xfer_cmplt           Command
+       m   Device1 to Device2   pid_command_data         Command
+     m+1   Device2 to Device1   pid_records              Records
+     m+2   Device2 to Device1   pid_workout_occurrence   Workout
+     …     …                    …                        …
+     n-2   Device2 to Device1   pid_workout_occurrence   Workout
+     n-1   Device2 to Device1   pid_xfer_cmplt           Command
+    ===== ==================== ======================== ==================
+
+    """
+    def get_data(self, callback=None):
+        workouts = TransferProtocol.get_data(self,
+                                             gps.command.cmnd_transfer_workouts,
+                                             gps.link.pid_workout,
+                                             callback=callback)
+        workout_occurrences = gps.workout_occurrence_transfer.get_data(callback)
+        return workouts + workout_occurrences
+
+
+class A1003(TransferProtocol):
+    """Workout Occurrence Transfer Protocol."""
+
     def get_data(self, callback=None):
         return TransferProtocol.get_data(self,
+                                         gps.command.cmnd_transfer_workout_occurrences,
+                                         gps.link.pid_workout_occurrence,
+                                         callback=callback)
+
+
+class A1004(TransferProtocol):
+    """Fitness User Profile Transfer Protocol.
+
+    Packet sequence:
+
+    === ==================== ========================== ==================
+     N   Direction            Packet ID                  Packet Data Type
+    === ==================== ========================== ==================
+     0   Device1 to Device2   pid_command_data           Command
+     1   Device2 to Device1   pid_fitness_user_profile   <D0>
+    === ==================== ========================== ==================
+
+    """
+
+    def get_data(self, callback=None):
+        gps.link.send_packet(gps.link.pid_command_data,
+                             gps.command.cmnd_transfer_fitness_user_profile)
+        packet = gps.link.expect_packet(gps.link.pid_fitness_user_profile)
+        datatype = self.datatypes[0]()
+        datatype.unpack(packet['data'])
+        if callback:
+            callback(datatype, 1, 1)
+        return datatype
+
+
+class A1005(TransferProtocol):
+    """Workout Limits Transfer Protocol.
+
+     N   Direction        Packet ID            Packet Data Type
+    === ================ ==================== ==================
+     0   Host to Device   pid_command_data     Command
+     1   Device to Host   pid_workout_limits   <D0>
+
+    """
+
+    def get_data(self, callback=None):
+        gps.link.send_packet(gps.link.pid_command_data,
+                              gps.command.cmnd_transfer_workout_limits)
+        packet = gps.link.expect_packet(gps.link.pid_workout_limits)
+        datatype = self.datatypes[0]()
+        datatype.unpack(packet['data'])
+        if callback:
+            callback(datatype, 1, 1)
+        return datatype
+
+
+class A1006(TransferProtocol):
+    """Course Transfer Protocol.
+
+    Packet sequence:
+
+    ===== ==================== ===================== ==================
+       N    Direction            Packet ID             Packet Data Type
+    ===== ==================== ===================== ==================
+       0    Device1 to Device2   pid_command_data      Command
+       1    Device2 to Device1   pid_records           Records
+       2    Device2 to Device1   pid_course            <D0>
+       …    …                    …                     …
+     j-2    Device2 to Device1   pid_course            <D0>
+     j-1    Device2 to Device1   pid_xfer_cmplt        Command
+       j    Device1 to Device2   pid_command_data      Command
+     j+1    Device2 to Device1   pid_records           Records
+     j+2    Device2 to Device1   pid_course_lap        CourseLap
+       …    …                    …                     …
+     k-2    Device2 to Device1   pid_course_lap        CourseLap
+     k-1    Device2 to Device1   pid_xfer_cmplt        Command
+       k    Device1 to Device2   pid_command_data      Command
+     k+1    Device2 to Device1   pid_records           Records
+     k+2    Device2 to Device1   pid_course_trk_hdr    Course_TrkHdr
+     k+3    Device2 to Device1   pid_course_trk_data   Course_TrkPoint
+       …    …                    …                     …
+     m-2    Device2 to Device1   pid_course_trk_data   Course_TrkPoint
+     m-1    Device2 to Device1   pid_xfer_cmplt        Command
+       m    Device1 to Device2   pid_command_data      Command
+     m+1    Device2 to Device1   pid_records           Records
+     m+2    Device2 to Device1   pid_course_point      CoursePoint
+       …    …                    …                     …
+     n-2    Device2 to Device1   pid_course_point      CoursePoint
+     n-1    Device2 to Device1   pid_xfer_cmplt        Command
+    ===== ==================== ===================== ==================
+
+    """
+
+    def get_data(self, callback=None):
+        runs = TransferProtocol.get_data(self,
                                          gps.command.cmnd_transfer_runs,
                                          gps.link.pid_run,
                                          callback=callback)
+        course_laps = gps.course_lap_transfer.get_data(callback)
+        # If the A1012 Course Track Transfer Protocol is supported, then the associated
+        # datatypes are used. Otherwise the datatypes used by the A302 Track Log
+        # Transfer Protocol are used.
+        if gps.registered_protocols.get('course_track_transfer_protocol') is not None:
+            course_tracks = gps.course_track_transfer.get_data(callback)
+        else:
+            protocol = A1012(gps, gps.track_log_transfer.datatypes)
+            course_tracks = protocol.get_data(callback)
+        course_points = gps.course_point_transfer.get_data(callback)
+        return runs + course_tracks + course_points
+
+
+class A1007(TransferProtocol):
+    """Course Lap Transfer Protocol."""
+
+    def get_data(self, callback=None):
+        return TransferProtocol.get_data(self,
+                                         gps.command.cmnd_transfer_course_laps,
+                                         gps.link.pid_course_lap,
+                                         callback=callback)
+
+
+class A1008(TransferProtocol):
+    """Course Point Transfer Protocol."""
+
+    def get_data(self, callback=None):
+        return TransferProtocol.get_data(self,
+                                         gps.command.cmnd_transfer_course_points,
+                                         gps.link.pid_course_point,
+                                         callback=callback)
+
+
+class A1009(TransferProtocol):
+    """Course Limits Transfer Protocol.
+
+    Packet sequence:
+
+    === ================ =================== ==================
+     N   Direction        Packet ID           Packet Data Type
+    === ================ =================== ==================
+     0   Host to Device   pid_command_data    Command
+     1   Device to Host   pid_course_limits   <D0>
+    === ================ =================== ==================
+
+    """
+
+    def get_data(self, callback=None):
+        gps.link.send_packet(gps.link.pid_command_data,
+                             gps.command.cmnd_transfer_course_limits)
+        packet = gps.link.expect_packet(gps.link.pid_course_limits)
+        datatype = self.datatypes[0]()
+        datatype.unpack(packet['data'])
+        if callback:
+            callback(datatype, 1, 1)
+        return datatype
+
+
+class A1012(TransferProtocol):
+    """Course Track Transfer Protocol."""
+
+    def get_data(self, callback=None):
+        return TransferProtocol.get_data(self,
+                                         gps.command.cmnd_transfer_course_tracks,
+                                         gps.link.pid_course_trk_hdr,
+                                         gps.link.pid_course_trk_data,
+                                         callback=callback)
+
+
 
 
 class DataType():
@@ -5479,10 +5673,14 @@ class Garmin():
         'A906': 'lap_transfer_protocol',
         'A1000': 'run_transfer_protocol',
         'A1002': 'workout_transfer_protocol',
+        'A1003': 'workout_occurrence_transfer_protocol',
         'A1004': 'fitness_user_profile_transfer_protocol',
         'A1005': 'workout_limits_transfer_protocol',
         'A1006': 'course_transfer_protocol',
+        'A1007': 'course_lap_transfer_protocol',
+        'A1008': 'course_point_transfer_protocol',
         'A1009': 'course_limits_transfer_protocol',
+        'A1012': 'course_track_transfer_protocol',
         'A1051': 'external_time_data_sync_protocol',
     }
 
@@ -5585,6 +5783,51 @@ class Garmin():
     def run_transfer(self):
         """Run Transfer Protocol."""
         return self._create_protocol('run_transfer_protocol', self)
+
+    @property
+    def workout_transfer(self):
+        """Workout Transfer Protocol."""
+        return self._create_protocol('workout_transfer_protocol', self)
+
+    @property
+    def workout_occurrence_transfer(self):
+        """Workout Occurrence Transfer Protocol."""
+        return self._create_protocol('workout_occurrence_transfer_protocol', self)
+
+    @property
+    def fitness_user_profile_transfer(self):
+        """Fitness User Profile Transfer Protocol."""
+        return self._create_protocol('fitness_user_profile_transfer_protocol', self)
+
+    @property
+    def workout_limits_transfer(self):
+        """Workout Limits Transfer Protocol."""
+        return self._create_protocol('workout_limits_transfer_protocol', self)
+
+    @property
+    def course_transfer(self):
+        """Course Transfer Protocol."""
+        return self._create_protocol('course_transfer_protocol', self)
+
+    @property
+    def course_lap_transfer(self):
+        """Course Lap Transfer Protocol."""
+        return self._create_protocol('course_lap_transfer_protocol', self)
+
+    @property
+    def course_point_transfer(self):
+        """Course Point Transfer Protocol."""
+        return self._create_protocol('course_point_transfer_protocol', self)
+
+    @property
+    def course_limits_transfer(self):
+        """Course Limits Transfer Protocol."""
+        return self._create_protocol('course_limits_transfer_protocol', self)
+
+    @property
+    def course_track_transfer(self):
+        """Course Track Transfer Protocol."""
+        return self._create_protocol('course_track_transfer_protocol', self)
 
     @property
     def screenshot_transfer(self):
@@ -5789,32 +6032,6 @@ class Garmin():
             raise GarminError("Protocol proximity_waypoint_transfer_protocol is not supported")
         return self.proximity_waypoint_transfer.put_data(data, callback)
 
-    def get_laps(self, callback=None):
-        """Download laps.
-
-        :param callback: optional callback function
-        :type callback: function or None
-        :return: list of lap datatypes
-        :rtype: list
-
-        """
-        if self.lap_transfer is None:
-            raise GarminError("Protocol lap_transfer_protocol is not supported")
-        return self.lap_transfer.get_data(callback)
-
-    def get_runs(self, callback=None):
-        """Download runs.
-
-        :param callback: optional callback function
-        :type callback: function or None
-        :return: list of run datatypes
-        :rtype: list
-
-        """
-        if self.run_transfer is None:
-            raise GarminError("Protocol run_transfer_protocol is not supported")
-        return self.run_transfer.get_data(callback)
-
     def get_almanac(self, callback=None):
         return self.almanac_transfer.get_data(callback)
 
@@ -5935,6 +6152,149 @@ class Garmin():
         # Restore the baudrate to the original value
         if isinstance(self.phys, SerialLink) and self.transmission:
             self.transmission.set_baudrate(current_baudrate)
+
+    def get_laps(self, callback=None):
+        """Download laps.
+
+        :param callback: optional callback function
+        :type callback: function or None
+        :return: list of lap datatypes
+        :rtype: list
+
+        """
+        if self.lap_transfer is None:
+            raise GarminError("Protocol lap_transfer_protocol is not supported")
+        return self.lap_transfer.get_data(callback)
+
+    def get_runs(self, callback=None):
+        """Download runs.
+
+        :param callback: optional callback function
+        :type callback: function or None
+        :return: list of run datatypes
+        :rtype: list
+
+        """
+        if self.run_transfer is None:
+            raise GarminError("Protocol run_transfer_protocol is not supported")
+        return self.run_transfer.get_data(callback)
+
+    def get_workouts(self, callback=None):
+        """Download workouts.
+
+        :param callback: optional callback function
+        :type callback: function or None
+        :return: list of workout datatypes
+        :rtype: list
+
+        """
+        if self.workout_transfer is None:
+            raise GarminError("Protocol workout_transfer_protocol is not supported")
+        return self.workout_transfer.get_data(callback)
+
+    def get_workout_occurrences(self, callback=None):
+        """Download workout occurrences.
+
+        :param callback: optional callback function
+        :type callback: function or None
+        :return: list of workout occurrence datatypes
+        :rtype: list
+
+        """
+        if self.workout_occurrence_transfer is None:
+            raise GarminError("Protocol workout_occurrence_transfer_protocol is not supported")
+        return self.workout_occurrence_transfer.get_data(callback)
+
+    def get_fitness_user_profiles(self, callback=None):
+        """Download workout occurrences.
+
+        :param callback: optional callback function
+        :type callback: function or None
+        :return: list of workout occurrence datatypes
+        :rtype: list
+
+        """
+        if self.fitness_user_profile_transfer is None:
+            raise GarminError("Protocol fitness_user_profile_transfer_protocol is not supported")
+        return self.fitness_user_profile_transfer.get_data(callback)
+
+    def get_workout_limits(self, callback=None):
+        """Download workout limits.
+
+        :param callback: optional callback function
+        :type callback: function or None
+        :return: list of workout limits datatypes
+        :rtype: list
+
+        """
+        if self.workout_limits_transfer is None:
+            raise GarminError("Protocol workout_limits_transfer_protocol is not supported")
+        return self.workout_limits_transfer.get_data(callback)
+
+    def get_courses(self, callback=None):
+        """Download workout occurrences.
+
+        :param callback: optional callback function
+        :type callback: function or None
+        :return: list of workout occurrence datatypes
+        :rtype: list
+
+        """
+        if self.course_transfer is None:
+            raise GarminError("Protocol course_transfer_protocol is not supported")
+        return self.course_transfer.get_data(callback)
+
+    def get_course_laps(self, callback=None):
+        """Download workout occurrences.
+
+        :param callback: optional callback function
+        :type callback: function or None
+        :return: list of workout occurrence datatypes
+        :rtype: list
+
+        """
+        if self.course_lap_transfer is None:
+            raise GarminError("Protocol course_lap_transfer_protocol is not supported")
+        return self.course_lap_transfer.get_data(callback)
+
+    def get_course_points(self, callback=None):
+        """Download workout occurrences.
+
+        :param callback: optional callback function
+        :type callback: function or None
+        :return: list of workout occurrence datatypes
+        :rtype: list
+
+        """
+        if self.course_point_transfer is None:
+            raise GarminError("Protocol course_point_transfer_protocol is not supported")
+        return self.course_point_transfer.get_data(callback)
+
+    def get_course_limits(self, callback=None):
+        """Download course limits.
+
+        :param callback: optional callback function
+        :type callback: function or None
+        :return: list of course limits datatypes
+        :rtype: list
+
+        """
+        if self.course_limits_transfer is None:
+            raise GarminError("Protocol course_limits_transfer_protocol is not supported")
+        return self.course_limits_transfer.get_data(callback)
+
+    def get_course_tracks(self, callback=None):
+        """Download workout occurrences.
+
+        :param callback: optional callback function
+        :type callback: function or None
+        :return: list of workout occurrence datatypes
+        :rtype: list
+
+        """
+        if self.course_track_transfer is None:
+            raise GarminError("Protocol course_track_transfer_protocol is not supported")
+        return self.course_track_transfer.get_data(callback)
 
     def get_screenshot(self, callback=None):
         """Capture screenshot.

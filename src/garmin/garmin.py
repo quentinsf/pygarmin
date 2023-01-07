@@ -2253,6 +2253,10 @@ class A906(TransferProtocol):
                                          callback=callback)
 
 
+class A907(TransferProtocol):
+    """Undocumented application protocol."""
+
+
 class A1000(TransferProtocol):
     """Run Transfer Protocol.
 
@@ -4454,6 +4458,21 @@ class D906(Lap):
                ('track_index', 'B'),         # See below
                ('unused', 'B'),              # Unused. Set to 0.
                ]
+
+class D907(DataType):
+    """Undocumented datatype."""
+
+
+class D908(DataType):
+    """Undocumented datatype."""
+
+
+class D909(DataType):
+    """Undocumented datatype."""
+
+
+class D910(DataType):
+    """Undocumented datatype."""
 
 
 class Step(DataType):

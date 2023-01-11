@@ -2131,43 +2131,57 @@ class ScreenshotTransfer:
         packet = self.gps.link.expect_packet(self.gps.link.pid_screen_data)
         datatype = ScreenshotHeader()
         datatype.unpack(packet['data'])
+        # Each row is padded to a multiple of 4 bytes in size. The bytewidth can
+        # be calculated with the formula below, but the bytewidth is also given
+        # in the header.
+        # row_size = ( width * bpp // 8)
+        # bytewidth = math.ceil(row_size / 4) * 4
+        bytewidth = datatype.bytewidth
+        bpp = datatype.bpp
+        width = datatype.width
+        height = datatype.height
         dimensions = datatype.get_dimensions()
         pixel_size = datatype.get_size()
         colors_used = datatype.get_colors_used()
         log.info(f"Dimensions: {'x'.join(map(str, dimensions))} pixels")
         log.info(f"Size: {pixel_size} bytes")
-        log.info(f"Bits per pixel: {datatype.bpp}")
+        log.info(f"Bits per pixel: {bpp}")
         log.info(f"Colors used: {colors_used}")
+        # The data is sent in chunks of maximum 128 bytes, so larger rows are
+        # split up to multiple packets
+        max_chunk_size = 128
+        chunk_count = math.ceil(bytewidth / max_chunk_size)
+        packet_size = ( chunk_count * 8 ) + bytewidth
+        pixel_data_size = packet_size * height
+        received_bytes = 0
         if colors_used is None or colors_used == 0:
             raise GarminError("Screenshots without a color palette are not supported")
-        # The color table is sent per color, so each packet data size is 11
-        # bytes, consisting of 4 bytes for the section, 4 bytes for the offset,
-        # and 3 bytes for the color.
-        color_table_size = colors_used * 11
+        elif colors_used == 4:
+            total_bytes = pixel_data_size
+        else:
+            # The color table is sent per color, so each packet data size is 11
+            # bytes, consisting of 4 bytes for the section, 4 bytes for the offset,
+            # and 3 bytes for the color.
+            color_table_size = colors_used * 11
+            total_bytes = color_table_size + pixel_data_size
+            log.info("Expect color table")
+            color_table = bytes()
+            while received_bytes < color_table_size:
+                packet = self.gps.link.expect_packet(self.gps.link.pid_screen_data)
+                datatype = ScreenshotChunk()
+                datatype.unpack(packet['data'])
+                section = datatype.get_section()
+                if section == 'color_table':
+                    color_table += datatype.chunk
+                    received_bytes += len(packet['data'])
+                    if callback:
+                        callback(datatype, received_bytes, total_bytes)
+                else:
+                    raise ProtocolError(f"Invalid section: expected color_table, got {section}")
+        log.info("Expect pixel data")
         # The pixel data is sent per row, "bottom-up", with a packet data size
         # of maximum 136 bytes, consisting of 4 bytes for the section, 4 bytes
         # for the offset, and maximum 128 bytes for the chunk of pixel data.
-        max_chunk_size = 128
-        chunk_count = math.ceil(datatype.width / max_chunk_size)
-        row_size = chunk_count * 8 + datatype.width
-        pixel_data_size = row_size * datatype.height
-        total_bytes = color_table_size + pixel_data_size
-        received_bytes = 0
-        log.info("Expect color table")
-        color_table = bytes()
-        while received_bytes < color_table_size:
-            packet = self.gps.link.expect_packet(self.gps.link.pid_screen_data)
-            datatype = ScreenshotChunk()
-            datatype.unpack(packet['data'])
-            section = datatype.get_section()
-            if section == 'color_table':
-                color_table += datatype.chunk
-                received_bytes += len(packet['data'])
-                if callback:
-                    callback(datatype, received_bytes, total_bytes)
-            else:
-                raise ProtocolError(f"Invalid section: expected color_table, got {section}")
-        log.info("Expect pixel data")
         pixel_data = bytes()
         while received_bytes < total_bytes:
             packet = self.gps.link.expect_packet(self.gps.link.pid_screen_data)
@@ -2181,9 +2195,44 @@ class ScreenshotTransfer:
                     callback(datatype, received_bytes, total_bytes)
             else:
                 raise ProtocolError(f"Invalid section: expected pixel_data, got {section}")
-        image = PIL.Image.frombytes(mode='P', size=dimensions, data=pixel_data, decoder_name='raw')
-        image.putpalette(color_table, rawmode='BGR')
-        return image.transpose(method=PIL.Image.Transpose.ROTATE_180)
+        if colors_used == 4:
+            # The Python Imaging Library doesn't support 2-bit pixels,
+            # so we have to upscale the color depth from 2 to 8 bpp. The
+            # row size, bytewidth and padding are therefore also
+            # multiplied by 4. Because the 2 bpp BMP format is a 4-tone
+            # grayscale format, the used mode is 8-bit grayscale.
+            mode = 'L'
+            bytewidth *= 4
+            data = bytes()
+            for int_value in pixel_data:
+                # Create a bit string from the byte
+                bit_value = f"{int_value:08b}"
+                # Split the bit string in the number of bits per pixel
+                for pos in range(0, len(bit_value), bpp):
+                    pixel = bit_value[pos:pos+bpp]
+                    # Convert the bit string to an integer
+                    # 0 means black, 3 means white
+                    value = int(pixel, 2)
+                    # Multiply by 85 to get the 8 bit grayscale value
+                    # 0 means black, 255 means white.
+                    new_value = value * 85
+                    byte = new_value.to_bytes(1, byteorder='little')
+                    data += byte
+        else:
+            mode = 'P'
+            data = pixel_data
+        log.info("Create image from pixel data")
+        image = PIL.Image.frombytes(mode,
+                                    dimensions,
+                                    data,
+                                    'raw',
+                                    mode,
+                                    bytewidth,
+                                    -1)
+        if mode == 'P':
+            log.info("Attach palette to image")
+            image.putpalette(color_table, rawmode='RGB')
+        return image
 
 
 class A906(TransferProtocol):
@@ -5267,8 +5316,8 @@ class ImageChunk(DataType):
         self.data = data
 
 
-class BGR(DataType):
-    """BGR is a sRGB format that uses 24 bits of data per per pixel.
+class RGB(DataType):
+    """RGB is a sRGB format that uses 24 bits of data per per pixel.
 
     Each color channel (blue, green, and red) is allocated 8 bits per pixel
     (BPP).
@@ -5301,7 +5350,10 @@ class Screenshot(DataType):
     bitmap data stores a single value used as an index into the color palette.
     1-, 4-, and 8-bit BMP files are expected to always contain a color palette.
     16-, 24-, and 32-bit BMP files never contain color palettes. 16- and 32-bit
-    BMP files contain bitfields mask values in place of the color palette.
+    BMP files contain bitfields mask values in place of the color palette. 2-bit
+    BMP files were added for Windows CE
+    (http://fileformats.archiveteam.org/wiki/Pocket_PC_Bitmap), but are not well
+    supported.
 
     The pixel data is a series of values representing either color palette
     indices or actual RGB color values. Pixels are packed into bytes and
@@ -5325,13 +5377,11 @@ class Screenshot(DataType):
 
 
 class ScreenshotHeader(Screenshot):
-    _fields = Screenshot._fields + [('unknown1', 'I'),   # width in bytes?
+    _fields = Screenshot._fields + [('bytewidth', 'I'),  # width in bytes
                                     ('bpp', 'I'),        # bits per pixel or color depth
                                     ('width', 'I'),      # width in pixels
                                     ('height', 'I'),     # heigth in pixels
-                                    ('unknown2', 'I'),
-                                    ('unknown3', 'I'),
-                                    ('unknown4', 'I'),
+                                    ('unknown2', '(12B)'),
                                     ]
 
     def get_dimensions(self):
@@ -5348,11 +5398,11 @@ class ScreenshotHeader(Screenshot):
 
 
 class ScreenshotColorTable(Screenshot):
-    _bgr_fmt = BGR.get_format()
+    _bgr_fmt = RGB.get_format()
     _fields = Screenshot._fields + [('color', f'{_bgr_fmt}')]
 
     def get_colors(self):
-        return BGR(*self.color)
+        return RGB(*self.color)
 
 
 class ScreenshotChunk(Screenshot):

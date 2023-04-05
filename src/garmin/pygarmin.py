@@ -682,12 +682,11 @@ class Pygarmin:
 
     def __init__(self, port):
         self.port = port
-        self.gps = self.get_gps(self.port)
+        self.gps = self.get_gps()
 
-
-    def get_gps(self, port):
-        phys = garmin.USBLink() if port == 'usb:' else garmin.SerialLink(port)
-        log.info(f"listening on port {port}")
+    def get_gps(self):
+        phys = garmin.USBLink() if self.port == 'usb:' else garmin.SerialLink(self.port)
+        log.info(f"listening on port {self.port}")
         return garmin.Garmin(phys)
 
     def info(self, args):

@@ -5245,7 +5245,7 @@ class ImageInformationHeader(DataType):
     _fields = (('unknown1', 'B'),
                ('bpp', 'B'),                 # bits per pixel or color depth
                ('unknown2', 'H'),
-               ('height', 'H'),              # heigth in pixels
+               ('height', 'H'),              # height in pixels
                ('width', 'H'),               # width in pixels
                ('bytewidth', 'H'),           # width in bytes?
                ('unknown3', 'H'),
@@ -5380,7 +5380,7 @@ class ScreenshotHeader(Screenshot):
     _fields = Screenshot._fields + [('bytewidth', 'I'),  # width in bytes
                                     ('bpp', 'I'),        # bits per pixel or color depth
                                     ('width', 'I'),      # width in pixels
-                                    ('height', 'I'),     # heigth in pixels
+                                    ('height', 'I'),     # height in pixels
                                     ('unknown2', '(12B)'),
                                     ]
 

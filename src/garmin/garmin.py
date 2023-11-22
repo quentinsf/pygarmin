@@ -430,10 +430,17 @@ class USBLink(P000):
         and cache the resulting value for future use.
 
         """
-        dev = usb.core.find(idVendor=self.idVendor)
-        if dev is None:
+        device = usb.core.find(idVendor=self.idVendor)
+        if device is None:
             raise LinkError("Garmin device not found")
-        return dev
+        for cfg in device:
+            for intf in cfg:
+                if device.is_kernel_driver_active(intf.bInterfaceNumber):
+                    try:
+                        device.detach_kernel_driver(intf.bInterfaceNumber)
+                    except usb.core.USBError as e:
+                        raise LinkError(f"Could not detach kernel driver from interface({intf.bInterfaceNumber}): {e}")
+        return device
 
     @cached_property
     def cfg(self):

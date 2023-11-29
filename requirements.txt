@@ -1,4 +1,5 @@
 gpxpy>=1.5.0
+microbmp>=0.3.0
 Pillow>=9.3.0
 pyserial>=3.5
 pyusb>=1.2.1

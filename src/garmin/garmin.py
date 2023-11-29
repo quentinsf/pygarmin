@@ -64,8 +64,8 @@ import io
 import json
 import logging
 import math
+from microbmp import MicroBMP
 import os
-import PIL.Image
 import rawutil
 import re
 import serial
@@ -1960,9 +1960,7 @@ class ImageTransfer:
             images.append(image_dict)
         return images
 
-    def get_image(self, idx=None, callback=None):
-        log.info("Turn off async mode")
-        self.gps.link.send_packet(self.gps.link.pid_enable_async_events, b'\x00\x00')
+    def get_image_properties(self, idx=None):
         log.info("Request image properties")
         self.gps.link.send_packet(self.gps.link.pid_image_props_rx, idx)
         packet = self.gps.link.expect_packet(self.gps.link.pid_image_props_tx)
@@ -1970,160 +1968,144 @@ class ImageTransfer:
             raise ValueError(f"Invalid symbol index {idx}")
         datatype = ImageInformationHeader()
         datatype.unpack(packet['data'])
-        dimensions = datatype.get_dimensions()
-        pixel_size = datatype.get_size()
-        colors_used = datatype.get_colors_used()
-        log.info(f"Dimensions: {'x'.join(map(str, dimensions))} pixels")
-        log.info(f"Size: {pixel_size} bytes")
-        log.info(f"Bits per pixel: {datatype.bpp}")
-        log.info(f"Colors used: {colors_used}")
-        if colors_used is None or colors_used == 0:
-            raise GarminError("Images without a color palette are not supported")
+        color = datatype.get_color()
+        log.info(f"Dimensions: {datatype.width}x{datatype.height} pixels")
+        log.info(f"Color depth: {datatype.bpp} bits per pixel")
+        log.info(f"Transparency color: {(color.red, color.green, color.blue) if color else None}")
+        return datatype
+
+    def get_image_id(self, idx=None):
         log.info("Request image ID")
         self.gps.link.send_packet(self.gps.link.pid_image_id_rx, idx)
         packet = self.gps.link.expect_packet(self.gps.link.pid_image_id_tx)
-        receive = ImageId()
-        receive.unpack(packet['data'])
-        log.info(f"Image ID: {receive.id}")
-        log.info(f"Request color table for image ID {receive.id}")
-        # The color table is sent in one packet, consisting of 4 bytes for the
-        # id, and 4 bytes per color.
-        color_table_size = colors_used * 4 + 4
-        # The pixel data is sent in chunks, with a packet data size of maximum
-        # 500 bytes, consisting of 4 bytes for the id and maximum 496 bytes for
-        # the chunk of pixel data. Finally, a packet with only the 4 byte id is
-        # sent.
-        max_chunk_size = 496
-        chunk_count = math.ceil(pixel_size / max_chunk_size)
-        pixel_data_size = chunk_count * 4 + pixel_size + 4
-        total_bytes = color_table_size + pixel_data_size
-        received_bytes = 0
-        self.gps.link.send_packet(self.gps.link.pid_color_table_rx, receive.get_data())
+        datatype = ImageId()
+        datatype.unpack(packet['data'])
+        log.info(f"Image ID: {datatype.id}")
+        return datatype
+
+    def get_color_table(self, image_id):
+        log.info(f"Request color table for image ID {image_id.id}")
+        self.gps.link.send_packet(self.gps.link.pid_color_table_rx, image_id.get_data())
         packet = self.gps.link.expect_packet(self.gps.link.pid_color_table_tx)
-        received_bytes += len(packet['data'])
-        if callback:
-            callback(datatype, received_bytes, total_bytes)
         datatype = ImageColorTable()
         datatype.unpack(packet['data'])
-        palette = datatype.get_palette()
-        log.info(f"Request pixel data for image ID {receive.id}")
-        pixel_data = bytes()
-        while True:
-            self.gps.link.send_packet(self.gps.link.pid_image_data_rx, receive.get_data())
+        colors = [(color.red, color.green, color.blue) for color in datatype.get_colors()]
+        log.info(f"Color table: {*colors,}")
+        return datatype
+
+    def put_color_table(self, color_table):
+        # The color table is sent in one packet, consisting of 4 bytes for the
+        # id, and 4 bytes per color.
+        log.info(f"Send color table for image ID {color_table.id}")
+        self.gps.link.send_packet(self.gps.link.pid_color_table_tx, color_table.get_data())
+        packet = self.gps.link.expect_packet(self.gps.link.pid_color_table_rx)
+        datatype = ImageId()
+        datatype.unpack(packet['data'])
+        if datatype.id != color_table.id:
+            raise ProtocolError(f"Expected {color_table.id}, got {datatype.id}")
+
+    def get_image(self, idx, callback=None):
+        log.info(f"Request image {idx}...")
+        props = self.get_image_properties(idx)
+        bpp = props.bpp
+        height = props.height
+        width = props.width
+        bytewidth = props.bytewidth
+        bytesize = props.get_bytesize()
+        colors_used = props.get_colors_used()
+        row_size = props.get_row_size()
+        bmp = MicroBMP(width, height, bpp)
+        image_id = self.get_image_id(idx)
+        if colors_used is None:
+            raise GarminError(f"Unsupported color depth {bpp} bpp")
+        elif colors_used == 0:
+            log.info(f"{bpp}-bit color depth has no color table")
+        else:
+            color_table = self.get_color_table(image_id)
+            # The color table can contain more colors than the number of colors
+            # used
+            bmp.palette = color_table.get_palette()[:colors_used]
+        # The pixel array is sent in chunks, with a packet data size of maximum
+        # 500 bytes, consisting of 4 bytes for the id and maximum 496 bytes for
+        # the chunk of pixel array.
+        max_chunk_size = 496
+        chunk_count = math.ceil(bytesize / max_chunk_size)
+        log.info(f"Image: Expecting {chunk_count} chunks")
+        pixel_array = bytearray()
+        for idx in range(chunk_count):
+            self.gps.link.send_packet(self.gps.link.pid_image_data_rx, image_id.get_data())
             packet = self.gps.link.expect_packet(self.gps.link.pid_image_data_tx)
-            received_bytes += len(packet['data'])
             datatype = ImageChunk()
             datatype.unpack(packet['data'])
+            pixel_array.extend(datatype.chunk)
             if callback:
-                callback(datatype, received_bytes, total_bytes)
-            if not datatype.data:
-                break
-            else:
-                pixel_data += datatype.data
-        log.info(f"Completed request pixel data for image ID {receive.id}")
-        self.gps.link.send_packet(self.gps.link.pid_image_data_cmplt, receive.get_data())
-        log.info("Create image from pixel data")
-        image = PIL.Image.frombytes(mode='P', size=dimensions, data=pixel_data, decoder_name='raw')
-        log.info("Attach palette to image")
-        image.putpalette(palette, rawmode='RGB')
-        return image.transpose(method=PIL.Image.Transpose.ROTATE_180)
+                callback(datatype, idx+1, chunk_count)
+        self.gps.link.send_packet(self.gps.link.pid_image_data_cmplt, image_id.get_data())
+        log.info(f"Completed request pixel array for image ID {image_id.id}")
+        # The pixels are stored "bottom-up", starting in the lower left corner,
+        # going from left to right, and then row by row from the bottom to the
+        # top of the image. The bits are packed in rows (also known as strides
+        # or scan lines). The size of each row is rounded up to a multiple of 4
+        # bytes (a 32-bit DWORD) by padding. For images with a height above 1,
+        # multiple padded rows are stored consecutively, forming a pixel array.
+        # Rearrange the pixel array from bottom-up to top-down and remove padding
+        bmp.parray = bytearray()
+        for pos in range(0, len(pixel_array), bytewidth):
+            row = pixel_array[::-1][pos:pos+row_size]
+            bmp.parray.extend(row)
+        return bmp
 
-    def put_image(self, idx=None, image=None, callback=None):
-        log.info("Turn off async mode")
-        self.gps.link.send_packet(self.gps.link.pid_enable_async_events, b'\x00\x00')
-        log.info("Request image properties")
-        self.gps.link.send_packet(self.gps.link.pid_image_props_rx, idx)
-        packet = self.gps.link.expect_packet(self.gps.link.pid_image_props_tx)
-        if not packet['data']:
-            raise ValueError(f"Invalid symbol index {idx}")
-        datatype = ImageInformationHeader()
-        datatype.unpack(packet['data'])
-        dimensions = datatype.get_dimensions()
-        pixel_size = datatype.get_size()
-        bpp = datatype.bpp
-        colors_used = datatype.get_colors_used()
-        log.info(f"Dimensions: {'x'.join(map(str, dimensions))} pixels")
-        log.info(f"Size: {pixel_size} bytes")
-        log.info(f"Bits per pixel: {bpp}")
-        log.info(f"Colors used: {colors_used}")
-        if colors_used is None or colors_used == 0:
-            raise GarminError("Images without a color palette are not supported")
-        log.info("Request image ID")
-        self.gps.link.send_packet(self.gps.link.pid_image_id_rx, idx)
-        packet = self.gps.link.expect_packet(self.gps.link.pid_image_id_tx)
-        transmit = ImageId()
-        transmit.unpack(packet['data'])
-        log.info(f"Image ID: {transmit.id}")
-        log.info(f"Request color table for image ID {transmit.id}")
-        self.gps.link.send_packet(self.gps.link.pid_color_table_rx, transmit.get_data())
-        packet = self.gps.link.expect_packet(self.gps.link.pid_color_table_tx)
-        datatype = ImageColorTable()
-        datatype.unpack(packet['data'])
-        palette = datatype.get_palette()
-        # The color table is sent in one packet, consisting of 4 bytes for the
-        # id, and 4 bytes per color.
-        color_table_size = colors_used * 4 + 4
-        # The pixel data is sent in chunks, with a packet data size of maximum
+    def put_image(self, idx, bmp, callback=None):
+        props = self.get_image_properties(idx)
+        bpp = props.bpp
+        height = props.height
+        width = props.width
+        bytewidth = props.bytewidth
+        bytesize = props.get_bytesize()
+        colors_used = props.get_colors_used()
+        row_size = props.get_row_size()
+        if bpp != bmp.DIB_depth:
+            raise GarminError(f"Image has wrong color depth: expected {bpp} bpp, got {bmp.DIB_depth} bpp")
+        if width != bmp.DIB_w or height != bmp.DIB_h:
+            raise GarminError(f"Image has wrong dimensions: expected {width}x{height} pixels, got {bmp.DIB_w}x{bmp.DIB_h} pixels")
+        image_id = self.get_image_id(idx)
+        if colors_used is None:
+            raise ProtocolError(f"Unsupported color depth {bpp} bpp")
+        elif colors_used == 0:
+            log.info(f"{bpp}-bit color depth has no color table")
+        else:
+            color_table = self.get_color_table(image_id)
+            # The color table can contain more colors than the number of colors
+            # used
+            palette = color_table.get_palette()[:colors_used]
+            if bmp.palette != palette:
+                raise GarminError("Image has the wrong color palette")
+            self.put_color_table(color_table)
+        pixel_array = bytes(bmp.parray)
+        log.info(f"Send pixel array for image ID {image_id.id}")
+        # The pixel array is sent in chunks, with a packet data size of maximum
         # 500 bytes, consisting of 4 bytes for the id and maximum 496 bytes for
-        # the chunk of pixel data. Finally, a packet with only the 4 byte id is
-        # sent.
+        # the chunk of pixel array. After every chunk a packet with only the 4
+        # byte ID is received.
         max_chunk_size = 496
-        chunk_count = math.ceil(pixel_size / max_chunk_size)
-        pixel_data_size = chunk_count * 4 + pixel_size + 4
-        total_bytes = color_table_size + pixel_data_size
-        sent_bytes = 0
-        log.info(f"Send color table for image ID {transmit.id}")
-        # Use the just received color table of the existing image
-        data = datatype.get_data()
-        self.gps.link.send_packet(self.gps.link.pid_color_table_tx, data)
-        sent_bytes += len(data)
-        if callback:
-            callback(datatype, sent_bytes, total_bytes)
-        packet = self.gps.link.expect_packet(self.gps.link.pid_color_table_rx)
-        receive = ImageId()
-        receive.unpack(packet['data'])
-        if receive.id != transmit.id:
-            raise ProtocolError(f"Expected {transmit.id}, got {receive.id}")
-        out = image.transpose(method=PIL.Image.Transpose.ROTATE_180)
-        if out.mode in ('RGBA', 'LA','PA'):
-            log.info(f"Replace the alpha channel with magenta as transparency color")
-            color=(255, 0, 255)
-            alpha = out.getchannel('A')
-            # convert semi-transparent pixels to black and white
-            mask = out.convert(mode='1')
-            background = PIL.Image.new('RGB', out.size, color)
-            background.paste(out, mask=mask)
-            out = background
-        if out.size != dimensions:
-            log.info(f"Resize image to {'x'.join(map(str, dimensions))} pixels")
-            out = out.resize(dimensions)
-        if not (out.mode == 'P' and out.palette == palette):
-            log.info(f"Convert image to {bpp}-bit RGB format")
-            out = out.convert(mode='RGB')
-            log.info(f"Quantize image to the received color palette.")
-            new_image = PIL.Image.new('P', dimensions)
-            new_palette = PIL.ImagePalette.ImagePalette(palette=palette)
-            new_image.putpalette(new_palette)
-            out = out.quantize(colors=colors_used, palette=new_image)
-        pixel_data = out.tobytes()
-        log.info(f"Send pixel data for image ID {transmit.id}")
-        datatype = ImageChunk(transmit.id, pixel_data)
-        datatype.pack()
-        data = datatype.get_data()
-        self.gps.link.send_packet(self.gps.link.pid_image_data_tx, data)
-        sent_bytes += len(data)
-        if callback:
-            callback(datatype, sent_bytes, total_bytes)
-        packet = self.gps.link.expect_packet(self.gps.link.pid_image_data_rx)
-        receive = ImageId()
-        receive.unpack(packet['data'])
-        if receive.id != transmit.id:
-            raise ProtocolError(f"Expected {transmit.id}, got {receive.id}")
-        log.info(f"Completed send pixel data for image ID {transmit.id}")
-        self.gps.link.send_packet(self.gps.link.pid_image_data_cmplt, transmit.get_data())
-        sent_bytes += len(transmit.get_data())
-        if callback:
-            callback(transmit, sent_bytes, total_bytes)
+        chunk_count = math.ceil(bytesize / max_chunk_size)
+        log.info(f"Image: Sending {chunk_count} chunks")
+        padding = bytes(bytewidth - row_size)
+        for idx, pos in enumerate(range(0, len(pixel_array), row_size)):
+            chunk = pixel_array[::-1][pos:pos+row_size]
+            chunk += bytes(padding)
+            datatype = ImageChunk(image_id.id, chunk)
+            datatype.pack()
+            self.gps.link.send_packet(self.gps.link.pid_image_data_tx, datatype.get_data())
+            if callback:
+                callback(datatype, idx+1, chunk_count)
+            packet = self.gps.link.expect_packet(self.gps.link.pid_image_data_rx)
+            datatype = ImageId()
+            datatype.unpack(packet['data'])
+            if datatype.id != image_id.id:
+                raise ProtocolError(f"Expected {image_id.id}, got {datatype.id}")
+        self.gps.link.send_packet(self.gps.link.pid_image_data_cmplt, image_id.get_data())
+        log.info(f"Completed send pixel array for image ID {image_id.id}")
 
 
 class ScreenshotTransfer:
@@ -2138,109 +2120,83 @@ class ScreenshotTransfer:
         packet = self.gps.link.expect_packet(self.gps.link.pid_screen_data)
         datatype = ScreenshotHeader()
         datatype.unpack(packet['data'])
+        bpp = datatype.bpp
+        height = datatype.height
+        width = datatype.width
+        bytesize = datatype.get_bytesize()
+        colors_used = datatype.get_colors_used()
+        row_size = datatype.get_row_size()
         # Each row is padded to a multiple of 4 bytes in size. The bytewidth can
         # be calculated with the formula below, but the bytewidth is also given
         # in the header.
-        # row_size = ( width * bpp // 8)
         # bytewidth = math.ceil(row_size / 4) * 4
         bytewidth = datatype.bytewidth
-        bpp = datatype.bpp
-        width = datatype.width
-        height = datatype.height
-        dimensions = datatype.get_dimensions()
-        pixel_size = datatype.get_size()
-        colors_used = datatype.get_colors_used()
-        log.info(f"Dimensions: {'x'.join(map(str, dimensions))} pixels")
-        log.info(f"Size: {pixel_size} bytes")
-        log.info(f"Bits per pixel: {bpp}")
-        log.info(f"Colors used: {colors_used}")
+        log.info(f"Dimensions: {datatype.width}x{datatype.height} pixels")
+        log.info(f"Color depth: {datatype.bpp} bits per pixel")
+        bmp = MicroBMP(width, height, bpp)
         # The data is sent in chunks of maximum 128 bytes, so larger rows are
         # split up to multiple packets
         max_chunk_size = 128
-        chunk_count = math.ceil(bytewidth / max_chunk_size)
-        packet_size = ( chunk_count * 8 ) + bytewidth
-        pixel_data_size = packet_size * height
-        received_bytes = 0
-        if colors_used is None or colors_used == 0:
-            raise GarminError("Screenshots without a color palette are not supported")
-        elif colors_used == 4:
-            total_bytes = pixel_data_size
+        pixel_array_size = math.ceil(bytewidth / max_chunk_size) * height
+        start = 0
+        if bpp not in [1, 2, 4, 8, 16, 24, 32]:
+            raise GarminError(f"Unsupported color depth {bpp} bpp")
+        elif bpp > 8:
+            # A color table is mandatory for bitmaps with color depths ≤ 8 bits
+            log.info(f"{bpp}-bit color depth has no color table")
+            chunk_count = pixel_array_size
+        elif bpp == 2:
+            # For some reason the Screenshot Transfer Protocol doesn't send a
+            # color table for the 2 bpp format. The palette should contain the
+            # grayscale colors (255, 255, 255), (192, 192, 192), (128, 128,
+            # 128), (0, 0, 0).
+            bmp.palette = [bytearray(b'\xff\xff\xff'), bytearray(b'\xc0\xc0\xc0'), bytearray(b'\x80\x80\x80'), bytearray(b'\x00\x00\x00')]
+            chunk_count = pixel_array_size
         else:
-            # The color table is sent per color, so each packet data size is 11
-            # bytes, consisting of 4 bytes for the section, 4 bytes for the offset,
-            # and 3 bytes for the color.
-            color_table_size = colors_used * 11
-            total_bytes = color_table_size + pixel_data_size
             log.info("Expect color table")
-            color_table = bytes()
-            while received_bytes < color_table_size:
+            # The color table is sent per color, so each packet data size is 11
+            # bytes, consisting of 4 bytes for the section, 4 bytes for the
+            # offset, and 3 bytes for the color.
+            color_table_size = colors_used
+            chunk_count = color_table_size + pixel_array_size
+            color_table = []
+            for idx in range(chunk_count):
                 packet = self.gps.link.expect_packet(self.gps.link.pid_screen_data)
-                datatype = ScreenshotChunk()
+                start += 1
+                datatype = ScreenshotColor()
                 datatype.unpack(packet['data'])
                 section = datatype.get_section()
-                if section == 'color_table':
-                    color_table += datatype.chunk
-                    received_bytes += len(packet['data'])
-                    if callback:
-                        callback(datatype, received_bytes, total_bytes)
-                else:
+                if section != 'color_table':
                     raise ProtocolError(f"Invalid section: expected color_table, got {section}")
-        log.info("Expect pixel data")
-        # The pixel data is sent per row, "bottom-up", with a packet data size
+                color = datatype.get_color().get_bytearray()
+                color_table.append(color)
+                bmp.palette = color_table
+                if callback:
+                    callback(datatype, idx+1, chunk_count)
+        log.info("Expect pixel array")
+        # The pixel array is sent per row, "bottom-up", with a packet data size
         # of maximum 136 bytes, consisting of 4 bytes for the section, 4 bytes
-        # for the offset, and maximum 128 bytes for the chunk of pixel data.
-        pixel_data = bytes()
-        while received_bytes < total_bytes:
+        # for the offset, and maximum 128 bytes for the chunk of pixel array.
+        pixel_array = bytearray()
+        for idx in range(start, chunk_count):
             packet = self.gps.link.expect_packet(self.gps.link.pid_screen_data)
             datatype = ScreenshotChunk()
             datatype.unpack(packet['data'])
-            section = datatype.get_section()
-            if section == 'pixel_data':
-                pixel_data += datatype.chunk
-                received_bytes += len(packet['data'])
-                if callback:
-                    callback(datatype, received_bytes, total_bytes)
-            else:
-                raise ProtocolError(f"Invalid section: expected pixel_data, got {section}")
-        if colors_used == 4:
-            # The Python Imaging Library doesn't support 2-bit pixels,
-            # so we have to upscale the color depth from 2 to 8 bpp. The
-            # row size, bytewidth and padding are therefore also
-            # multiplied by 4. Because the 2 bpp BMP format is a 4-tone
-            # grayscale format, the used mode is 8-bit grayscale.
-            mode = 'L'
-            bytewidth *= 4
-            data = bytes()
-            for int_value in pixel_data:
-                # Create a bit string from the byte
-                bit_value = f"{int_value:08b}"
-                # Split the bit string in the number of bits per pixel
-                for pos in range(0, len(bit_value), bpp):
-                    pixel = bit_value[pos:pos+bpp]
-                    # Convert the bit string to an integer
-                    # 0 means black, 3 means white
-                    value = int(pixel, 2)
-                    # Multiply by 85 to get the 8 bit grayscale value
-                    # 0 means black, 255 means white.
-                    new_value = value * 85
-                    byte = new_value.to_bytes(1, byteorder='little')
-                    data += byte
-        else:
-            mode = 'P'
-            data = pixel_data
-        log.info("Create image from pixel data")
-        image = PIL.Image.frombytes(mode,
-                                    dimensions,
-                                    data,
-                                    'raw',
-                                    mode,
-                                    bytewidth,
-                                    -1)
-        if mode == 'P':
-            log.info("Attach palette to image")
-            image.putpalette(color_table, rawmode='RGB')
-        return image
+            if datatype.get_section() != 'pixel_array':
+                raise ProtocolError(f"Invalid section: expected pixel_array, got {section}")
+            pixel_array.extend(datatype.chunk)
+            if callback:
+                callback(datatype, idx+1, chunk_count)
+        # Rearrange the pixel array from bottom-up to top-down and remove padding
+        bmp.parray = bytearray()
+        for pos in range(0, len(pixel_array), bytewidth):
+            row = pixel_array[::-1][pos:pos+row_size]
+            bmp.parray.extend(row)
+        return bmp
 
+
+class A905(TransferProtocol):
+    """Unlock Code Communication Protocol."""
 
 class A906(TransferProtocol):
     """Lap Transfer Protocol.
@@ -5220,6 +5176,14 @@ class RGBA(DataType):
         self.blue = blue
         self.unused = unused
 
+    def get_bytearray(self):
+        """Return the color as bytearray."""
+        return bytearray([self.red, self.green, self.blue])
+
+    def get_rgb(self):
+        """Return an RGB tuple."""
+        return (self.red, self.green, self.blue)
+
 
 class ImageProp(DataType):
     _fields = [('idx', 'H'),         # image index
@@ -5254,7 +5218,7 @@ class ImageInformationHeader(DataType):
                ('unknown2', 'H'),
                ('height', 'H'),              # height in pixels
                ('width', 'H'),               # width in pixels
-               ('bytewidth', 'H'),           # width in bytes?
+               ('bytewidth', 'H'),           # width in bytes
                ('unknown3', 'H'),
                ('color', f'({_rgba_fmt})'),  # transparent color
                )
@@ -5265,6 +5229,12 @@ class ImageInformationHeader(DataType):
     def get_size(self):
         return (self.bpp * self.width * self.height) // 8
 
+    def get_row_size(self):
+        return (self.width * self.bpp // 8)
+
+    def get_bytesize(self):
+        return (self.bytewidth * self.height)
+
     def get_colors_used(self):
         if self.bpp <= 8:
             return 1 << self.bpp
@@ -5272,7 +5242,8 @@ class ImageInformationHeader(DataType):
             return 0
 
     def get_color(self):
-        return RGBA(*self.colors)
+        if any(x != 0 for x in self.color):
+            return RGBA(*self.color)
 
 
 class ImageId(DataType):
@@ -5301,26 +5272,30 @@ class ImageColorTable(DataType):
                ('colors', f'{{{_rgba_fmt}}}'),
                ]
 
+    def __init__(self, id=0, colors=b''):
+        self.id = id
+        self.colors = colors
+
     def get_colors(self):
         return [ RGBA(*color) for color in self.colors ]
 
     def get_palette(self):
-        """Returns the RGB color palette as a list of ints."""
+        """Returns the RGB color palette as a list of bytearray."""
         palette = []
         for color in self.get_colors():
-            palette.extend([color.red, color.green, color.blue])
+            palette.append(color.get_bytearray())
         return palette
 
 
 class ImageChunk(DataType):
     _id_fmt = ImageId.get_format()
     _fields = [('id', f'{_id_fmt}'),
-               ('data', '$'),
+               ('chunk', '$'),
                ]
 
-    def __init__(self, id=0, data=b''):
+    def __init__(self, id=0, chunk=b''):
         self.id = id
-        self.data = data
+        self.chunk = chunk
 
 
 class RGB(DataType):
@@ -5339,6 +5314,14 @@ class RGB(DataType):
         self.blue = blue
         self.green = green
         self.red = red
+
+    def get_bytearray(self):
+        """Return the color as bytearray."""
+        return bytearray([self.red, self.green, self.blue])
+
+    def get_rgb(self):
+        """Return an RGB tuple."""
+        return (self.red, self.green, self.blue)
 
 
 class Screenshot(DataType):
@@ -5362,7 +5345,7 @@ class Screenshot(DataType):
     (http://fileformats.archiveteam.org/wiki/Pocket_PC_Bitmap), but are not well
     supported.
 
-    The pixel data is a series of values representing either color palette
+    The pixel array is a series of values representing either color palette
     indices or actual RGB color values. Pixels are packed into bytes and
     arranged as scan lines. In a BMP file, each scan line must end on a 4-byte
     boundary, so one, two, or three bytes of padding may follow each scan line.
@@ -5375,7 +5358,7 @@ class Screenshot(DataType):
                ]
 
     _section = { 0: 'header',
-                 1: 'pixel_data',
+                 1: 'pixel_array',
                  2: 'color_table',
                 }
 
@@ -5397,6 +5380,12 @@ class ScreenshotHeader(Screenshot):
     def get_size(self):
         return (self.bpp * self.width * self.height) // 8
 
+    def get_row_size(self):
+        return (self.width * self.bpp // 8)
+
+    def get_bytesize(self):
+        return (self.bytewidth * self.height)
+
     def get_colors_used(self):
         if self.bpp <= 8:
             return 1 << self.bpp
@@ -5404,11 +5393,11 @@ class ScreenshotHeader(Screenshot):
             return 0
 
 
-class ScreenshotColorTable(Screenshot):
-    _bgr_fmt = RGB.get_format()
-    _fields = Screenshot._fields + [('color', f'{_bgr_fmt}')]
+class ScreenshotColor(Screenshot):
+    _rgb_fmt = RGB.get_format()
+    _fields = Screenshot._fields + [('color', f'({_rgb_fmt})')]
 
-    def get_colors(self):
+    def get_color(self):
         return RGB(*self.color)
 
 
@@ -6321,7 +6310,7 @@ class Garmin():
         :param callback: optional callback function
         :type callback: function or None
         :return: image file of the device's display
-        :rtype: PIL.Image
+        :rtype: MicroBMP
 
         """
         return self.screenshot_transfer.get_image(callback)
@@ -6368,7 +6357,7 @@ class Garmin():
         :param callback: optional callback function
         :type callback: function or None
         :return: image file of the device's display
-        :rtype: PIL.Image
+        :rtype: MicroBMP
 
         """
         return self.image_transfer.get_image(idx, callback)
@@ -6382,13 +6371,22 @@ class Garmin():
         :param idx: index of image to upload
         :type idx: int
         :param data: image data to upload
-        :type data: PIL.Image
+        :type data: MicroBMP or str or io.BufferedReader
         :param callback: optional callback function
         :type callback: function or None
 
         """
-        with PIL.Image.open(data) as image:
-            self.image_transfer.put_image(idx, image, callback)
+        if data is None:
+            raise GarminError("No image")
+        elif isinstance(data, MicroBMP):
+            bmp = data
+        elif isinstance(data, str):
+            bmp = MicroBMP().load(data)
+        elif isinstance(data, io.BufferedReader):
+            bmp = MicroBMP().read_io(data)
+        else:
+            raise GarminError("Invalid image")
+        self.image_transfer.put_image(idx, bmp, callback)
 
     def abort_transfer(self):
         """Abort transfer"""

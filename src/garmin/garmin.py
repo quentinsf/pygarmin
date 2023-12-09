@@ -1902,6 +1902,17 @@ class A904:
     """
 
 
+class A905(TransferProtocol):
+    """Undocumented application protocol
+
+    This protocol is undocumented, but it is called an unlock code communication
+    protocol in the changelogs of the Garmin eTrex Legend Cx/Vista Cx/Venture
+    Cx/Venture HC, and the Garmin GPSMAP 60Cx/60CSx/76Cx/76CSx. No
+    implementation as of yet.
+
+    """
+
+
 class ImageTransfer:
     """Image transfer protocol.
 
@@ -2193,10 +2204,6 @@ class ScreenshotTransfer:
             row = pixel_array[::-1][pos:pos+row_size]
             bmp.parray.extend(row)
         return bmp
-
-
-class A905(TransferProtocol):
-    """Unlock Code Communication Protocol."""
 
 class A906(TransferProtocol):
     """Lap Transfer Protocol.
@@ -4608,6 +4615,10 @@ class D800(PVT):
             4: '2D_diff',   # two dimensional differential
             5: '3D_diff',   # three dimensional differential
             }
+
+
+class D900(DataType):
+    """Undocumented unlock code communication datatype."""
 
 
 class Lap(DataType):

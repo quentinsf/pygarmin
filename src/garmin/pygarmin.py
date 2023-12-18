@@ -31,8 +31,9 @@ import argparse
 import gpxpy
 import json
 import logging
+from microbmp import MicroBMP
 import os
-import PIL.Image
+from PIL import Image, ImagePalette, UnidentifiedImageError
 import re
 import signal
 import sys
@@ -52,6 +53,101 @@ logging_levels = {
 log = logging.getLogger('garmin')
 log.addHandler(logging.StreamHandler())
 
+def to_pixel_data(pixel_values, bpp):
+    """Returns the pixel array of the image.
+
+    :param pixel_values: the pixel values of the image
+    :type pixel_values: list[int]
+    :param bpp: the color depth of the image, must be in (1, 2, 4, 8)
+    :type bpp: int
+    :return: pixel_array
+    :rtype: bytearray
+
+    """
+    if 8 % bpp != 0:
+        sys.exit(f"{bpp}-bit color depth is not supported")
+    ppb = 8 // bpp
+    pixel_array = list()
+    for pos in range(0, len(pixel_values), ppb):
+        values = pixel_values[pos:pos+ppb]
+        pixels = 0
+        # Pixels are stored from left to right, so the bits of the first pixel
+        # are shifted to the far left
+        for idx, value in enumerate(reversed(values)):
+            if value.bit_length() > bpp:
+                sys.exit(f"Integer {value} cannot be represented by {bpp} bits")
+            offset = idx * bpp
+            pixels = pixels + (value << offset)
+        pixel_array.append(pixels)
+    return bytearray(pixel_array)
+
+def to_pixel_values(pixel_array, bpp):
+    """Returns the contents of this image as a list of pixel values.
+
+    :param pixel_array: the pixel array of the image
+    :type pixel_array: bytes or bytearray
+    :param bpp: the color depth of the image, must be in (1, 2, 4, 8)
+    :type bpp: int
+    :return: list of pixel values
+    :rtype: list[int]
+
+    """
+    if 8 % bpp != 0:
+        sys.exit(f"{bpp}-bit color depth is not supported")
+    pixel_values = []
+    # Calculate the bitmask, that is the maximum integer that can be
+    # represented by the number of bits per pixel
+    mask = pow(2, bpp) - 1
+    for byte in pixel_array:
+        for offset in reversed(range(0, 8, bpp)):
+            value = byte >> offset & mask
+            pixel_values.append(value)
+    return pixel_values
+
+def bmp_to_pil(bmp):
+    """Converts BMP to PIL image.
+
+    :param bmp: BMP image
+    :type bmp: BMP
+    :return: PIL image
+    :rtype: Image.Image
+
+    """
+    log.info("Converting BMP to PIL image")
+    # PIL supports images of 1/8/24/32-bit color depth
+    bpp = bmp.DIB_depth
+    if bpp == 1:
+        log.info("Using black and white mode (1)")
+        mode = '1'
+    elif bpp in (1, 2, 4):
+        # Convert BMP to 8-bit PIL image
+        log.info(f"Converting {bpp} bpp image to 8 bpp color depth")
+        pixel_values = to_pixel_values(bmp.parray, bpp)
+        pixel_data = to_pixel_data(pixel_values, 8)
+        log.info("Using palette mode (P)")
+        mode = 'P'
+    elif bpp == 8:
+        pixel_data = bmp.parray
+        log.info("Using palette mode (P)")
+        mode = 'P'
+    elif bpp == 24:
+        pixel_data = bmp.parray
+        log.info("Using true color mode (RGB)")
+        mode = 'RGB'
+    else:
+        sys.exit(f"{bpp}-bit color depth is not supported")
+    image = Image.frombytes(mode=mode,
+                                size=(bmp.DIB_w, bmp.DIB_h),
+                                data=pixel_data,
+                                decoder_name='raw')
+    if mode == 'P':
+        log.info("Attaching palette to image")
+        # The BMP palette is a list of bytearrays, but the PIL palette must be a
+        # flat list of integers (or a single bytearray)
+        palette = [ channel for color in bmp.palette for channel in color ]
+        log.debug(f"RGB color palette: {*[ tuple(color) for color in bmp.palette ], }")
+        image.putpalette(palette, rawmode='RGB')
+    return image
 
 class ProgressBar(tqdm):
 
@@ -976,9 +1072,49 @@ class Pygarmin:
         self.gps.del_map()
 
     def get_screenshot(self, args):
-        with ProgressBar() as progress_bar:
-            image = self.gps.get_screenshot(callback=progress_bar.update_to)
-        image.save(args.filename, format=args.format)
+        log.info(f"Downloading screenshot")
+        if args.progress:
+            with ProgressBar() as progress_bar:
+                bmp = self.gps.get_screenshot(callback=progress_bar.update_to)
+        else:
+            bmp = self.gps.get_screenshot()
+        log.info(f"Received BMP image of {bmp.DIB_w}x{bmp.DIB_h} pixels and {bmp.DIB_depth} bpp")
+        if args.filename is None:
+            if args.format is None:
+                # No format is given, so use the BMP format by default
+                log.info(f"Using the BMP format")
+                filename = "Screenshot.bmp"
+            else:
+                # Determine the filename extension
+                log.debug(f"Supported formats: {*Image.registered_extensions().values(), }")
+                log.info(f"Trying to find an extension matching the {args.format.upper()} format")
+                extensions = [ extension for (extension, format) in Image.registered_extensions().items() if format == args.format.upper() ]
+                if len(extensions) == 0:
+                    sys.exit(f"Image format {args.format.upper()} is not supported")
+                elif len(extensions) == 1:
+                    log.info(f"Found extension {extensions[0]}")
+                    filename = "Screenshot" + extensions[0]
+                elif len(extensions) > 1:
+                    log.info(f"Found extensions {*extensions, }")
+                    # If a format has multiple extensions, prefer the
+                    # extension with the same name as the format.
+                    preferred_extension = [ extension for extension in extensions if extension == '.' + args.format.lower() ]
+                    if preferred_extension:
+                        log.info(f"Prefer extension {preferred_extension[0]}")
+                        filename = "Screenshot" + preferred_extension[0]
+                    else:
+                        sys.exit("The extension could not be determined")
+        else:
+            filename = args.filename
+        if args.format is not None and not path.endswith(args.format.lower()):
+            log.warning(f"Override format by saving {path} as {args.format.upper()}")
+        log.info(f"Saving {path}")
+        if args.format == 'bmp' or path.endswith('bmp'):
+            # BMP supports images of 1/2/4/8/24-bit color depth
+            bmp.save(path)
+        else:
+            image = bmp_to_pil(bmp)
+            image.save(path, format=args.format)
 
     def get_image_types(self, args):
         image_types = self.gps.get_image_types()
@@ -998,21 +1134,32 @@ class Pygarmin:
         image_list = self.gps.get_image_list()
         if args.index is None:
             indices = [ image['idx'] for image in image_list ]
+            log.info("Download all images")
         else:
             indices = args.index
+            log.info(f"Download image {*[idx for idx in indices],}")
         for idx in indices:
             basename = image_list[idx].get('name')
             log.info(f"Downloading {basename}")
+            if args.progress:
+                with ProgressBar() as progress_bar:
+                    bmp = self.gps.get_image(idx, callback=progress_bar.update_to)
+            else:
+                bmp = self.gps.get_image(idx)
+            log.info(f"Received BMP image of {bmp.DIB_w}x{bmp.DIB_h} pixels and {bmp.DIB_depth} bpp")
             single_modulo = '(?<!%)%(?!%)'  # match a single % character
+            # Determine filename
             if args.filename is None or os.path.isdir(args.filename):
+                # No filename is given, so use the basename by default
                 if args.format is None:
+                    # No format is given, so use the BMP format by default
                     log.info(f"Using the BMP format")
                     filename = basename + '.bmp'
                 else:
-                    log.debug(f"Supported formats: {*PIL.Image.registered_extensions().values(), }")
+                    # Determine the filename extension
+                    log.debug(f"Supported formats: {*Image.registered_extensions().values(), }")
                     log.info(f"Trying to find an extension matching the {args.format.upper()} format")
-                    extensions = [ extension for (extension, format) in PIL.Image.registered_extensions().items() if format == args.format.upper() ]
-                    log.info(f"Found extensions {PIL.Image.registered_extensions().items()}")
+                    extensions = [ extension for (extension, format) in Image.registered_extensions().items() if format == args.format.upper() ]
                     if len(extensions) == 0:
                         sys.exit(f"Image format {args.format.upper()} is not supported")
                     elif len(extensions) == 1:
@@ -1022,7 +1169,7 @@ class Pygarmin:
                         log.info(f"Found extensions {*extensions, }")
                         # If a format has multiple extensions, prefer the
                         # extension with the same name as the format.
-                        preferred_extension = [ extension for extension in extensions if extension.endswith(args.format.lower()) ]
+                        preferred_extension = [ extension for extension in extensions if extension == '.' + args.format.lower() ]
                         if preferred_extension:
                             log.info(f"Prefer extension {preferred_extension[0]}")
                             filename = basename + preferred_extension[0]
@@ -1040,15 +1187,15 @@ class Pygarmin:
                 path = args.filename
                 if len(indices) > 1:
                     sys.exit(f"Cannot download {len(indices)} files to 1 filename")
-            if args.progress:
-                with ProgressBar(unit='B', unit_scale=True, unit_divisor=1024, miniters=1) as progress_bar:
-                    image = self.gps.get_image(idx, callback=progress_bar.update_to)
-            else:
-                image = self.gps.get_image(idx)
             if args.format is not None and not path.endswith(args.format.lower()):
-                log.warning(f"Overriding format by saving {path} as {args.format.upper()}")
+                log.warning(f"Override format by saving {path} as {args.format.upper()}")
             log.info(f"Saving {path}")
-            image.save(path, format=args.format)
+            if args.format == 'bmp' or path.endswith('bmp'):
+                # BMP supports images of 1/2/4/8/24-bit color depth
+                bmp.save(path)
+            else:
+                image = bmp_to_pil(bmp)
+                image.save(path, format=args.format)
 
     def put_image(self, args):
         files = args.filename
@@ -1058,17 +1205,105 @@ class Pygarmin:
         else:
             indices = args.index
         if len(files) != len(indices):
-            log.warning(f"Trying to upload {len(files)} files to {len(indices)} indices.")
+            sys.exit(f"Cannot upload {len(files)} files to {len(indices)} indices")
         for idx, filename in zip(indices, files):
-            image = image_list[idx]
-            if image['writable'] is True:
-                if args.progress:
-                    with ProgressBar(unit='B', unit_scale=True, unit_divisor=1024, miniters=1) as progress_bar:
-                        self.gps.put_image(idx, filename, callback=progress_bar.update_to)
-                else:
-                    self.gps.put_image(idx, filename)
+            basename = image_list[idx].get('name')
+            log.info(f"{image_list[idx]['writable']}")
+            if not image_list[idx]['writable']:
+                sys.exit(f"Image {basename} with index {idx} is not writable")
+            # If the file is a BMP with the correct color depth, dimensions, and
+            # color table it can be uploaded as is
+            try:
+                log.info(f"Trying to load {filename} image as a BMP image")
+                bmp = MicroBMP().load(filename)
+                props = self.gps.image_transfer.get_image_properties(idx)
+                bpp = props.bpp
+                width = props.width
+                height = props.height
+                colors_used = props.get_colors_used()
+                if bpp != bmp.DIB_depth:
+                    raise Exception(f"Image has wrong color depth: expected {bpp} bpp, got {bmp.DIB_depth} bpp")
+                if width != bmp.DIB_w or height != bmp.DIB_h:
+                    raise Exception(f"Image has wrong dimensions: expected {width}x{height} pixels, got {bmp.DIB_w}x{bmp.DIB_h} pixels")
+                # Images with a color depth of 1, 2, 4, or 8 bpp have a color table
+                if bpp <= 8:
+                    image_id = self.gps.image_transfer.get_image_id(idx)
+                    color_table = self.gps.image_transfer.get_color_table(image_id)
+                    palette = color_table.get_palette()[:colors_used]
+                    if bmp.palette != palette:
+                        raise Exception("Image has the wrong color palette")
+            # If the file is not a BMP image or it has the wrong attributes, it
+            # has to be converted before uploading
+            except Exception as e:
+                log.info(e)
+                try:
+                    log.info(f"Trying to load {filename} image as a PIL image")
+                    image = Image.open(filename)
+                    # Convert PIL image to BMP
+                    image_id = self.gps.image_transfer.get_image_id(idx)
+                    # PIL images with the modes RGBA, LA, and PA have an alpha
+                    # channel. Garmin images use magenta (255, 0, 255) as a transparency
+                    # color, so it doesn't display.
+                    if image.mode in ('RGBA', 'LA', 'PA'):
+                        transparency = props.get_color().get_rgb()
+                        log.info(f"Replacing the alpha channel with the transparency color {transparency}")
+                        # Create a mask with the transparent pixels converted to black
+                        alpha = image.getchannel('A')
+                        mask = alpha.convert(mode='1')
+                        # Create a background image with the transparency color
+                        background = Image.new('RGB', image.size, transparency)
+                        # Paste the original image onto  the background image, using the
+                        # transparency mask
+                        background.paste(image, mask=mask)
+                        # Now we have a RGB image the alpha channel of which is replaced
+                        # by the transparency color
+                        image = background
+                    if image.width!= width or image.height != height:
+                        log.info(f"Resizing image to {width}x{height} pixels")
+                        image = image.resize((width, height))
+                    log.info(f"Creating BMP image of {width}x{height} pixels and {bpp} bpp")
+                    bmp = MicroBMP(width, height, bpp)
+                    # Images with a color depth of 1, 2, 4, or 8 bpp have a palette
+                    if bpp in (1, 2, 4, 8):
+                        if image.mode != 'P':
+                            log.info("Converting image to palette mode (P)")
+                            image = image.convert(mode='P')
+                        # The palette must be the same as Garmin's
+                        color_table = self.gps.image_transfer.get_color_table(image_id)
+                        palette = color_table.get_palette()[:colors_used]
+                        # The BMP palette is a list of bytearray, and the PIL palette is a byte object
+                        if image.palette.palette != b''.join(palette):
+                            log.info(f"Quantizing image to the received color palette")
+                            image = image.convert(mode='RGB')
+                            new_image = Image.new('P', (width, height))
+                            new_palette = ImagePalette.ImagePalette(palette=b''.join(palette))
+                            new_image.putpalette(new_palette)
+                            image = image.quantize(colors=colors_used, palette=new_image)
+                        bmp.palette = palette
+                        pixel_data = image.tobytes()
+                        if bpp != 8:
+                            log.info(f"Converting 8 bpp image to {bpp} bpp color depth")
+                            pixel_values = to_pixel_values(pixel_data, 8)
+                            pixel_data = to_pixel_data(pixel_values, bpp)
+                        bmp.parray = pixel_data
+                    # Images with a color depth of 24 bpp
+                    elif bpp == 24:
+                        if image.mode != 'RGB':
+                            log.info("Converting image to true color mode (RGB)")
+                            image = image.convert(mode='RGB')
+                        pixel_data = image.tobytes()
+                        bmp.parray = pixel_data
+                    else:
+                        sys.exit(f"Images of {bpp} bpp are not supported")
+                except UnidentifiedImageError as e:
+                    log.info(e)
+                    sys.exit(f"Unknown image file format")
+            log.info(f"Uploading {basename}")
+            if args.progress:
+                with ProgressBar() as progress_bar:
+                    self.gps.put_image(idx, bmp, callback=progress_bar.update_to)
             else:
-                log.error(f"Image {image['name']} with index {idx} is not writable")
+                self.gps.put_image(idx, bmp)
 
 parser = argparse.ArgumentParser(prog='pygarmin',
                                  description=
@@ -1323,8 +1558,8 @@ get_screenshot.add_argument('-t',
                             '--format',
                             help="Set image file format")
 get_screenshot.add_argument('filename',
-                            default='Screenshot.bmp',
-                            help="Set image file name")
+                            nargs='?',
+                            help="Set image filename or directory")
 get_image_types = subparsers.add_parser('get-image-types', help="List image types")
 get_image_types.add_argument('filename',
                              nargs='?',

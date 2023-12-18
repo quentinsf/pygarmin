@@ -2434,7 +2434,7 @@ class ScreenshotTransfer:
             # color table for the 2 bpp format. The palette should contain the
             # grayscale colors (255, 255, 255), (192, 192, 192), (128, 128,
             # 128), (0, 0, 0).
-            bmp.palette = [bytearray(b'\xff\xff\xff'), bytearray(b'\xc0\xc0\xc0'), bytearray(b'\x80\x80\x80'), bytearray(b'\x00\x00\x00')]
+            bmp.palette = [bytearray((255, 255, 255)), bytearray((192, 192, 192)), bytearray((128, 128, 128)), bytearray((0, 0, 0))]
             chunk_count = pixel_array_size
         else:
             log.info("Expect color table")
@@ -5293,9 +5293,7 @@ class ImageColorTable(DataType):
 
     def get_palette(self):
         """Returns the RGB color palette as a list of bytearray."""
-        palette = []
-        for color in self.get_colors():
-            palette.append(color.get_bytearray())
+        palette = [ color.get_bytearray() for color in self.get_colors() ]
         return palette
 
 

@@ -860,7 +860,7 @@ class Pygarmin:
         info += f"Memory size: {data.mem_size}\n"
         args.filename.write(info)
 
-    def map(self, args):
+    def map_info(self, args):
         records = self.gps.map_transfer.get_map_properties()
         if records is None:
             log.warning("Map not found")
@@ -1410,9 +1410,9 @@ memory.add_argument('filename',
                     type=argparse.FileType(mode='w'),
                     default=sys.stdout,
                     help="Set output file")
-map = subparsers.add_parser('map', help="Return map info")
-map.set_defaults(command='map')
-map.add_argument('filename',
+map_info = subparsers.add_parser('map', help="Return map info")
+map_info.set_defaults(command='map_info')
+map_info.add_argument('filename',
                  nargs='?',
                  type=argparse.FileType(mode='w'),
                  default=sys.stdout,

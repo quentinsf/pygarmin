@@ -823,7 +823,7 @@ class Pygarmin:
 
     def get_gps(self, port):
         phys = garmin.USBLink() if port == 'usb:' else garmin.SerialLink(port)
-        log.info(f"listening on port {port}")
+        log.info(f"Listening on port {port}")
         return garmin.Garmin(phys)
 
     def info(self, args):

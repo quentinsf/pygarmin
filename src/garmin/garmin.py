@@ -5188,7 +5188,7 @@ class RGBA(DataType):
     """RGBA is a sRGB format that uses 32 bits of data per pixel.
 
     Each channel (red, green, blue, and alpha) is allocated 8 bits per pixel
-    (BPP). The alpha channel is unused. Instead, a color is used for
+    (bpp). The alpha channel is unused. Instead, a color is used for
     transparency. Most devices make magenta (255,0,255) transparent.
 
     """

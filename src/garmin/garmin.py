@@ -745,6 +745,7 @@ class L001(L000):
     pid_trk_hdr = 99
     pid_tx_unlock_key = 108  # undocumented
     pid_ack_unlock_key = 109  # undocumented
+    pid_satellite_data = 114
     pid_flightbook_record = 134  # packet with FlightBook data
     pid_lap = 149  # part of Forerunner data
     pid_wpt_cat = 152
@@ -1647,6 +1648,9 @@ class A800(TransferProtocol):
      0   Device to Host (ACK/NAK optional)   pid_pvt_data   <D0>
     === =================================== ============== ==================
 
+    The Garmin Forerunner 305 only reports the D800 datatype, but in practice
+    transmits the D800 and an undocumented Satellite datatype alternately.
+
     """
 
     def data_on(self):
@@ -1658,12 +1662,24 @@ class A800(TransferProtocol):
                                   self.gps.command.cmnd_stop_pvt_data)
 
     def get_data(self, callback=None):
-        packet = self.gps.link.expect_packet(self.gps.link.pid_pvt_data)
-        datatype = self.datatypes[0]()
-        datatype.unpack(packet['data'])
-        if callback:
-            callback(datatype, 1, 1)
-        return datatype
+        pids = [self.gps.link.pid_pvt_data,
+                self.gps.link.pid_satellite_data]
+        self.datatypes.append(Satellite)
+        packet = self.gps.link.read_packet()
+        pid = packet['id']
+        if pid in pids:
+            i = pids.index(pid)
+            datatype = self.datatypes[i]()
+            log.info(f"Datatype {type(datatype).__name__}")
+            datatype.unpack(packet['data'])
+            log.info(f"{str(datatype)}")
+            if type(datatype).__name__ == 'Satellite':
+                log.info(f"{str(datatype.get_records())}")
+            if callback:
+                callback(datatype, 1, 1)
+            return datatype
+        else:
+            raise ProtocolError(f"Expected one of {*pids,}, got {pid}")
 
 
 class A801:
@@ -5413,6 +5429,85 @@ class ScreenshotColor(Screenshot):
 
 class ScreenshotChunk(Screenshot):
     _fields = Screenshot._fields + [('chunk', '$')]
+
+
+class SatelliteRecord(DataType):
+    _fields = [('svid', 'B'),    # space vehicle identification (1–32 and 33–64 for WAAS)
+               ('snr', 'H'),     # signal-to-noise ratio
+               ('elev', 'B'),    # satellite elevation in degrees
+               ('azmth', 'H'),   # satellite azimuth in degrees
+               ('status', 'B'),  # status bit-field
+               ]
+
+    def __init__(self, svid, snr, elev, azmth, status):
+        self.svid = svid
+        self.snr = snr
+        self.elev = elev
+        self.azmth = azmth
+        self.status = status
+
+    # The status bit field represents a set of booleans described below:
+
+    # ===== ====================================================================
+    #  Bit   Meaning when bit is one (1)
+    # ===== ====================================================================
+    #    0   The unit has ephemeris data for the specified satellite
+    #    1   The unit has a differential correction for the specified satellite
+    #    2   The unit is using this satellite in the solution
+    #  ===== ====================================================================
+
+    def has_eph(self):
+        """Return whether the unit has ephemeris data for the specified satellite."""
+        bits = f"{self.status:08b}"[::-1]  # reverse because of little endian byteorder
+        has_eph = True if bits[0] == '1' else False
+        return has_eph
+
+    def has_diff(self):
+        """Return whether the unit has a differential correction for the specified satellite."""
+        bits = f"{self.status:08b}"[::-1]  # reverse because of little endian byteorder
+        has_diff = True if bits[1] == '1' else False
+        return has_diff
+
+    def is_used(self):
+        """Return whether the unit is using this satellite in the solution."""
+        bits = f"{self.status:08b}"[::-1]  # reverse because of little endian byteorder
+        is_used = True if bits[2] == '1' else False
+        return is_used
+
+    def get_prn(self):
+        """Return the PRN.
+
+        The ``svid`` member identifies a satellite in the GPS constellation as
+        follows: PRN-01 through PRN-32 are indicated by ``svid`` equal to 0
+        through 31, respectively.
+
+        """
+        return self.svid + 1
+
+
+class Satellite(DataType):
+    """Satellite datatype.
+
+    The satellite records contain post-process information, such as position and velocity
+    information.
+
+    This datatype is undocumented in the spec, but it is described in the GPS
+    16/17 Technical Specifications
+    (https://static.garmin.com/pumac/470_GPS16_17TechnicalSpecification.pdf) and
+    the GPS 18x Technical Specifications
+    (https://static.garmin.com/pumac/GPS_18x_Tech_Specs.pdf).
+
+    """
+    _satellite_record_fmt = SatelliteRecord.get_format()
+    _fields = [('records', f'12[{_satellite_record_fmt}]'),
+               ]
+
+    def __init__(self, records=None):
+        self.records = records
+
+    def get_records(self):
+        return [ SatelliteRecord(*record) for record in self.records ]
+
 
 
 # Garmin models ==============================================

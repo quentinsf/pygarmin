@@ -63,9 +63,9 @@ Download all waypoints in gpx format to the file waypoints.gpx::
 
    pygarmin get-waypoints waypoints.gpx -t gpx
 
-Print real-time position, velocity, and time (PVT) to stdout::
+Print real-time position, velocity, and time (PVT) in GPSD JSON format to stdout::
 
-   pygarmin pvt -t tpv
+   pygarmin pvt -t gpsd
 
 List the images types::
 

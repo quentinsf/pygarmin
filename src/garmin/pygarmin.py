@@ -681,7 +681,9 @@ class GPXTracks(GPX):
 
 
 class Gpsd:
-    pass
+
+    def __str__(self):
+        return json.dumps(self.get_dict())
 
 
 class TPV(Gpsd):
@@ -720,25 +722,63 @@ class TPV(Gpsd):
             mode = 1
         return mode
 
-    def __str__(self):
-        return json.dumps({
-            'class': 'TPV',
-            'device': 'device',
-            'mode': self.mode,
-            'time': self.time,
-            'altHAE': self.alt_hae,
-            'altMSL': self.alt_msl,
-            'sep': self.sep,
-            'eph': self.eph,
-            'epv': self.epv,
-            'geoidSep': self.geoid_sep,
-            'lat': self.lat,
-            'leapseconds': self.leapseconds,
-            'lon': self.lon,
-            'velD': self.vel_d,
-            'velE': self.vel_e,
-            'velN': self.vel_n,
-        })
+
+    def get_dict(self):
+        return {'class': 'TPV',
+                'device': 'device',
+                'mode': self.mode,
+                'time': self.time,
+                'altHAE': self.alt_hae,
+                'altMSL': self.alt_msl,
+                'sep': self.sep,
+                'eph': self.eph,
+                'epv': self.epv,
+                'geoidSep': self.geoid_sep,
+                'lat': self.lat,
+                'leapseconds': self.leapseconds,
+                'lon': self.lon,
+                'velD': self.vel_d,
+                'velE': self.vel_e,
+                'velN': self.vel_n,
+                }
+
+
+class SAT(Gpsd):
+    def __init__(self, sat):
+        self.sat = sat
+        self.prn = self.sat.get_prn()
+        self.az = self.sat.azmth        # Azimuth, degrees from true north
+        self.el = self.sat.elev         # Elevation in degrees
+        self.ss = self.sat.snr          # Signal to Noise ratio in dBHz
+        self.used = self.sat.is_used()  # Used in current solution?
+
+    def get_dict(self):
+        return {'PRN': self.prn,
+                'az': self.az,
+                'el': self.el,
+                'ss': self.ss,
+                'used': self.used,
+                }
+
+
+class SKY(Gpsd):
+    """A SKY object reports a sky view of the GPS satellite positions. If there
+    is no GPS device available, or no skyview has been reported yet, only the
+    \"class\" field will reliably be present.
+
+    """
+    def __init__(self, pvt):
+        self.pvt = pvt
+
+    def get_satellites(self):
+        records = self.pvt.get_records()
+        satelittes = [ SAT(record) for record in records ]
+        return satelittes
+
+    def get_dict(self):
+        return {'class': 'SKY',
+                'satellites': [satellite.get_dict() for satellite in self.get_satellites()],
+                }
 
 
 class Pygarmin:
@@ -1008,12 +1048,6 @@ class Pygarmin:
         log.warning("Press Ctrl-C to quit")
         # Catch interrupt from keyboard (Control-C)
         signal.signal(signal.SIGINT, signal_handler)
-        if args.format == 'txt':
-            func = str
-        elif args.format == 'garmin':
-            func = repr
-        elif args.format == 'tpv':
-            func = TPV
         self.gps.pvt_on()
         # In PVT mode the device will transmit packets approximately once per
         # second, but the default timeout of 1 second will lead to a timeout
@@ -1021,7 +1055,17 @@ class Pygarmin:
         self.gps.phys.set_timeout(2)
         while True:
             pvt = self.gps.get_pvt()
-            args.filename.write(f"{func(pvt)}\n")
+            if args.format == 'txt':
+                args.filename.write(f"{str(pvt)}\n")
+            elif args.format == 'garmin':
+                args.filename.write(f"{repr(pvt)}\n")
+            elif args.format == 'gpsd':
+                if isinstance(pvt, garmin.D800):
+                    args.filename.write(f"{TPV(pvt)}\n")
+                elif isinstance(pvt, garmin.Satellite):
+                    args.filename.write(f"{SKY(pvt)}\n")
+                else:
+                    log.warning(f"Unknown datatype {type(pvt).__name__}")
             args.filename.flush()
 
     def get_laps(self, args):
@@ -1509,9 +1553,9 @@ pvt = subparsers.add_parser('pvt', help="Download pvt")
 pvt.set_defaults(command='pvt')
 pvt.add_argument('-t',
                  '--format',
-                 choices=['txt', 'garmin', 'tpv'],
+                 choices=['txt', 'garmin', 'gpsd'],
                  default='garmin',
-                 help="Set output format. ``txt`` returns a JSON string that consists of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype. ``tpv`` returns a TPV object based on the GPSD JSON protocol.")
+                 help="Set output format. ``txt`` returns a JSON string that consists of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype. ``gpsd`` returns a GPSD JSON object.")
 pvt.add_argument('filename',
                  nargs='?',
                  type=argparse.FileType(mode='w'),

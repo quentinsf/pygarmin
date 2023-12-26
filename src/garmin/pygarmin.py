@@ -1588,6 +1588,7 @@ get_runs.add_argument('filename',
 get_map = subparsers.add_parser('get-map', help="Download map")
 get_map.set_defaults(command='get_map')
 get_map.add_argument('filename',
+                     nargs='?',
                      default='gmapsupp.img',
                      help="Set output file")
 put_map = subparsers.add_parser('put-map', help="Upload map")

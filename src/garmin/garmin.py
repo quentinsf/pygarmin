@@ -1913,6 +1913,279 @@ class A905(TransferProtocol):
     """
 
 
+class A906(TransferProtocol):
+    """Lap Transfer Protocol.
+
+    Packet sequence:
+
+    ===== ================ ================ ==================
+       N   Direction        Packet ID        Packet Data Type
+    ===== ================ ================ ==================
+       0   Device to Host   pid_records      Records
+       1   Device to Host   pid_lap          <D0>
+       2   Device to Host   pid_lap          <D0>
+       …   …                …                …
+     n-2   Device to Host   pid_lap          <D0>
+     n-1   Device to Host   pid_xfer_cmplt   Command
+    ===== ================ ================ ==================
+
+    """
+
+    def get_data(self, callback=None):
+        return TransferProtocol.get_data(self,
+                                         self.gps.command.cmnd_transfer_laps,
+                                         self.gps.link.pid_lap,
+                                         callback=callback)
+
+
+class A907(TransferProtocol):
+    """Undocumented application protocol."""
+
+
+class A1000(TransferProtocol):
+    """Run Transfer Protocol.
+
+    Packet sequence:
+
+    ===== ================ ================== ==================
+       N   Direction        Packet ID          Packet Data Type
+    ===== ================ ================== ==================
+       0   Host to Device   pid_command_data   Command
+       1   Device to Host   pid_records        Records
+       2   Device to Host   pid_run            <D0>
+       …   …                …                  …
+     k-2   Device to Host   pid_run            <D0>
+     k-1   Device to Host   pid_xfer_cmplt     Command
+       k   Host to Device   pid_command_data   Command
+     k+1   Device to Host   pid_records        Records
+     k+2   Device to Host   pid_lap            Lap
+       …   …                …                  …
+     m-2   Device to Host   pid_lap            Lap
+     m-1   Device to Host   pid_xfer_cmplt     Command
+       m   Host to Device   pid_command_data   Command
+     m+1   Device to Host   pid_records        Records
+     m+2   Device to Host   pid_trk_hdr        TrkHdr
+     m+3   Device to Host   pid_trk_data       TrkPoint
+       …   …                …                  …
+     n-2   Device to Host   pid_trk_data       TrkPoint
+     n-1   Device to Host   pid_xfer_cmplt     Command
+    ===== ================ ================== ==================
+
+    """
+
+    def get_data(self, callback=None):
+        runs = TransferProtocol.get_data(self,
+                                         self.gps.command.cmnd_transfer_runs,
+                                         self.gps.link.pid_run,
+                                         callback=callback)
+        laps = gps.lap_transfer.get_data(callback)
+        tracks = gps.track_log_transfer.get_data(callback)
+        return runs + laps + tracks
+
+
+class A1002(TransferProtocol):
+    """Workout Transfer Protocol.
+
+    Packet sequence:
+
+    ===== ==================== ======================== ==================
+       N   Direction            Packet ID                Packet Data Type
+    ===== ==================== ======================== ==================
+       0   Device1 to Device2   pid_command_data         Command
+       1   Device2 to Device1   pid_records              Records
+       2   Device2 to Device1   pid_workout              <D0>
+     …     …                    …                        …
+     m-2   Device2 to Device1   pid_workout              <D0>
+     m-1   Device2 to Device1   pid_xfer_cmplt           Command
+       m   Device1 to Device2   pid_command_data         Command
+     m+1   Device2 to Device1   pid_records              Records
+     m+2   Device2 to Device1   pid_workout_occurrence   Workout
+     …     …                    …                        …
+     n-2   Device2 to Device1   pid_workout_occurrence   Workout
+     n-1   Device2 to Device1   pid_xfer_cmplt           Command
+    ===== ==================== ======================== ==================
+
+    """
+    def get_data(self, callback=None):
+        workouts = TransferProtocol.get_data(self,
+                                             self.gps.command.cmnd_transfer_workouts,
+                                             self.gps.link.pid_workout,
+                                             callback=callback)
+        workout_occurrences = gps.workout_occurrence_transfer.get_data(callback)
+        return workouts + workout_occurrences
+
+
+class A1003(TransferProtocol):
+    """Workout Occurrence Transfer Protocol."""
+
+    def get_data(self, callback=None):
+        return TransferProtocol.get_data(self,
+                                         self.gps.command.cmnd_transfer_workout_occurrences,
+                                         self.gps.link.pid_workout_occurrence,
+                                         callback=callback)
+
+
+class A1004(TransferProtocol):
+    """Fitness User Profile Transfer Protocol.
+
+    Packet sequence:
+
+    === ==================== ========================== ==================
+     N   Direction            Packet ID                  Packet Data Type
+    === ==================== ========================== ==================
+     0   Device1 to Device2   pid_command_data           Command
+     1   Device2 to Device1   pid_fitness_user_profile   <D0>
+    === ==================== ========================== ==================
+
+    """
+
+    def get_data(self, callback=None):
+        self.gps.link.send_packet(self.gps.link.pid_command_data,
+                                  self.gps.command.cmnd_transfer_fitness_user_profile)
+        packet = self.gps.link.expect_packet(self.gps.link.pid_fitness_user_profile)
+        datatype = self.datatypes[0]()
+        datatype.unpack(packet['data'])
+        if callback:
+            callback(datatype, 1, 1)
+        return datatype
+
+
+class A1005(TransferProtocol):
+    """Workout Limits Transfer Protocol.
+
+     N   Direction        Packet ID            Packet Data Type
+    === ================ ==================== ==================
+     0   Host to Device   pid_command_data     Command
+     1   Device to Host   pid_workout_limits   <D0>
+
+    """
+
+    def get_data(self, callback=None):
+        self.gps.link.send_packet(self.gps.link.pid_command_data,
+                                  self.gps.command.cmnd_transfer_workout_limits)
+        packet = self.gps.link.expect_packet(self.gps.link.pid_workout_limits)
+        datatype = self.datatypes[0]()
+        datatype.unpack(packet['data'])
+        if callback:
+            callback(datatype, 1, 1)
+        return datatype
+
+
+class A1006(TransferProtocol):
+    """Course Transfer Protocol.
+
+    Packet sequence:
+
+    ===== ==================== ===================== ==================
+       N    Direction            Packet ID             Packet Data Type
+    ===== ==================== ===================== ==================
+       0    Device1 to Device2   pid_command_data      Command
+       1    Device2 to Device1   pid_records           Records
+       2    Device2 to Device1   pid_course            <D0>
+       …    …                    …                     …
+     j-2    Device2 to Device1   pid_course            <D0>
+     j-1    Device2 to Device1   pid_xfer_cmplt        Command
+       j    Device1 to Device2   pid_command_data      Command
+     j+1    Device2 to Device1   pid_records           Records
+     j+2    Device2 to Device1   pid_course_lap        CourseLap
+       …    …                    …                     …
+     k-2    Device2 to Device1   pid_course_lap        CourseLap
+     k-1    Device2 to Device1   pid_xfer_cmplt        Command
+       k    Device1 to Device2   pid_command_data      Command
+     k+1    Device2 to Device1   pid_records           Records
+     k+2    Device2 to Device1   pid_course_trk_hdr    Course_TrkHdr
+     k+3    Device2 to Device1   pid_course_trk_data   Course_TrkPoint
+       …    …                    …                     …
+     m-2    Device2 to Device1   pid_course_trk_data   Course_TrkPoint
+     m-1    Device2 to Device1   pid_xfer_cmplt        Command
+       m    Device1 to Device2   pid_command_data      Command
+     m+1    Device2 to Device1   pid_records           Records
+     m+2    Device2 to Device1   pid_course_point      CoursePoint
+       …    …                    …                     …
+     n-2    Device2 to Device1   pid_course_point      CoursePoint
+     n-1    Device2 to Device1   pid_xfer_cmplt        Command
+    ===== ==================== ===================== ==================
+
+    """
+
+    def get_data(self, callback=None):
+        runs = TransferProtocol.get_data(self,
+                                         self.gps.command.cmnd_transfer_runs,
+                                         self.gps.link.pid_run,
+                                         callback=callback)
+        course_laps = gps.course_lap_transfer.get_data(callback)
+        # If the A1012 Course Track Transfer Protocol is supported, then the associated
+        # datatypes are used. Otherwise the datatypes used by the A302 Track Log
+        # Transfer Protocol are used.
+        if gps.registered_protocols.get('course_track_transfer_protocol') is not None:
+            course_tracks = gps.course_track_transfer.get_data(callback)
+        else:
+            protocol = A1012(gps, gps.track_log_transfer.datatypes)
+            course_tracks = protocol.get_data(callback)
+        course_points = gps.course_point_transfer.get_data(callback)
+        return runs + course_tracks + course_points
+
+
+class A1007(TransferProtocol):
+    """Course Lap Transfer Protocol."""
+
+    def get_data(self, callback=None):
+        return TransferProtocol.get_data(self,
+                                         self.gps.command.cmnd_transfer_course_laps,
+                                         self.gps.link.pid_course_lap,
+                                         callback=callback)
+
+
+class A1008(TransferProtocol):
+    """Course Point Transfer Protocol."""
+
+    def get_data(self, callback=None):
+        return TransferProtocol.get_data(self,
+                                         self.gps.command.cmnd_transfer_course_points,
+                                         self.gps.link.pid_course_point,
+                                         callback=callback)
+
+
+class A1009(TransferProtocol):
+    """Course Limits Transfer Protocol.
+
+    Packet sequence:
+
+    === ================ =================== ==================
+     N   Direction        Packet ID           Packet Data Type
+    === ================ =================== ==================
+     0   Host to Device   pid_command_data    Command
+     1   Device to Host   pid_course_limits   <D0>
+    === ================ =================== ==================
+
+    """
+
+    def get_data(self, callback=None):
+        self.gps.link.send_packet(self.gps.link.pid_command_data,
+                                  self.gps.command.cmnd_transfer_course_limits)
+        packet = self.gps.link.expect_packet(self.gps.link.pid_course_limits)
+        datatype = self.datatypes[0]()
+        datatype.unpack(packet['data'])
+        if callback:
+            callback(datatype, 1, 1)
+        return datatype
+
+
+class A1012(TransferProtocol):
+    """Course Track Transfer Protocol."""
+
+    def get_data(self, callback=None):
+        return TransferProtocol.get_data(self,
+                                         self.gps.command.cmnd_transfer_course_tracks,
+                                         self.gps.link.pid_course_trk_hdr,
+                                         self.gps.link.pid_course_trk_data,
+                                         callback=callback)
+
+
+class A1013(TransferProtocol):
+    """Undocumented application protocol."""
+
+
 class ImageTransfer:
     """Image transfer protocol.
 
@@ -2204,278 +2477,6 @@ class ScreenshotTransfer:
             row = pixel_array[::-1][pos:pos+row_size]
             bmp.parray.extend(row)
         return bmp
-
-class A906(TransferProtocol):
-    """Lap Transfer Protocol.
-
-    Packet sequence:
-
-    ===== ================ ================ ==================
-       N   Direction        Packet ID        Packet Data Type
-    ===== ================ ================ ==================
-       0   Device to Host   pid_records      Records
-       1   Device to Host   pid_lap          <D0>
-       2   Device to Host   pid_lap          <D0>
-       …   …                …                …
-     n-2   Device to Host   pid_lap          <D0>
-     n-1   Device to Host   pid_xfer_cmplt   Command
-    ===== ================ ================ ==================
-
-    """
-
-    def get_data(self, callback=None):
-        return TransferProtocol.get_data(self,
-                                         self.gps.command.cmnd_transfer_laps,
-                                         self.gps.link.pid_lap,
-                                         callback=callback)
-
-
-class A907(TransferProtocol):
-    """Undocumented application protocol."""
-
-
-class A1000(TransferProtocol):
-    """Run Transfer Protocol.
-
-    Packet sequence:
-
-    ===== ================ ================== ==================
-       N   Direction        Packet ID          Packet Data Type
-    ===== ================ ================== ==================
-       0   Host to Device   pid_command_data   Command
-       1   Device to Host   pid_records        Records
-       2   Device to Host   pid_run            <D0>
-       …   …                …                  …
-     k-2   Device to Host   pid_run            <D0>
-     k-1   Device to Host   pid_xfer_cmplt     Command
-       k   Host to Device   pid_command_data   Command
-     k+1   Device to Host   pid_records        Records
-     k+2   Device to Host   pid_lap            Lap
-       …   …                …                  …
-     m-2   Device to Host   pid_lap            Lap
-     m-1   Device to Host   pid_xfer_cmplt     Command
-       m   Host to Device   pid_command_data   Command
-     m+1   Device to Host   pid_records        Records
-     m+2   Device to Host   pid_trk_hdr        TrkHdr
-     m+3   Device to Host   pid_trk_data       TrkPoint
-       …   …                …                  …
-     n-2   Device to Host   pid_trk_data       TrkPoint
-     n-1   Device to Host   pid_xfer_cmplt     Command
-    ===== ================ ================== ==================
-
-    """
-
-    def get_data(self, callback=None):
-        runs = TransferProtocol.get_data(self,
-                                         self.gps.command.cmnd_transfer_runs,
-                                         self.gps.link.pid_run,
-                                         callback=callback)
-        laps = gps.lap_transfer.get_data(callback)
-        tracks = gps.track_log_transfer.get_data(callback)
-        return runs + laps + tracks
-
-
-class A1002(TransferProtocol):
-    """Workout Transfer Protocol.
-
-    Packet sequence:
-
-    ===== ==================== ======================== ==================
-       N   Direction            Packet ID                Packet Data Type
-    ===== ==================== ======================== ==================
-       0   Device1 to Device2   pid_command_data         Command
-       1   Device2 to Device1   pid_records              Records
-       2   Device2 to Device1   pid_workout              <D0>
-     …     …                    …                        …
-     m-2   Device2 to Device1   pid_workout              <D0>
-     m-1   Device2 to Device1   pid_xfer_cmplt           Command
-       m   Device1 to Device2   pid_command_data         Command
-     m+1   Device2 to Device1   pid_records              Records
-     m+2   Device2 to Device1   pid_workout_occurrence   Workout
-     …     …                    …                        …
-     n-2   Device2 to Device1   pid_workout_occurrence   Workout
-     n-1   Device2 to Device1   pid_xfer_cmplt           Command
-    ===== ==================== ======================== ==================
-
-    """
-    def get_data(self, callback=None):
-        workouts = TransferProtocol.get_data(self,
-                                             self.gps.command.cmnd_transfer_workouts,
-                                             self.gps.link.pid_workout,
-                                             callback=callback)
-        workout_occurrences = gps.workout_occurrence_transfer.get_data(callback)
-        return workouts + workout_occurrences
-
-
-class A1003(TransferProtocol):
-    """Workout Occurrence Transfer Protocol."""
-
-    def get_data(self, callback=None):
-        return TransferProtocol.get_data(self,
-                                         self.gps.command.cmnd_transfer_workout_occurrences,
-                                         self.gps.link.pid_workout_occurrence,
-                                         callback=callback)
-
-
-class A1004(TransferProtocol):
-    """Fitness User Profile Transfer Protocol.
-
-    Packet sequence:
-
-    === ==================== ========================== ==================
-     N   Direction            Packet ID                  Packet Data Type
-    === ==================== ========================== ==================
-     0   Device1 to Device2   pid_command_data           Command
-     1   Device2 to Device1   pid_fitness_user_profile   <D0>
-    === ==================== ========================== ==================
-
-    """
-
-    def get_data(self, callback=None):
-        self.gps.link.send_packet(self.gps.link.pid_command_data,
-                                  self.gps.command.cmnd_transfer_fitness_user_profile)
-        packet = self.gps.link.expect_packet(self.gps.link.pid_fitness_user_profile)
-        datatype = self.datatypes[0]()
-        datatype.unpack(packet['data'])
-        if callback:
-            callback(datatype, 1, 1)
-        return datatype
-
-
-class A1005(TransferProtocol):
-    """Workout Limits Transfer Protocol.
-
-     N   Direction        Packet ID            Packet Data Type
-    === ================ ==================== ==================
-     0   Host to Device   pid_command_data     Command
-     1   Device to Host   pid_workout_limits   <D0>
-
-    """
-
-    def get_data(self, callback=None):
-        self.gps.link.send_packet(self.gps.link.pid_command_data,
-                                  self.gps.command.cmnd_transfer_workout_limits)
-        packet = self.gps.link.expect_packet(self.gps.link.pid_workout_limits)
-        datatype = self.datatypes[0]()
-        datatype.unpack(packet['data'])
-        if callback:
-            callback(datatype, 1, 1)
-        return datatype
-
-
-class A1006(TransferProtocol):
-    """Course Transfer Protocol.
-
-    Packet sequence:
-
-    ===== ==================== ===================== ==================
-       N    Direction            Packet ID             Packet Data Type
-    ===== ==================== ===================== ==================
-       0    Device1 to Device2   pid_command_data      Command
-       1    Device2 to Device1   pid_records           Records
-       2    Device2 to Device1   pid_course            <D0>
-       …    …                    …                     …
-     j-2    Device2 to Device1   pid_course            <D0>
-     j-1    Device2 to Device1   pid_xfer_cmplt        Command
-       j    Device1 to Device2   pid_command_data      Command
-     j+1    Device2 to Device1   pid_records           Records
-     j+2    Device2 to Device1   pid_course_lap        CourseLap
-       …    …                    …                     …
-     k-2    Device2 to Device1   pid_course_lap        CourseLap
-     k-1    Device2 to Device1   pid_xfer_cmplt        Command
-       k    Device1 to Device2   pid_command_data      Command
-     k+1    Device2 to Device1   pid_records           Records
-     k+2    Device2 to Device1   pid_course_trk_hdr    Course_TrkHdr
-     k+3    Device2 to Device1   pid_course_trk_data   Course_TrkPoint
-       …    …                    …                     …
-     m-2    Device2 to Device1   pid_course_trk_data   Course_TrkPoint
-     m-1    Device2 to Device1   pid_xfer_cmplt        Command
-       m    Device1 to Device2   pid_command_data      Command
-     m+1    Device2 to Device1   pid_records           Records
-     m+2    Device2 to Device1   pid_course_point      CoursePoint
-       …    …                    …                     …
-     n-2    Device2 to Device1   pid_course_point      CoursePoint
-     n-1    Device2 to Device1   pid_xfer_cmplt        Command
-    ===== ==================== ===================== ==================
-
-    """
-
-    def get_data(self, callback=None):
-        runs = TransferProtocol.get_data(self,
-                                         self.gps.command.cmnd_transfer_runs,
-                                         self.gps.link.pid_run,
-                                         callback=callback)
-        course_laps = gps.course_lap_transfer.get_data(callback)
-        # If the A1012 Course Track Transfer Protocol is supported, then the associated
-        # datatypes are used. Otherwise the datatypes used by the A302 Track Log
-        # Transfer Protocol are used.
-        if gps.registered_protocols.get('course_track_transfer_protocol') is not None:
-            course_tracks = gps.course_track_transfer.get_data(callback)
-        else:
-            protocol = A1012(gps, gps.track_log_transfer.datatypes)
-            course_tracks = protocol.get_data(callback)
-        course_points = gps.course_point_transfer.get_data(callback)
-        return runs + course_tracks + course_points
-
-
-class A1007(TransferProtocol):
-    """Course Lap Transfer Protocol."""
-
-    def get_data(self, callback=None):
-        return TransferProtocol.get_data(self,
-                                         self.gps.command.cmnd_transfer_course_laps,
-                                         self.gps.link.pid_course_lap,
-                                         callback=callback)
-
-
-class A1008(TransferProtocol):
-    """Course Point Transfer Protocol."""
-
-    def get_data(self, callback=None):
-        return TransferProtocol.get_data(self,
-                                         self.gps.command.cmnd_transfer_course_points,
-                                         self.gps.link.pid_course_point,
-                                         callback=callback)
-
-
-class A1009(TransferProtocol):
-    """Course Limits Transfer Protocol.
-
-    Packet sequence:
-
-    === ================ =================== ==================
-     N   Direction        Packet ID           Packet Data Type
-    === ================ =================== ==================
-     0   Host to Device   pid_command_data    Command
-     1   Device to Host   pid_course_limits   <D0>
-    === ================ =================== ==================
-
-    """
-
-    def get_data(self, callback=None):
-        self.gps.link.send_packet(self.gps.link.pid_command_data,
-                                  self.gps.command.cmnd_transfer_course_limits)
-        packet = self.gps.link.expect_packet(self.gps.link.pid_course_limits)
-        datatype = self.datatypes[0]()
-        datatype.unpack(packet['data'])
-        if callback:
-            callback(datatype, 1, 1)
-        return datatype
-
-
-class A1012(TransferProtocol):
-    """Course Track Transfer Protocol."""
-
-    def get_data(self, callback=None):
-        return TransferProtocol.get_data(self,
-                                         self.gps.command.cmnd_transfer_course_tracks,
-                                         self.gps.link.pid_course_trk_hdr,
-                                         self.gps.link.pid_course_trk_data,
-                                         callback=callback)
-
-
-class A1013(TransferProtocol):
-    """Undocumented application protocol."""
 
 
 class DataType():

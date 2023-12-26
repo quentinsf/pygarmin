@@ -6191,6 +6191,18 @@ class Garmin():
         """
         return self.pvt.get_data(callback)
 
+    def get_memory_properties(self):
+        """Return memory info."""
+        if self.map_transfer is None:
+            raise GarminError("Protocol map_transfer_protocol is not supported")
+        return self.map_transfer.get_memory_properties()
+
+    def get_map_properties(self):
+        """Return map info."""
+        if self.map_transfer is None:
+            raise GarminError("Protocol map_transfer_protocol is not supported")
+        return self.map_transfer.get_map_properties()
+
     def del_map(self):
         """Delete map."""
         if self.map_transfer is None:

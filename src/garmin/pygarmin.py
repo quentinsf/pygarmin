@@ -852,50 +852,56 @@ class Pygarmin:
         args.filename.write(info)
 
     def memory(self, args):
-        data = self.gps.map_transfer.get_memory_properties()
-        info = "Memory information\n"
-        info += "==================\n"
-        info += f"Memory region: {data.mem_region}\n"
-        info += f"Maximum number of tiles: {data.max_tiles}\n"
-        info += f"Memory size: {data.mem_size}\n"
-        args.filename.write(info)
+        try:
+            data = self.gps.get_memory_properties()
+            info = "Memory information\n"
+            info += "==================\n"
+            info += f"Memory region: {data.mem_region}\n"
+            info += f"Maximum number of tiles: {data.max_tiles}\n"
+            info += f"Memory size: {data.mem_size}\n"
+            args.filename.write(info)
+        except garmin.GarminError as e:
+            sys.exit(f"{e}")
 
     def map_info(self, args):
-        records = self.gps.map_transfer.get_map_properties()
-        if records is None:
-            log.warning("Map not found")
-        else:
-            info = "Map information\n"
-            info += "===============\n"
-            for record in records:
-                if isinstance(record, garmin.MapSegment):
-                    info += "Map segment description\n"
-                    info += "-----------------------\n"
-                    info += f"Product ID: {record.pid}\n"
-                    info += f"Family ID: {record.fid}\n"
-                    info += f"Segment ID: {record.segment_id}\n"
-                    info += f"Family name: {str(record.name, 'latin_1')}\n"
-                    info += f"Segment name: {str(record.segment_name, 'latin_1')}\n"
-                    info += f"Area name: {str(record.area_name, 'latin_1')}\n"
-                    info += "\n"
-                elif isinstance(record, garmin.MapSet):
-                    info += "Map set description\n"
-                    info += "-------------------\n"
-                    info += f"Mapset name: {str(record.mapset_name, 'latin_1')}\n"
-                    info += "\n"
-                elif isinstance(record, garmin.MapUnlock):
-                    info += "Map unlock description\n"
-                    info += "----------------------\n"
-                    info += f"Unlock code: {str(unlock_code, 'latin_1')}\n"
-                    info += "\n"
-                elif isinstance(record, garmin.MapProduct):
-                    info += "Map product description\n"
-                    info += "-----------------------\n"
-                    info += f"Product ID: {record.pid}\n"
-                    info += f"Family ID: {record.fid}\n"
-                    info += f"Family name: {str(record.name, 'latin_1')}\n"
-                    info += "\n"
-            args.filename.write(info)
+        try:
+            records = self.gps.get_map_properties()
+            if records is None:
+                log.warning("Map not found")
+            else:
+                info = "Map information\n"
+                info += "===============\n"
+                for record in records:
+                    if isinstance(record, garmin.MapSegment):
+                        info += "Map segment description\n"
+                        info += "-----------------------\n"
+                        info += f"Product ID: {record.pid}\n"
+                        info += f"Family ID: {record.fid}\n"
+                        info += f"Segment ID: {record.segment_id}\n"
+                        info += f"Family name: {str(record.name, 'latin_1')}\n"
+                        info += f"Segment name: {str(record.segment_name, 'latin_1')}\n"
+                        info += f"Area name: {str(record.area_name, 'latin_1')}\n"
+                        info += "\n"
+                    elif isinstance(record, garmin.MapSet):
+                        info += "Map set description\n"
+                        info += "-------------------\n"
+                        info += f"Mapset name: {str(record.mapset_name, 'latin_1')}\n"
+                        info += "\n"
+                    elif isinstance(record, garmin.MapUnlock):
+                        info += "Map unlock description\n"
+                        info += "----------------------\n"
+                        info += f"Unlock code: {str(unlock_code, 'latin_1')}\n"
+                        info += "\n"
+                    elif isinstance(record, garmin.MapProduct):
+                        info += "Map product description\n"
+                        info += "-----------------------\n"
+                        info += f"Product ID: {record.pid}\n"
+                        info += f"Family ID: {record.fid}\n"
+                        info += f"Family name: {str(record.name, 'latin_1')}\n"
+                        info += "\n"
+                args.filename.write(info)
+        except garmin.GarminError as e:
+            sys.exit(f"{e}")
 
     def get_waypoints(self, args):
         if args.progress:
@@ -1093,27 +1099,36 @@ class Pygarmin:
                 args.filename.write(f"{repr(run)}\n")
 
     def get_map(self, args):
-        if args.progress:
-            with ProgressBar() as progress_bar:
-                data = self.gps.get_map(callback=progress_bar.update_to)
-        else:
-            data = self.gps.get_map()
-        if data is None:
-            log.warning("Map not found")
-        else:
-            with open(args.filename, 'wb') as f:
-                f.write(data)
+        try:
+            if args.progress:
+                with ProgressBar() as progress_bar:
+                    data = self.gps.get_map(callback=progress_bar.update_to)
+            else:
+                data = self.gps.get_map()
+            if data is None:
+                log.warning("Map not found")
+            else:
+                with open(args.filename, 'wb') as f:
+                    f.write(data)
+        except garmin.GarminError as e:
+            sys.exit(f"{e}")
 
     def put_map(self, args):
-        with open(args.filename, 'rb') as f:
-            if args.progress:
-                with ProgressBar(unit='B', unit_scale=True, unit_divisor=1024, miniters=1) as progress_bar:
-                    self.gps.put_map(f, callback=progress_bar.update_to)
-            else:
-                self.gps.put_map(f)
+        try:
+            with open(args.filename, 'rb') as f:
+                if args.progress:
+                    with ProgressBar(unit='B', unit_scale=True, unit_divisor=1024, miniters=1) as progress_bar:
+                        self.gps.put_map(f, callback=progress_bar.update_to)
+                else:
+                    self.gps.put_map(f)
+        except garmin.GarminError as e:
+            sys.exit(f"{e}")
 
     def del_map(self, args):
-        self.gps.del_map()
+        try:
+            self.gps.del_map()
+        except garmin.GarminError as e:
+            sys.exit(f"{e}")
 
     def get_screenshot(self, args):
         log.info(f"Downloading screenshot")

@@ -3,8 +3,8 @@ Screenshot datatypes
 
 .. currentmodule:: garmin
 
-.. autoclass:: BGR
+.. autoclass:: RGB
 .. autoclass:: Screenshot
 .. autoclass:: ScreenshotHeader
-.. autoclass:: ScreenshotColorTable
+.. autoclass:: ScreenshotColor
 .. autoclass:: ScreenshotChunk

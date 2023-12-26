@@ -5,6 +5,10 @@ Miscellaneous datatypes
 
 .. autoclass:: Lap
 .. autoclass:: D906
+.. autoclass:: D907
+.. autoclass:: D908
+.. autoclass:: D909
+.. autoclass:: D910
 .. autoclass:: Step
 .. autoclass:: Run
 .. autoclass:: VirtualPartner
@@ -14,9 +18,9 @@ Miscellaneous datatypes
 .. autoclass:: D1002
 .. autoclass:: WorkoutOccurrence
 .. autoclass:: D1003
-.. autoclass:: HeartRateZones
-.. autoclass:: SpeedZones
-.. autoclass:: Activities
+.. autoclass:: HeartRateZone
+.. autoclass:: SpeedZone
+.. autoclass:: Activity
 .. autoclass:: FitnessUserProfile
 .. autoclass:: D1004
 .. autoclass:: WorkoutLimits
@@ -33,3 +37,4 @@ Miscellaneous datatypes
 .. autoclass:: D1012
 .. autoclass:: CourseLimits
 .. autoclass:: D1013
+.. autoclass:: D1015

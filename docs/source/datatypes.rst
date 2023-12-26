@@ -25,3 +25,4 @@ Garmin datatypes
    map_datatypes
    image_datatypes
    screenshot_datatypes
+   satellite_datatypes

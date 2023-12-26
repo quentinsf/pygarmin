@@ -2069,10 +2069,12 @@ class A1004(TransferProtocol):
 class A1005(TransferProtocol):
     """Workout Limits Transfer Protocol.
 
+    === ================ ==================== ==================
      N   Direction        Packet ID            Packet Data Type
     === ================ ==================== ==================
      0   Host to Device   pid_command_data     Command
      1   Device to Host   pid_workout_limits   <D0>
+    === ================ ==================== ==================
 
     """
 

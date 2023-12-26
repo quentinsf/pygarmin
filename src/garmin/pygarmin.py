@@ -25,7 +25,7 @@
    found at https://opensource.org/licenses/gpl-license.html
 
 """
-__version__ = '0.1'
+__version__ = '0.2'
 
 import argparse
 import gpxpy

@@ -1,6 +1,12 @@
 Changelog
 =========
 
+[1.1.0] 2023-12-26
+------------------
+
+- Support Garmin Forerunner 305
+- Support images of different color depths
+- Various bugfixes
 
 [1.0.5] 2023-11-22
 ------------------

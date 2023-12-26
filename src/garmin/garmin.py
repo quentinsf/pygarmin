@@ -64,8 +64,8 @@ import io
 import json
 import logging
 import math
+from microbmp import MicroBMP
 import os
-import PIL.Image
 import rawutil
 import re
 import serial
@@ -197,7 +197,6 @@ class SerialLink(P000):
         # 2's complement of the sum of all bytes from byte 1 to byte n-3
         if checksum != self.checksum(packet[1:-3]):
             raise LinkError("Invalid packet: checksum failed")
-
         return {'id': id, 'data': data}
 
     def pack(self, pid, data):
@@ -251,7 +250,6 @@ class SerialLink(P000):
             + self.escape(bytes([checksum])) \
             + bytes([self.dle]) \
             + bytes([self.etx])
-
         return packet
 
     def read(self):
@@ -291,7 +289,6 @@ class SerialLink(P000):
                     raise LinkError("Invalid packet: doesn't end with DLE and ETX character")
             else:
                 packet += bytes([buffer.pop(0)])
-
         return bytes(packet)
 
     def write(self, buffer):
@@ -314,10 +311,8 @@ class SerialLink(P000):
                 log.info(e)
                 self.send_nak()
                 retries += 1
-
         if retries > self.max_retries:
             raise LinkError("Maximum retries exceeded")
-
         return packet
 
     def send_packet(self, pid, data, acknowledge=True):
@@ -334,7 +329,6 @@ class SerialLink(P000):
             except LinkError as e:
                 log.error(e)
                 retries += 1
-
         if retries > self.max_retries:
             raise LinkError("Maximum retries exceeded")
 
@@ -436,11 +430,17 @@ class USBLink(P000):
         and cache the resulting value for future use.
 
         """
-        dev = usb.core.find(idVendor=self.idVendor)
-        if dev is None:
+        device = usb.core.find(idVendor=self.idVendor)
+        if device is None:
             raise LinkError("Garmin device not found")
-
-        return dev
+        for cfg in device:
+            for intf in cfg:
+                if device.is_kernel_driver_active(intf.bInterfaceNumber):
+                    try:
+                        device.detach_kernel_driver(intf.bInterfaceNumber)
+                    except usb.core.USBError as e:
+                        raise LinkError(f"Could not detach kernel driver from interface({intf.bInterfaceNumber}): {e}")
+        return device
 
     @cached_property
     def cfg(self):
@@ -459,7 +459,6 @@ class USBLink(P000):
         if cfg.bConfigurationValue != self.configuration_value:
             self.dev.set_configuration(self.configuration_value)
             cfg = self.dev.get_active_configuration()
-
         return cfg
 
     @cached_property
@@ -481,8 +480,7 @@ class USBLink(P000):
         and cache the resulting value for future use.
 
         """
-        ep = usb.util.find_descriptor(self.intf,
-                                           bEndpointAddress=self.Interrupt_IN)
+        ep = usb.util.find_descriptor(self.intf, bEndpointAddress=self.Interrupt_IN)
         return ep
 
     @cached_property
@@ -494,8 +492,7 @@ class USBLink(P000):
 
         """
 
-        ep = usb.util.find_descriptor(self.intf,
-                                           bEndpointAddress=self.Bulk_OUT)
+        ep = usb.util.find_descriptor(self.intf, bEndpointAddress=self.Bulk_OUT)
         return ep
 
     def unpack(self, buffer):
@@ -508,13 +505,10 @@ class USBLink(P000):
         # reserved_2 = buffer[6:8]  # unused
         size = buffer[8:12]
         data = buffer[12:]
-
         id = int.from_bytes(id, byteorder='little')
         size = int.from_bytes(size, byteorder='little')
-
         if size != len(data):
             raise ProtocolError("Invalid packet: wrong size of packet data")
-
         return {'id': id, 'data': data}
 
     def pack(self, layer, pid, data=None):
@@ -547,17 +541,14 @@ class USBLink(P000):
         else:
             datatype = type(data).__name__
             raise ProtocolError(f"Invalid data type: should be 'bytes' or 'int', but is {datatype}")
-
         size = len(data)
         log.debug(f"Data size: {size}")
-
         packet = bytes([layer]) \
             + bytes([0]) * 3 \
             + pid.to_bytes(2, byteorder='little') \
             + bytes([0]) * 2 \
             + size.to_bytes(4, byteorder='little') \
             + data
-
         return packet
 
     def read(self):
@@ -570,7 +561,6 @@ class USBLink(P000):
             buffer = self.dev.read(endpoint, size, timeout=timeout)
         except usb.core.USBError as e:
             raise LinkError(e.strerror)
-
         # pyusb returns an array object, but we want a bytes object
         return buffer.tobytes()
 
@@ -596,10 +586,8 @@ class USBLink(P000):
             except LinkError as e:
                 log.info(e)
                 retries += 1
-
         if retries > self.max_retries:
             raise LinkError("Maximum retries exceeded")
-
         return packet
 
     def send_packet(self, pid, data):
@@ -614,7 +602,6 @@ class USBLink(P000):
             except LinkError as e:
                 log.error(e)
                 retries += 1
-
         if retries > self.max_retries:
             raise LinkError("Maximum retries exceeded")
 
@@ -665,7 +652,6 @@ class USBLink(P000):
                 log.info("Received Session Started packet")
                 break
 
-
     def start_session(self):
         """Start USB session and return the unit ID.
 
@@ -711,7 +697,6 @@ class L000:
                     log.debug(f"Extra Product Data: {property[0].decode()}")
             else:
                 break
-
         return packet
 
     def expect_packet(self, pid):
@@ -721,7 +706,6 @@ class L000:
         packet = self.read_packet()
         if packet['id'] != pid:
             raise ProtocolError(f"Expected {pid:3}, got {packet['id']:3}")
-
         return packet
 
 
@@ -761,6 +745,7 @@ class L001(L000):
     pid_trk_hdr = 99
     pid_tx_unlock_key = 108  # undocumented
     pid_ack_unlock_key = 109  # undocumented
+    pid_satellite_data = 114
     pid_flightbook_record = 134  # packet with FlightBook data
     pid_lap = 149  # part of Forerunner data
     pid_wpt_cat = 152
@@ -848,7 +833,6 @@ class A000:
         log.info(f"Product ID: {datatype.product_id}")
         log.info(f"Software version: {datatype.software_version:.2f}")
         log.info(f"Product description: {datatype.product_description.decode()}")
-
         return datatype
 
 
@@ -912,7 +896,6 @@ class A001:
                 protocols[-1].append(protocol_datatype)
             else:
                 log.info(f"Got unknown protocol or datatype '{protocol_datatype}'. Ignoring...")
-
         return protocols
 
 
@@ -934,16 +917,16 @@ class CommandProtocol:
     cmnd_abort_transfer = None
     cmnd_turn_off_pwr = None
 
-    def __init__(self, link):
-        self.link = link
+    def __init__(self, gps):
+        self.gps = gps
 
     def abort_transfer(self):
-        self.link.send_packet(self.link.pid_command_data,
-                              self.cmnd_abort_transfer)
+        self.gps.link.send_packet(self.gps.link.pid_command_data,
+                             self.cmnd_abort_transfer)
 
     def turn_power_off(self):
-        self.link.send_packet(self.link.pid_command_data,
-                              self.cmnd_turn_off_pwr)
+        self.gps.link.send_packet(self.gps.link.pid_command_data,
+                             self.cmnd_turn_off_pwr)
 
 
 class A010(CommandProtocol):
@@ -1012,10 +995,8 @@ class T001:
 
     """
 
-    def __init__(self, phys, link, command):
-        self.phys = phys
-        self.link = link
-        self.command = command
+    def __init__(self, gps):
+        self.gps = gps
 
     @staticmethod
     def desired_baudrate(baudrate):
@@ -1039,9 +1020,9 @@ class T001:
 
     def get_supported_baudrates(self):
         log.info("Get supported baudrates...")
-        self.link.send_packet(self.link.pid_command_data,
-                              self.command.cmnd_transfer_baud)
-        packet = self.link.expect_packet(self.link.pid_baud_data)
+        self.gps.link.send_packet(self.gps.link.pid_command_data,
+                                  self.gps.command.cmnd_transfer_baud)
+        packet = self.gps.link.expect_packet(self.gps.link.pid_baud_data)
         baudrates = []
         for baudrate, in rawutil.iter_unpack('<I', packet['data']):
             baudrate = self.desired_baudrate(baudrate)
@@ -1056,14 +1037,13 @@ class T001:
         """
         log.info(f"Change baudrate to {baudrate}...")
         log.info("Turn off async mode")
-        self.link.send_packet(self.link.pid_enable_async_events, b'\x00\x00')
+        self.gps.link.send_packet(self.gps.link.pid_enable_async_events, b'\x00\x00')
         log.info("Request baudrate change")
         data = baudrate.to_bytes(4, byteorder='little')
-        self.link.send_packet(self.link.pid_baud_rqst_data,
-                              data)
+        self.gps.link.send_packet(self.gps.link.pid_baud_rqst_data, data)
         # The device will respond by sending a packet with the highest
         # acceptable baudrate closest to what was requested
-        packet = self.link.expect_packet(self.link.pid_baud_acpt_data)
+        packet = self.gps.link.expect_packet(self.gps.link.pid_baud_acpt_data)
         baudrate = int.from_bytes(packet['data'], byteorder='little')
         log.info(f"Accepted baudrate: {baudrate}")
         # Determine the desired baudrate value from accepted baudrate
@@ -1072,14 +1052,14 @@ class T001:
             log.info(f"Desired baudrate: {desired_baudrate}")
             # Set the new baudrate
             log.info(f"Set the baudrate to {desired_baudrate}")
-            self.phys.set_baudrate(desired_baudrate)
+            self.gps.phys.set_baudrate(desired_baudrate)
             try:
                 # Immediately after setting the baudrate, transmit an Ack ping packet
-                self.link.send_packet(self.link.pid_command_data,
-                                      self.command.cmnd_ack_ping)
+                self.gps.link.send_packet(self.gps.link.pid_command_data,
+                                          self.gps.command.cmnd_ack_ping)
                 # Transmit the same packet again
-                self.link.send_packet(self.link.pid_command_data,
-                                      self.command.cmnd_ack_ping)
+                self.gps.link.send_packet(self.gps.link.pid_command_data,
+                                          self.gps.command.cmnd_ack_ping)
                 # The baudrate has been successfully changed upon acknowledging the
                 # above two ping packets. If the device does not receive these two
                 # packets within two seconds, it will reset its baudrate to the default
@@ -1091,7 +1071,7 @@ class T001:
             log.warning("Unsupported baudrate {baudrate}")
 
     def get_baudrate(self):
-        return self.phys.get_baudrate()
+        return self.gps.phys.get_baudrate()
 
 
 class TransferProtocol:
@@ -1142,21 +1122,20 @@ class TransferProtocol:
 
     """
 
-    def __init__(self, link, command, datatypes):
-        self.link = link
-        self.command = command
+    def __init__(self, gps, datatypes):
+        self.gps = gps
         self.datatypes = datatypes
 
     def get_data(self, cmd, *pids, callback=None):
-        self.link.send_packet(self.link.pid_command_data, cmd)
-        packet = self.link.expect_packet(self.link.pid_records)
+        self.gps.link.send_packet(self.gps.link.pid_command_data, cmd)
+        packet = self.gps.link.expect_packet(self.gps.link.pid_records)
         datatype = Records()
         datatype.unpack(packet['data'])
         packet_count = datatype.records
         log.info(f"{type(self).__name__}: Expecting {packet_count} records")
         result = []
         for idx in range(packet_count):
-            packet = self.link.read_packet()
+            packet = self.gps.link.read_packet()
             pid = packet['id']
             data = packet['data']
             i = pids.index(pid)
@@ -1170,14 +1149,14 @@ class TransferProtocol:
                 raise ProtocolError(f"Expected one of {*pids,}, got {pid}")
             if callback:
                 callback(datatype, idx+1, packet_count)
-        self.link.expect_packet(self.link.pid_xfer_cmplt)
+        self.gps.link.expect_packet(self.gps.link.pid_xfer_cmplt)
 
         return result
 
     def put_data(self, cmd, packets, callback=None):
         packet_count = len(packets)
         log.info(f"{type(self).__name__}: Sending {packet_count} records")
-        self.link.send_packet(self.link.pid_records, packet_count)
+        self.gps.link.send_packet(self.gps.link.pid_records, packet_count)
         for idx, packet in enumerate(packets):
             pid = packet['id']
             datatype = packet['data']
@@ -1185,11 +1164,10 @@ class TransferProtocol:
             log.info(f"{str(datatype)}")
             data = datatype.get_data()
             log.debug(f"> packet {pid:3}: {bytes.hex(data, sep=' ')}")
-            self.link.send_packet(pid, data)
+            self.gps.link.send_packet(pid, data)
             if callback:
                 callback(datatype, idx+1, packet_count)
-
-        self.link.send_packet(self.link.pid_xfer_cmplt, cmd)
+        self.gps.link.send_packet(self.gps.link.pid_xfer_cmplt, cmd)
 
 
 class A100(TransferProtocol):
@@ -1212,15 +1190,15 @@ class A100(TransferProtocol):
 
     def get_data(self, callback=None):
         return TransferProtocol.get_data(self,
-                                         self.command.cmnd_transfer_wpt,
-                                         self.link.pid_wpt_data,
+                                         self.gps.command.cmnd_transfer_wpt,
+                                         self.gps.link.pid_wpt_data,
                                          callback=callback)
 
     def put_data(self, points, callback=None):
         packets = []
         log.info(f"Datatypes: {*[datatype.__name__ for datatype in self.datatypes],}")
         for point in points:
-            pid = self.link.pid_wpt_data
+            pid = self.gps.link.pid_wpt_data
             if isinstance(point, Wpt):
                 datatype = point
             elif isinstance(point, dict):
@@ -1229,9 +1207,8 @@ class A100(TransferProtocol):
                 raise ProtocolError("Invalid class type: expected dict or {datatypes[0].__name__}")
             packet = {'id': pid, 'data': datatype}
             packets.append(packet)
-
         return TransferProtocol.put_data(self,
-                                         self.command.cmnd_transfer_wpt,
+                                         self.gps.command.cmnd_transfer_wpt,
                                          packets,
                                          callback=callback)
 
@@ -1256,15 +1233,15 @@ class A101(TransferProtocol):
 
     def get_data(self, callback=None):
         return TransferProtocol.get_data(self,
-                                         self.command.cmnd_transfer_wpt_cats,
-                                         self.link.pid_wpt_cat,
+                                         self.gps.command.cmnd_transfer_wpt_cats,
+                                         self.gps.link.pid_wpt_cat,
                                          callback=callback)
 
     def put_data(self, categories, callback=None):
         packets = []
         log.info(f"Datatypes: {*[datatype.__name__ for datatype in self.datatypes],}")
         for category in categories:
-            pid = self.link.pid_wpt_cat
+            pid = self.gps.link.pid_wpt_cat
             if isinstance(point, WptCat):
                 datatype = point
             elif isinstance(point, dict):
@@ -1274,7 +1251,7 @@ class A101(TransferProtocol):
             packet = {'id': pid, 'data': datatype}
             packets.append(packet)
         return TransferProtocol.put_data(self,
-                                         self.command.cmnd_transfer_wpt_cats,
+                                         self.gps.command.cmnd_transfer_wpt_cats,
                                          packets,
                                          callback=callback)
 
@@ -1300,9 +1277,9 @@ class A200(TransferProtocol):
 
     def get_data(self, callback=None):
         return TransferProtocol.get_data(self,
-                                         self.command.cmnd_transfer_rte,
-                                         self.link.pid_rte_hdr,
-                                         self.link.pid_rte_wpt_data,
+                                         self.gps.command.cmnd_transfer_rte,
+                                         self.gps.link.pid_rte_hdr,
+                                         self.gps.link.pid_rte_wpt_data,
                                          callback=callback)
 
     def put_data(self, routes, callback=None):
@@ -1310,7 +1287,7 @@ class A200(TransferProtocol):
         for route in routes:
             header = route[0]
             points = route[1:]
-            pid = self.link.pid_rte_hdr
+            pid = self.gps.link.pid_rte_hdr
             if isinstance(header, RteHdr):
                 datatype = header
             elif isinstance(header, dict):
@@ -1320,7 +1297,7 @@ class A200(TransferProtocol):
             packet = {'id': pid, 'data': datatype}
             packets.append(packet)
             for point in points:
-                pid = self.link.pid_rte_wpt_data
+                pid = self.gps.link.pid_rte_wpt_data
                 if isinstance(point, Wpt):
                     datatype = point
                 elif isinstance(point, dict):
@@ -1329,9 +1306,8 @@ class A200(TransferProtocol):
                     raise ProtocolError("Invalid class type: expected dict or {datatypes[0].__name__}")
                 packet = {'id': pid, 'data': datatype}
                 packets.append(packet)
-
         return TransferProtocol.put_data(self,
-                                         self.command.cmnd_transfer_rte,
+                                         self.gps.command.cmnd_transfer_rte,
                                          packets,
                                          callback=callback)
 
@@ -1359,10 +1335,10 @@ class A201(TransferProtocol):
 
     def get_data(self, callback=None):
         return TransferProtocol.get_data(self,
-                                         self.command.cmnd_transfer_rte,
-                                         self.link.pid_rte_hdr,
-                                         self.link.pid_rte_wpt_data,
-                                         self.link.pid_rte_link_data,
+                                         self.gps.command.cmnd_transfer_rte,
+                                         self.gps.link.pid_rte_hdr,
+                                         self.gps.link.pid_rte_wpt_data,
+                                         self.gps.link.pid_rte_link_data,
                                          callback=callback)
 
     def put_data(self, routes, callback=None):
@@ -1370,21 +1346,21 @@ class A201(TransferProtocol):
         for point in routes:
             header = route[0]
             points = route[1:]
-            pid = self.link.pid_rte_hdr
+            pid = self.gps.link.pid_rte_hdr
             datatype = self.datatypes[0](**header)
             packet = {'id': pid, 'data': datatype}
             packets.append(packet)
             is_even = lambda x: x % 2 == 0
             for idx, point in enumerate(points):
                 if is_even(idx):
-                    pid = self.link.pid_rte_wpt_data
+                    pid = self.gps.link.pid_rte_wpt_data
                 else:
-                    pid = self.link.pid_rte_link_data
+                    pid = self.gps.link.pid_rte_link_data
                 datatype = self.datatypes[idx+1](**point)
                 packet = {'id': pid, 'data': datatype}
                 packets.append(packet)
         return TransferProtocol.put_data(self,
-                                         self.command.cmnd_transfer_rte,
+                                         self.gps.command.cmnd_transfer_rte,
                                          packets,
                                          callback=callback)
 
@@ -1409,14 +1385,14 @@ class A300(TransferProtocol):
 
     def get_data(self, callback=None):
         return TransferProtocol.get_data(self,
-                                         self.command.cmnd_transfer_trk,
-                                         self.link.pid_trk_data,
+                                         self.gps.command.cmnd_transfer_trk,
+                                         self.gps.link.pid_trk_data,
                                          callback=callback)
 
     def put_data(self, points, callback=None):
         packets = []
         for point in points:
-            pid = self.link.pid_trk_data
+            pid = self.gps.link.pid_trk_data
             if isinstance(point, TrkPoint):
                 datatype = point
             elif isinstance(point, dict):
@@ -1425,9 +1401,8 @@ class A300(TransferProtocol):
                 raise ProtocolError("Invalid class type: expected dict or {datatypes[0].__name__}")
             packet = (pid, datatype)
             packets.append(packet)
-
         return TransferProtocol.put_data(self,
-                                         self.command.cmnd_transfer_trk,
+                                         self.gps.command.cmnd_transfer_trk,
                                          packets,
                                          callback=callback)
 
@@ -1453,9 +1428,9 @@ class A301(TransferProtocol):
 
     def get_data(self, callback=None):
         return TransferProtocol.get_data(self,
-                                         self.command.cmnd_transfer_trk,
-                                         self.link.pid_trk_hdr,
-                                         self.link.pid_trk_data,
+                                         self.gps.command.cmnd_transfer_trk,
+                                         self.gps.link.pid_trk_hdr,
+                                         self.gps.link.pid_trk_data,
                                          callback=callback)
 
     def put_data(self, tracks, callback=None):
@@ -1463,7 +1438,7 @@ class A301(TransferProtocol):
         for track in tracks:
             header = track[0]
             points = track[1:]
-            pid = self.link.pid_trk_hdr
+            pid = self.gps.link.pid_trk_hdr
             if isinstance(header, TrkHdr):
                 datatype = header
             elif isinstance(header, dict):
@@ -1473,7 +1448,7 @@ class A301(TransferProtocol):
             packet = (pid, datatype)
             packets.append(packet)
             for point in points:
-                pid = self.link.pid_trk_data
+                pid = self.gps.link.pid_trk_data
                 if isinstance(point, TrkPoint):
                     datatype = point
                 elif isinstance(point, dict):
@@ -1482,9 +1457,8 @@ class A301(TransferProtocol):
                     raise ProtocolError("Invalid class type: expected dict or {datatypes[1].__name__}")
                 packet = (pid, datatype)
                 packets.append(packet)
-
         return TransferProtocol.put_data(self,
-                                         self.command.cmnd_transfer_trk,
+                                         self.gps.command.cmnd_transfer_trk,
                                          packets,
                                          callback=callback)
 
@@ -1523,14 +1497,14 @@ class A400(TransferProtocol):
 
     def get_data(self, callback=None):
         return TransferProtocol.get_data(self,
-                                         self.command.cmnd_transfer_prx,
-                                         self.link.pid_prx_wpt_data,
+                                         self.gps.command.cmnd_transfer_prx,
+                                         self.gps.link.pid_prx_wpt_data,
                                          callback=callback)
 
     def put_data(self, points, callback=None):
         packets = []
         for point in points:
-            pid = self.link.pid_prx_wpt_data
+            pid = self.gps.link.pid_prx_wpt_data
             if isinstance(point, PrxWpt):
                 datatype = point
             elif isinstance(point, dict):
@@ -1539,9 +1513,8 @@ class A400(TransferProtocol):
                 raise ProtocolError("Invalid class type: expected dict or {datatypes[0].__name__}")
             packet = {'id': pid, 'data': datatype}
             packets.append(packet)
-
         return TransferProtocol.put_data(self,
-                                         self.command.cmnd_transfer_prx,
+                                         self.gps.command.cmnd_transfer_prx,
                                          packets,
                                          callback=callback)
 
@@ -1572,8 +1545,8 @@ class A500(TransferProtocol):
 
     def get_data(self, callback=None):
         return TransferProtocol.get_data(self,
-                                         self.command.cmnd_transfer_alm,
-                                         self.link.pid_almanac_data,
+                                         self.gps.command.cmnd_transfer_alm,
+                                         self.gps.link.pid_almanac_data,
                                          callback=callback)
 
 
@@ -1591,21 +1564,18 @@ class A600(TransferProtocol):
     """
 
     def get_data(self, callback=None):
-        self.link.send_packet(self.link.pid_command_data,
-                              self.command.cmnd_transfer_time)
-        packet = self.link.expect_packet(self.link.pid_date_time_data)
+        self.gps.link.send_packet(self.gps.link.pid_command_data,
+                                  self.gps.command.cmnd_transfer_time)
+        packet = self.gps.link.expect_packet(self.gps.link.pid_date_time_data)
         datatype = self.datatypes[0]()
         datatype.unpack(packet['data'])
         if callback:
             callback(datatype, 1, 1)
-
         return datatype
 
 
 class A601(TransferProtocol):
-    """A601 implementation.
-
-    Used by GPSmap 60cs, no specifications as of 2004-09-26."""
+    """Undocumented application protocol."""
 
 
 class A650(TransferProtocol):
@@ -1628,8 +1598,8 @@ class A650(TransferProtocol):
 
     def get_data(self, callback=None):
         return TransferProtocol.get_data(self,
-                                         self.command.cmnd_flightbook_transfer,
-                                         self.link.pid_flightbook_record,
+                                         self.gps.command.cmnd_flightbook_transfer,
+                                         self.gps.link.pid_flightbook_record,
                                          callback=callback)
 
 
@@ -1647,14 +1617,13 @@ class A700(TransferProtocol):
     """
 
     def get_data(self, callback=None):
-        self.link.send_packet(self.link.pid_command_data,
-                              self.command.cmnd_transfer_posn)
-        packet = self.link.expect_packet(self.link.pid_position_data)
+        self.gps.link.send_packet(self.gps.link.pid_command_data,
+                                  self.gps.command.cmnd_transfer_posn)
+        packet = self.gps.link.expect_packet(self.gps.link.pid_position_data)
         datatype = self.datatypes[0]()
         datatype.unpack(packet['data'])
         if callback:
             callback(datatype, 1, 1)
-
         return datatype
 
 
@@ -1679,42 +1648,50 @@ class A800(TransferProtocol):
      0   Device to Host (ACK/NAK optional)   pid_pvt_data   <D0>
     === =================================== ============== ==================
 
+    The Garmin Forerunner 305 only reports the D800 datatype, but in practice
+    transmits the D800 and an undocumented Satellite datatype alternately.
+
     """
 
     def data_on(self):
-        self.link.send_packet(self.link.pid_command_data,
-                              self.command.cmnd_start_pvt_data)
+        self.gps.link.send_packet(self.gps.link.pid_command_data,
+                                  self.gps.command.cmnd_start_pvt_data)
 
     def data_off(self):
-        self.link.send_packet(self.link.pid_command_data,
-                              self.command.cmnd_stop_pvt_data)
+        self.gps.link.send_packet(self.gps.link.pid_command_data,
+                                  self.gps.command.cmnd_stop_pvt_data)
 
     def get_data(self, callback=None):
-        packet = self.link.expect_packet(self.link.pid_pvt_data)
-        datatype = self.datatypes[0]()
-        datatype.unpack(packet['data'])
-        if callback:
-            callback(datatype, 1, 1)
-
-        return datatype
+        pids = [self.gps.link.pid_pvt_data,
+                self.gps.link.pid_satellite_data]
+        self.datatypes.append(Satellite)
+        packet = self.gps.link.read_packet()
+        pid = packet['id']
+        if pid in pids:
+            i = pids.index(pid)
+            datatype = self.datatypes[i]()
+            log.info(f"Datatype {type(datatype).__name__}")
+            datatype.unpack(packet['data'])
+            log.info(f"{str(datatype)}")
+            if type(datatype).__name__ == 'Satellite':
+                log.info(f"{str(datatype.get_records())}")
+            if callback:
+                callback(datatype, 1, 1)
+            return datatype
+        else:
+            raise ProtocolError(f"Expected one of {*pids,}, got {pid}")
 
 
 class A801:
-    """A801 implementation.
-
-    Used by ?, no documentation as of 2001-05-30.
-    """
+    """Undocumented application protocol."""
 
 
 class A802:
-    """A802 implementation.
-
-    Used by ?, no documentation as of 2001-05-30.
-    """
+    """Undocumented application protocol."""
 
 
 class A900:
-    """A900 implementation.
+    """Map transfer protocol.
 
     This protocol is undocumented, but it appears to be a map transfer protocol.
     The implementation is derived from the GarminDev drivers of the abandoned
@@ -1765,9 +1742,8 @@ class A900:
 
     """
 
-    def __init__(self, link, command):
-        self.link = link
-        self.command = command
+    def __init__(self, gps):
+        self.gps = gps
 
     @cached_property
     def memory_properties(self):
@@ -1775,10 +1751,10 @@ class A900:
 
     def get_memory_properties(self):
         log.info("Request capacity data...")
-        self.link.send_packet(self.link.pid_command_data,
-                              self.command.cmnd_transfer_mem)
+        self.gps.link.send_packet(self.gps.link.pid_command_data,
+                                  self.gps.command.cmnd_transfer_mem)
         log.info("Expect capacity data")
-        packet = self.link.expect_packet(self.link.pid_capacity_data)
+        packet = self.gps.link.expect_packet(self.gps.link.pid_capacity_data)
         datatype = MemProperties()
         datatype.unpack(packet['data'])
         mem_size = datatype.mem_size
@@ -1791,17 +1767,17 @@ class A900:
         datatype = MemFile(mem_region=mem_region, subfile=filename)
         datatype.pack()
         data = datatype.get_data()
-        self.link.send_packet(self.link.pid_mem_read, data)
-        packet = self.link.read_packet()
+        self.gps.link.send_packet(self.gps.link.pid_mem_read, data)
+        packet = self.gps.link.read_packet()
         pid = packet['id']
-        if pid == self.link.pid_mem_data:
+        if pid == self.gps.link.pid_mem_data:
             datatype = MemData()
             datatype.unpack(packet['data'])
             if int.from_bytes(datatype.data, byteorder='little') == 0:
                 log.info("Data not found")
             else:
                 log.info(f"Got unknown data {datatype.data}. Ignoring...")
-        elif pid == self.link.pid_mem_records:
+        elif pid == self.gps.link.pid_mem_records:
             # The Records contains a 32-bit integer that indicates the number
             # of data packets to follow.
             datatype = Records()
@@ -1810,7 +1786,7 @@ class A900:
             log.info(f"{type(self).__name__}: Expecting {packet_count} records")
             data = bytes()
             for idx in range(packet_count):
-                packet = self.link.expect_packet(self.link.pid_mem_chunk)
+                packet = self.gps.link.expect_packet(self.gps.link.pid_mem_chunk)
                 datatype = MemRecord()
                 datatype.unpack(packet['data'])
                 data += datatype.chunk
@@ -1831,7 +1807,7 @@ class A900:
                 datatype.pack()
                 data = datatype.get_data()
                 log.debug(f"Upload {offset+len(chunk)}/{file_size} bytes")
-                self.link.send_packet(self.link.pid_mem_write, data)
+                self.gps.link.send_packet(self.gps.link.pid_mem_write, data)
                 if callback:
                     callback(datatype, offset+len(chunk), file_size)
 
@@ -1849,7 +1825,7 @@ class A900:
             datatype.pack()
             data = datatype.get_data()
             log.debug(f"Upload {offset+len(chunk)}/{file_size} bytes")
-            self.link.send_packet(self.link.pid_mem_write, data)
+            self.gps.link.send_packet(self.gps.link.pid_mem_write, data)
             if callback:
                 callback(datatype, offset+len(chunk), file_size)
 
@@ -1863,17 +1839,17 @@ class A900:
             datatype.pack()
             data = datatype.get_data()
             log.debug(f"Upload {offset+len(chunk)}/{file_size} bytes")
-            self.link.send_packet(self.link.pid_mem_write, data)
+            self.gps.link.send_packet(self.gps.link.pid_mem_write, data)
             if callback:
                 callback(datatype, offset+len(chunk), file_size)
 
     def _write_memory(self, data, chunk_size=250, callback=None):
         mem_region = self.memory_properties.mem_region
         log.info("Turn off async mode")
-        self.link.send_packet(self.link.pid_enable_async_events, b'\x00\x00')
+        self.gps.link.send_packet(self.gps.link.pid_enable_async_events, b'\x00\x00')
         log.info("Enable write")
-        self.link.send_packet(self.link.pid_mem_wren, mem_region)
-        self.link.expect_packet(self.link.pid_mem_wel)
+        self.gps.link.send_packet(self.gps.link.pid_mem_wren, mem_region)
+        self.gps.link.expect_packet(self.gps.link.pid_mem_wel)
         log.info("Write enabled")
         if data is None:
             log.info("Delete map...")
@@ -1885,7 +1861,7 @@ class A900:
         elif isinstance(data, bytes):
             self._write_bytes(data, chunk_size, callback)
         log.info("Disable write")
-        self.link.send_packet(self.link.pid_mem_wrdi, mem_region)
+        self.gps.link.send_packet(self.gps.link.pid_mem_wrdi, mem_region)
 
     def get_map_properties(self):
         log.info("Get map properties...")
@@ -1907,7 +1883,7 @@ class A900:
 
 
 class A902:
-    """A902 implementation.
+    """Map unlock protocol.
 
     This protocol is undocumented, but it appears to be a map unlock protocol.
     The implementation is derived from the GarminDev drivers of the abandoned
@@ -1917,29 +1893,24 @@ class A902:
 
     """
 
-    def __init__(self, link, command):
-        self.link = link
-        self.command = command
+    def __init__(self, gps):
+        self.gps = gps
 
     def send_unlock_key(self, key):
         data = bytes(key)
         log.info("Send unlock key")
-        self.link.send_packet(self.link.pid_tx_unlock_key,
-                              data)
+        self.gps.link.send_packet(self.gps.link.pid_tx_unlock_key, data)
         log.info("Acknowledge unlock key")
-        self.link.expect_packet(self.link.pid_ack_unlock_key)
+        self.gps.link.expect_packet(self.gps.link.pid_ack_unlock_key)
         # TODO: read data
 
 
 class A903:
-    """A903 implementation.
-
-    Used by etrex, no documentation as of 2001-05-30.
-    """
+    """Undocumented application protocol."""
 
 
 class A904:
-    """A904 implementation.
+    """Undocumented application protocol
 
     This protocol is undocumented, but it appears to be a routable protocol. No
     implementation as of yet.
@@ -1947,298 +1918,15 @@ class A904:
     """
 
 
-class ImageTransfer:
-    """Image transfer protocol.
+class A905(TransferProtocol):
+    """Undocumented application protocol
 
-    With the image transfer protocol a screenshot and custom waypoint icons can
-    be downloaded. The latter can also be uploaded. This protocol is
-    undocumented. The implementation is derived from the GarminDev drivers of
-    the abandoned QLandkarteGT application
-    (https://sourceforge.net/projects/qlandkartegt/) and by reverse-engineering
-    the Garmin xImage utility
-    (https://www8.garmin.com/support/download_details.jsp?id=545). Compatible
-    devices include the Garmin GPSMAP 60CX/60CSX, eTrex Legend C, eTrex Vista C,
-    GPSMAP 60C/60CS, GPSMAP 76C/76CS. Some devices, like the 60C and 76C,
-    originally didn’t support custom waypoint icons, but later it was added with
-    a firmware update.
+    This protocol is undocumented, but it is called an unlock code communication
+    protocol in the changelogs of the Garmin eTrex Legend Cx/Vista Cx/Venture
+    Cx/Venture HC, and the Garmin GPSMAP 60Cx/60CSx/76Cx/76CSx. No
+    implementation as of yet.
 
     """
-
-    def __init__(self, link, command):
-        self.link = link
-        self.command = command
-
-
-    def get_image_types(self):
-        log.info("Request image types")
-        self.link.send_packet(self.link.pid_image_type_idx_rx, None)
-        packet = self.link.expect_packet(self.link.pid_image_type_idx_tx)
-        indices = list(packet['data'])
-        log.info("Request image type names")
-        image_types = list()
-        for idx in indices:
-            self.link.send_packet(self.link.pid_image_type_name_rx, idx)
-            packet = self.link.expect_packet(self.link.pid_image_type_name_tx)
-            datatype = ImageName()
-            datatype.unpack(packet['data'])
-            name = datatype.name.decode()
-            log.info(f"Image type name: {name}")
-            image_types.append({'idx': idx, 'name': name})
-        return image_types
-
-    def get_image_list(self):
-        log.info("Request image list")
-        self.link.send_packet(self.link.pid_image_list_rx, None)
-        packet = self.link.expect_packet(self.link.pid_image_list_tx)
-        datatype = ImageList()
-        datatype.unpack(packet['data'])
-        images = list()
-        for image in datatype.get_images():
-            idx = image.idx
-            image_dict = image.get_dict()
-            log.info("Request image name")
-            self.link.send_packet(self.link.pid_image_name_rx, idx)
-            packet = self.link.expect_packet(self.link.pid_image_name_tx)
-            datatype = ImageName()
-            datatype.unpack(packet['data'])
-            name = datatype.name.decode()
-            log.info(f"Image name: {name}")
-            image_dict['name'] = name
-            images.append(image_dict)
-        return images
-
-    def get_image(self, idx=None, callback=None):
-        log.info("Turn off async mode")
-        self.link.send_packet(self.link.pid_enable_async_events, b'\x00\x00')
-        log.info("Request image properties")
-        self.link.send_packet(self.link.pid_image_props_rx, idx)
-        packet = self.link.expect_packet(self.link.pid_image_props_tx)
-        if not packet['data']:
-            raise ValueError(f"Invalid symbol index {idx}")
-        datatype = ImageInformationHeader()
-        datatype.unpack(packet['data'])
-        dimensions = datatype.get_dimensions()
-        pixel_size = datatype.get_size()
-        colors_used = datatype.get_colors_used()
-        log.info(f"Dimensions: {'x'.join(map(str, dimensions))} pixels")
-        log.info(f"Size: {pixel_size} bytes")
-        log.info(f"Bits per pixel: {datatype.bpp}")
-        log.info(f"Colors used: {colors_used}")
-        if colors_used is None or colors_used == 0:
-            raise GarminError("Images without a color palette are not supported")
-        log.info("Request image ID")
-        self.link.send_packet(self.link.pid_image_id_rx, idx)
-        packet = self.link.expect_packet(self.link.pid_image_id_tx)
-        receive = ImageId()
-        receive.unpack(packet['data'])
-        log.info(f"Image ID: {receive.id}")
-        log.info(f"Request color table for image ID {receive.id}")
-        # The color table is sent in one packet, consisting of 4 bytes for the
-        # id, and 4 bytes per color.
-        color_table_size = colors_used * 4 + 4
-        # The pixel data is sent in chunks, with a packet data size of maximum
-        # 500 bytes, consisting of 4 bytes for the id and maximum 496 bytes for
-        # the chunk of pixel data. Finally, a packet with only the 4 byte id is
-        # sent.
-        max_chunk_size = 496
-        chunk_count = math.ceil(pixel_size / max_chunk_size)
-        pixel_data_size = chunk_count * 4 + pixel_size + 4
-        total_bytes = color_table_size + pixel_data_size
-        received_bytes = 0
-        self.link.send_packet(self.link.pid_color_table_rx, receive.get_data())
-        packet = self.link.expect_packet(self.link.pid_color_table_tx)
-        received_bytes += len(packet['data'])
-        if callback:
-            callback(datatype, received_bytes, total_bytes)
-        datatype = ImageColorTable()
-        datatype.unpack(packet['data'])
-        palette = datatype.get_palette()
-        log.info(f"Request pixel data for image ID {receive.id}")
-        pixel_data = bytes()
-        while True:
-            self.link.send_packet(self.link.pid_image_data_rx, receive.get_data())
-            packet = self.link.expect_packet(self.link.pid_image_data_tx)
-            received_bytes += len(packet['data'])
-            datatype = ImageChunk()
-            datatype.unpack(packet['data'])
-            if callback:
-                callback(datatype, received_bytes, total_bytes)
-            if not datatype.data:
-                break
-            else:
-                pixel_data += datatype.data
-        log.info(f"Completed request pixel data for image ID {receive.id}")
-        self.link.send_packet(self.link.pid_image_data_cmplt, receive.get_data())
-        log.info("Create image from pixel data")
-        image = PIL.Image.frombytes(mode='P', size=dimensions, data=pixel_data, decoder_name='raw')
-        log.info("Attach palette to image")
-        image.putpalette(palette, rawmode='RGB')
-        return image.transpose(method=PIL.Image.Transpose.ROTATE_180)
-
-    def put_image(self, idx=None, image=None, callback=None):
-        log.info("Turn off async mode")
-        self.link.send_packet(self.link.pid_enable_async_events, b'\x00\x00')
-        log.info("Request image properties")
-        self.link.send_packet(self.link.pid_image_props_rx, idx)
-        packet = self.link.expect_packet(self.link.pid_image_props_tx)
-        if not packet['data']:
-            raise ValueError(f"Invalid symbol index {idx}")
-        datatype = ImageInformationHeader()
-        datatype.unpack(packet['data'])
-        dimensions = datatype.get_dimensions()
-        pixel_size = datatype.get_size()
-        bpp = datatype.bpp
-        colors_used = datatype.get_colors_used()
-        log.info(f"Dimensions: {'x'.join(map(str, dimensions))} pixels")
-        log.info(f"Size: {pixel_size} bytes")
-        log.info(f"Bits per pixel: {bpp}")
-        log.info(f"Colors used: {colors_used}")
-        if colors_used is None or colors_used == 0:
-            raise GarminError("Images without a color palette are not supported")
-        log.info("Request image ID")
-        self.link.send_packet(self.link.pid_image_id_rx, idx)
-        packet = self.link.expect_packet(self.link.pid_image_id_tx)
-        transmit = ImageId()
-        transmit.unpack(packet['data'])
-        log.info(f"Image ID: {transmit.id}")
-        log.info(f"Request color table for image ID {transmit.id}")
-        self.link.send_packet(self.link.pid_color_table_rx, transmit.get_data())
-        packet = self.link.expect_packet(self.link.pid_color_table_tx)
-        datatype = ImageColorTable()
-        datatype.unpack(packet['data'])
-        palette = datatype.get_palette()
-        # The color table is sent in one packet, consisting of 4 bytes for the
-        # id, and 4 bytes per color.
-        color_table_size = colors_used * 4 + 4
-        # The pixel data is sent in chunks, with a packet data size of maximum
-        # 500 bytes, consisting of 4 bytes for the id and maximum 496 bytes for
-        # the chunk of pixel data. Finally, a packet with only the 4 byte id is
-        # sent.
-        max_chunk_size = 496
-        chunk_count = math.ceil(pixel_size / max_chunk_size)
-        pixel_data_size = chunk_count * 4 + pixel_size + 4
-        total_bytes = color_table_size + pixel_data_size
-        sent_bytes = 0
-        log.info(f"Send color table for image ID {transmit.id}")
-        # Use the just received color table of the existing image
-        data = datatype.get_data()
-        self.link.send_packet(self.link.pid_color_table_tx, data)
-        sent_bytes += len(data)
-        if callback:
-            callback(datatype, sent_bytes, total_bytes)
-        packet = self.link.expect_packet(self.link.pid_color_table_rx)
-        receive = ImageId()
-        receive.unpack(packet['data'])
-        if receive.id != transmit.id:
-            raise ProtocolError(f"Expected {transmit.id}, got {receive.id}")
-        out = image.transpose(method=PIL.Image.Transpose.ROTATE_180)
-        if out.mode in ('RGBA', 'LA','PA'):
-            log.info(f"Replace the alpha channel with magenta as transparency color")
-            color=(255, 0, 255)
-            alpha = out.getchannel('A')
-            # convert semi-transparent pixels to black and white
-            mask = out.convert(mode='1')
-            background = PIL.Image.new('RGB', out.size, color)
-            background.paste(out, mask=mask)
-            out = background
-        if out.size != dimensions:
-            log.info(f"Resize image to {'x'.join(map(str, dimensions))} pixels")
-            out = out.resize(dimensions)
-        if not (out.mode == 'P' and out.palette == palette):
-            log.info(f"Convert image to {bpp}-bit RGB format")
-            out = out.convert(mode='RGB')
-            log.info(f"Quantize image to the received color palette.")
-            new_image = PIL.Image.new('P', dimensions)
-            new_palette = PIL.ImagePalette.ImagePalette(palette=palette)
-            new_image.putpalette(new_palette)
-            out = out.quantize(colors=colors_used, palette=new_image)
-        pixel_data = out.tobytes()
-        log.info(f"Send pixel data for image ID {transmit.id}")
-        datatype = ImageChunk(transmit.id, pixel_data)
-        datatype.pack()
-        data = datatype.get_data()
-        self.link.send_packet(self.link.pid_image_data_tx, data)
-        sent_bytes += len(data)
-        if callback:
-            callback(datatype, sent_bytes, total_bytes)
-        packet = self.link.expect_packet(self.link.pid_image_data_rx)
-        receive = ImageId()
-        receive.unpack(packet['data'])
-        if receive.id != transmit.id:
-            raise ProtocolError(f"Expected {transmit.id}, got {receive.id}")
-        log.info(f"Completed send pixel data for image ID {transmit.id}")
-        self.link.send_packet(self.link.pid_image_data_cmplt, transmit.get_data())
-        sent_bytes += len(transmit.get_data())
-        if callback:
-            callback(transmit, sent_bytes, total_bytes)
-
-
-class ScreenshotTransfer:
-
-    def __init__(self, link, command):
-        self.link = link
-        self.command = command
-
-    def get_image(self, callback=None):
-        log.info("Request screenshot...")
-        self.link.send_packet(self.link.pid_command_data, self.command.cmnd_transfer_screen)
-        log.info("Expect screen data")
-        packet = self.link.expect_packet(self.link.pid_screen_data)
-        datatype = ScreenshotHeader()
-        datatype.unpack(packet['data'])
-        dimensions = datatype.get_dimensions()
-        pixel_size = datatype.get_size()
-        colors_used = datatype.get_colors_used()
-        log.info(f"Dimensions: {'x'.join(map(str, dimensions))} pixels")
-        log.info(f"Size: {pixel_size} bytes")
-        log.info(f"Bits per pixel: {datatype.bpp}")
-        log.info(f"Colors used: {colors_used}")
-        if colors_used is None or colors_used == 0:
-            raise GarminError("Screenshots without a color palette are not supported")
-        # The color table is sent per color, so each packet data size is 11
-        # bytes, consisting of 4 bytes for the section, 4 bytes for the offset,
-        # and 3 bytes for the color.
-        color_table_size = colors_used * 11
-        # The pixel data is sent per row, "bottom-up", with a packet data size
-        # of maximum 136 bytes, consisting of 4 bytes for the section, 4 bytes
-        # for the offset, and maximum 128 bytes for the chunk of pixel data.
-        max_chunk_size = 128
-        chunk_count = math.ceil(datatype.width / max_chunk_size)
-        row_size = chunk_count * 8 + datatype.width
-        pixel_data_size = row_size * datatype.height
-        total_bytes = color_table_size + pixel_data_size
-        received_bytes = 0
-        log.info("Expect color table")
-        color_table = bytes()
-        while received_bytes < color_table_size:
-            packet = self.link.expect_packet(self.link.pid_screen_data)
-            datatype = ScreenshotChunk()
-            datatype.unpack(packet['data'])
-            section = datatype.get_section()
-            if section == 'color_table':
-                color_table += datatype.chunk
-                received_bytes += len(packet['data'])
-                if callback:
-                    callback(datatype, received_bytes, total_bytes)
-            else:
-                raise ProtocolError(f"Invalid section: expected color_table, got {section}")
-        log.info("Expect pixel data")
-        pixel_data = bytes()
-        while received_bytes < total_bytes:
-            packet = self.link.expect_packet(self.link.pid_screen_data)
-            datatype = ScreenshotChunk()
-            datatype.unpack(packet['data'])
-            section = datatype.get_section()
-            if section == 'pixel_data':
-                pixel_data += datatype.chunk
-                received_bytes += len(packet['data'])
-                if callback:
-                    callback(datatype, received_bytes, total_bytes)
-            else:
-                raise ProtocolError(f"Invalid section: expected pixel_data, got {section}")
-        image = PIL.Image.frombytes(mode='P', size=dimensions, data=pixel_data, decoder_name='raw')
-        image.putpalette(color_table, rawmode='BGR')
-        return image.transpose(method=PIL.Image.Transpose.ROTATE_180)
 
 
 class A906(TransferProtocol):
@@ -2261,9 +1949,13 @@ class A906(TransferProtocol):
 
     def get_data(self, callback=None):
         return TransferProtocol.get_data(self,
-                                         self.command.cmnd_transfer_laps,
-                                         self.link.pid_lap,
+                                         self.gps.command.cmnd_transfer_laps,
+                                         self.gps.link.pid_lap,
                                          callback=callback)
+
+
+class A907(TransferProtocol):
+    """Undocumented application protocol."""
 
 
 class A1000(TransferProtocol):
@@ -2298,10 +1990,511 @@ class A1000(TransferProtocol):
     """
 
     def get_data(self, callback=None):
-        return TransferProtocol.get_data(self,
-                                         self.command.cmnd_transfer_runs,
-                                         self.link.pid_run,
+        runs = TransferProtocol.get_data(self,
+                                         self.gps.command.cmnd_transfer_runs,
+                                         self.gps.link.pid_run,
                                          callback=callback)
+        laps = gps.lap_transfer.get_data(callback)
+        tracks = gps.track_log_transfer.get_data(callback)
+        return runs + laps + tracks
+
+
+class A1002(TransferProtocol):
+    """Workout Transfer Protocol.
+
+    Packet sequence:
+
+    ===== ==================== ======================== ==================
+       N   Direction            Packet ID                Packet Data Type
+    ===== ==================== ======================== ==================
+       0   Device1 to Device2   pid_command_data         Command
+       1   Device2 to Device1   pid_records              Records
+       2   Device2 to Device1   pid_workout              <D0>
+     …     …                    …                        …
+     m-2   Device2 to Device1   pid_workout              <D0>
+     m-1   Device2 to Device1   pid_xfer_cmplt           Command
+       m   Device1 to Device2   pid_command_data         Command
+     m+1   Device2 to Device1   pid_records              Records
+     m+2   Device2 to Device1   pid_workout_occurrence   Workout
+     …     …                    …                        …
+     n-2   Device2 to Device1   pid_workout_occurrence   Workout
+     n-1   Device2 to Device1   pid_xfer_cmplt           Command
+    ===== ==================== ======================== ==================
+
+    """
+    def get_data(self, callback=None):
+        workouts = TransferProtocol.get_data(self,
+                                             self.gps.command.cmnd_transfer_workouts,
+                                             self.gps.link.pid_workout,
+                                             callback=callback)
+        workout_occurrences = gps.workout_occurrence_transfer.get_data(callback)
+        return workouts + workout_occurrences
+
+
+class A1003(TransferProtocol):
+    """Workout Occurrence Transfer Protocol."""
+
+    def get_data(self, callback=None):
+        return TransferProtocol.get_data(self,
+                                         self.gps.command.cmnd_transfer_workout_occurrences,
+                                         self.gps.link.pid_workout_occurrence,
+                                         callback=callback)
+
+
+class A1004(TransferProtocol):
+    """Fitness User Profile Transfer Protocol.
+
+    Packet sequence:
+
+    === ==================== ========================== ==================
+     N   Direction            Packet ID                  Packet Data Type
+    === ==================== ========================== ==================
+     0   Device1 to Device2   pid_command_data           Command
+     1   Device2 to Device1   pid_fitness_user_profile   <D0>
+    === ==================== ========================== ==================
+
+    """
+
+    def get_data(self, callback=None):
+        self.gps.link.send_packet(self.gps.link.pid_command_data,
+                                  self.gps.command.cmnd_transfer_fitness_user_profile)
+        packet = self.gps.link.expect_packet(self.gps.link.pid_fitness_user_profile)
+        datatype = self.datatypes[0]()
+        datatype.unpack(packet['data'])
+        if callback:
+            callback(datatype, 1, 1)
+        return datatype
+
+
+class A1005(TransferProtocol):
+    """Workout Limits Transfer Protocol.
+
+    === ================ ==================== ==================
+     N   Direction        Packet ID            Packet Data Type
+    === ================ ==================== ==================
+     0   Host to Device   pid_command_data     Command
+     1   Device to Host   pid_workout_limits   <D0>
+    === ================ ==================== ==================
+
+    """
+
+    def get_data(self, callback=None):
+        self.gps.link.send_packet(self.gps.link.pid_command_data,
+                                  self.gps.command.cmnd_transfer_workout_limits)
+        packet = self.gps.link.expect_packet(self.gps.link.pid_workout_limits)
+        datatype = self.datatypes[0]()
+        datatype.unpack(packet['data'])
+        if callback:
+            callback(datatype, 1, 1)
+        return datatype
+
+
+class A1006(TransferProtocol):
+    """Course Transfer Protocol.
+
+    Packet sequence:
+
+    ===== ==================== ===================== ==================
+       N    Direction            Packet ID             Packet Data Type
+    ===== ==================== ===================== ==================
+       0    Device1 to Device2   pid_command_data      Command
+       1    Device2 to Device1   pid_records           Records
+       2    Device2 to Device1   pid_course            <D0>
+       …    …                    …                     …
+     j-2    Device2 to Device1   pid_course            <D0>
+     j-1    Device2 to Device1   pid_xfer_cmplt        Command
+       j    Device1 to Device2   pid_command_data      Command
+     j+1    Device2 to Device1   pid_records           Records
+     j+2    Device2 to Device1   pid_course_lap        CourseLap
+       …    …                    …                     …
+     k-2    Device2 to Device1   pid_course_lap        CourseLap
+     k-1    Device2 to Device1   pid_xfer_cmplt        Command
+       k    Device1 to Device2   pid_command_data      Command
+     k+1    Device2 to Device1   pid_records           Records
+     k+2    Device2 to Device1   pid_course_trk_hdr    Course_TrkHdr
+     k+3    Device2 to Device1   pid_course_trk_data   Course_TrkPoint
+       …    …                    …                     …
+     m-2    Device2 to Device1   pid_course_trk_data   Course_TrkPoint
+     m-1    Device2 to Device1   pid_xfer_cmplt        Command
+       m    Device1 to Device2   pid_command_data      Command
+     m+1    Device2 to Device1   pid_records           Records
+     m+2    Device2 to Device1   pid_course_point      CoursePoint
+       …    …                    …                     …
+     n-2    Device2 to Device1   pid_course_point      CoursePoint
+     n-1    Device2 to Device1   pid_xfer_cmplt        Command
+    ===== ==================== ===================== ==================
+
+    """
+
+    def get_data(self, callback=None):
+        runs = TransferProtocol.get_data(self,
+                                         self.gps.command.cmnd_transfer_runs,
+                                         self.gps.link.pid_run,
+                                         callback=callback)
+        course_laps = gps.course_lap_transfer.get_data(callback)
+        # If the A1012 Course Track Transfer Protocol is supported, then the associated
+        # datatypes are used. Otherwise the datatypes used by the A302 Track Log
+        # Transfer Protocol are used.
+        if gps.registered_protocols.get('course_track_transfer_protocol') is not None:
+            course_tracks = gps.course_track_transfer.get_data(callback)
+        else:
+            protocol = A1012(gps, gps.track_log_transfer.datatypes)
+            course_tracks = protocol.get_data(callback)
+        course_points = gps.course_point_transfer.get_data(callback)
+        return runs + course_tracks + course_points
+
+
+class A1007(TransferProtocol):
+    """Course Lap Transfer Protocol."""
+
+    def get_data(self, callback=None):
+        return TransferProtocol.get_data(self,
+                                         self.gps.command.cmnd_transfer_course_laps,
+                                         self.gps.link.pid_course_lap,
+                                         callback=callback)
+
+
+class A1008(TransferProtocol):
+    """Course Point Transfer Protocol."""
+
+    def get_data(self, callback=None):
+        return TransferProtocol.get_data(self,
+                                         self.gps.command.cmnd_transfer_course_points,
+                                         self.gps.link.pid_course_point,
+                                         callback=callback)
+
+
+class A1009(TransferProtocol):
+    """Course Limits Transfer Protocol.
+
+    Packet sequence:
+
+    === ================ =================== ==================
+     N   Direction        Packet ID           Packet Data Type
+    === ================ =================== ==================
+     0   Host to Device   pid_command_data    Command
+     1   Device to Host   pid_course_limits   <D0>
+    === ================ =================== ==================
+
+    """
+
+    def get_data(self, callback=None):
+        self.gps.link.send_packet(self.gps.link.pid_command_data,
+                                  self.gps.command.cmnd_transfer_course_limits)
+        packet = self.gps.link.expect_packet(self.gps.link.pid_course_limits)
+        datatype = self.datatypes[0]()
+        datatype.unpack(packet['data'])
+        if callback:
+            callback(datatype, 1, 1)
+        return datatype
+
+
+class A1012(TransferProtocol):
+    """Course Track Transfer Protocol."""
+
+    def get_data(self, callback=None):
+        return TransferProtocol.get_data(self,
+                                         self.gps.command.cmnd_transfer_course_tracks,
+                                         self.gps.link.pid_course_trk_hdr,
+                                         self.gps.link.pid_course_trk_data,
+                                         callback=callback)
+
+
+class A1013(TransferProtocol):
+    """Undocumented application protocol."""
+
+
+class ImageTransfer:
+    """Image transfer protocol.
+
+    With the image transfer protocol a screenshot and custom waypoint icons can
+    be downloaded. The latter can also be uploaded. This protocol is
+    undocumented. The implementation is derived from the GarminDev drivers of
+    the abandoned QLandkarteGT application
+    (https://sourceforge.net/projects/qlandkartegt/) and by reverse-engineering
+    the Garmin xImage utility
+    (https://www8.garmin.com/support/download_details.jsp?id=545). Compatible
+    devices include the Garmin GPSMAP 60CX/60CSX, eTrex Legend C, eTrex Vista C,
+    GPSMAP 60C/60CS, GPSMAP 76C/76CS. Some devices, like the 60C and 76C,
+    originally didn’t support custom waypoint icons, but later it was added with
+    a firmware update.
+
+    """
+
+    def __init__(self, gps):
+        self.gps = gps
+
+    def get_image_types(self):
+        log.info("Request image types")
+        self.gps.link.send_packet(self.gps.link.pid_image_type_idx_rx, None)
+        packet = self.gps.link.expect_packet(self.gps.link.pid_image_type_idx_tx)
+        indices = list(packet['data'])
+        log.info("Request image type names")
+        image_types = list()
+        for idx in indices:
+            self.gps.link.send_packet(self.gps.link.pid_image_type_name_rx, idx)
+            packet = self.gps.link.expect_packet(self.gps.link.pid_image_type_name_tx)
+            datatype = ImageName()
+            datatype.unpack(packet['data'])
+            name = datatype.name.decode()
+            log.info(f"Image type name: {name}")
+            image_types.append({'idx': idx, 'name': name})
+        return image_types
+
+    def get_image_list(self):
+        log.info("Request image list")
+        self.gps.link.send_packet(self.gps.link.pid_image_list_rx, None)
+        packet = self.gps.link.expect_packet(self.gps.link.pid_image_list_tx)
+        datatype = ImageList()
+        datatype.unpack(packet['data'])
+        images = list()
+        for image in datatype.get_images():
+            idx = image.idx
+            image_dict = image.get_dict()
+            log.info("Request image name")
+            self.gps.link.send_packet(self.gps.link.pid_image_name_rx, idx)
+            packet = self.gps.link.expect_packet(self.gps.link.pid_image_name_tx)
+            datatype = ImageName()
+            datatype.unpack(packet['data'])
+            name = datatype.name.decode()
+            log.info(f"Image name: {name}")
+            image_dict['name'] = name
+            images.append(image_dict)
+        return images
+
+    def get_image_properties(self, idx=None):
+        log.info("Request image properties")
+        self.gps.link.send_packet(self.gps.link.pid_image_props_rx, idx)
+        packet = self.gps.link.expect_packet(self.gps.link.pid_image_props_tx)
+        if not packet['data']:
+            raise ValueError(f"Invalid symbol index {idx}")
+        datatype = ImageInformationHeader()
+        datatype.unpack(packet['data'])
+        color = datatype.get_color()
+        log.info(f"Dimensions: {datatype.width}x{datatype.height} pixels")
+        log.info(f"Color depth: {datatype.bpp} bits per pixel")
+        log.info(f"Transparency color: {(color.red, color.green, color.blue) if color else None}")
+        return datatype
+
+    def get_image_id(self, idx=None):
+        log.info("Request image ID")
+        self.gps.link.send_packet(self.gps.link.pid_image_id_rx, idx)
+        packet = self.gps.link.expect_packet(self.gps.link.pid_image_id_tx)
+        datatype = ImageId()
+        datatype.unpack(packet['data'])
+        log.info(f"Image ID: {datatype.id}")
+        return datatype
+
+    def get_color_table(self, image_id):
+        log.info(f"Request color table for image ID {image_id.id}")
+        self.gps.link.send_packet(self.gps.link.pid_color_table_rx, image_id.get_data())
+        packet = self.gps.link.expect_packet(self.gps.link.pid_color_table_tx)
+        datatype = ImageColorTable()
+        datatype.unpack(packet['data'])
+        colors = [(color.red, color.green, color.blue) for color in datatype.get_colors()]
+        log.info(f"Color table: {*colors,}")
+        return datatype
+
+    def put_color_table(self, color_table):
+        # The color table is sent in one packet, consisting of 4 bytes for the
+        # id, and 4 bytes per color.
+        log.info(f"Send color table for image ID {color_table.id}")
+        self.gps.link.send_packet(self.gps.link.pid_color_table_tx, color_table.get_data())
+        packet = self.gps.link.expect_packet(self.gps.link.pid_color_table_rx)
+        datatype = ImageId()
+        datatype.unpack(packet['data'])
+        if datatype.id != color_table.id:
+            raise ProtocolError(f"Expected {color_table.id}, got {datatype.id}")
+
+    def get_image(self, idx, callback=None):
+        log.info(f"Request image {idx}...")
+        props = self.get_image_properties(idx)
+        bpp = props.bpp
+        height = props.height
+        width = props.width
+        bytewidth = props.bytewidth
+        bytesize = props.get_bytesize()
+        colors_used = props.get_colors_used()
+        row_size = props.get_row_size()
+        bmp = MicroBMP(width, height, bpp)
+        image_id = self.get_image_id(idx)
+        if colors_used is None:
+            raise GarminError(f"Unsupported color depth {bpp} bpp")
+        elif colors_used == 0:
+            log.info(f"{bpp}-bit color depth has no color table")
+        else:
+            color_table = self.get_color_table(image_id)
+            # The color table can contain more colors than the number of colors
+            # used
+            bmp.palette = color_table.get_palette()[:colors_used]
+        # The pixel array is sent in chunks, with a packet data size of maximum
+        # 500 bytes, consisting of 4 bytes for the id and maximum 496 bytes for
+        # the chunk of pixel array.
+        max_chunk_size = 496
+        chunk_count = math.ceil(bytesize / max_chunk_size)
+        log.info(f"Image: Expecting {chunk_count} chunks")
+        pixel_array = bytearray()
+        for idx in range(chunk_count):
+            self.gps.link.send_packet(self.gps.link.pid_image_data_rx, image_id.get_data())
+            packet = self.gps.link.expect_packet(self.gps.link.pid_image_data_tx)
+            datatype = ImageChunk()
+            datatype.unpack(packet['data'])
+            pixel_array.extend(datatype.chunk)
+            if callback:
+                callback(datatype, idx+1, chunk_count)
+        self.gps.link.send_packet(self.gps.link.pid_image_data_cmplt, image_id.get_data())
+        log.info(f"Completed request pixel array for image ID {image_id.id}")
+        # The pixels are stored "bottom-up", starting in the lower left corner,
+        # going from left to right, and then row by row from the bottom to the
+        # top of the image. The bits are packed in rows (also known as strides
+        # or scan lines). The size of each row is rounded up to a multiple of 4
+        # bytes (a 32-bit DWORD) by padding. For images with a height above 1,
+        # multiple padded rows are stored consecutively, forming a pixel array.
+        # Rearrange the pixel array from bottom-up to top-down and remove padding
+        bmp.parray = bytearray()
+        for pos in range(0, len(pixel_array), bytewidth):
+            row = pixel_array[::-1][pos:pos+row_size]
+            bmp.parray.extend(row)
+        return bmp
+
+    def put_image(self, idx, bmp, callback=None):
+        props = self.get_image_properties(idx)
+        bpp = props.bpp
+        height = props.height
+        width = props.width
+        bytewidth = props.bytewidth
+        bytesize = props.get_bytesize()
+        colors_used = props.get_colors_used()
+        row_size = props.get_row_size()
+        if bpp != bmp.DIB_depth:
+            raise GarminError(f"Image has wrong color depth: expected {bpp} bpp, got {bmp.DIB_depth} bpp")
+        if width != bmp.DIB_w or height != bmp.DIB_h:
+            raise GarminError(f"Image has wrong dimensions: expected {width}x{height} pixels, got {bmp.DIB_w}x{bmp.DIB_h} pixels")
+        image_id = self.get_image_id(idx)
+        if colors_used is None:
+            raise ProtocolError(f"Unsupported color depth {bpp} bpp")
+        elif colors_used == 0:
+            log.info(f"{bpp}-bit color depth has no color table")
+        else:
+            color_table = self.get_color_table(image_id)
+            # The color table can contain more colors than the number of colors
+            # used
+            palette = color_table.get_palette()[:colors_used]
+            if bmp.palette != palette:
+                raise GarminError("Image has the wrong color palette")
+            self.put_color_table(color_table)
+        pixel_array = bytes(bmp.parray)
+        log.info(f"Send pixel array for image ID {image_id.id}")
+        # The pixel array is sent in chunks, with a packet data size of maximum
+        # 500 bytes, consisting of 4 bytes for the id and maximum 496 bytes for
+        # the chunk of pixel array. After every chunk a packet with only the 4
+        # byte ID is received.
+        max_chunk_size = 496
+        chunk_count = math.ceil(bytesize / max_chunk_size)
+        log.info(f"Image: Sending {chunk_count} chunks")
+        padding = bytes(bytewidth - row_size)
+        for idx, pos in enumerate(range(0, len(pixel_array), row_size)):
+            chunk = pixel_array[::-1][pos:pos+row_size]
+            chunk += bytes(padding)
+            datatype = ImageChunk(image_id.id, chunk)
+            datatype.pack()
+            self.gps.link.send_packet(self.gps.link.pid_image_data_tx, datatype.get_data())
+            if callback:
+                callback(datatype, idx+1, chunk_count)
+            packet = self.gps.link.expect_packet(self.gps.link.pid_image_data_rx)
+            datatype = ImageId()
+            datatype.unpack(packet['data'])
+            if datatype.id != image_id.id:
+                raise ProtocolError(f"Expected {image_id.id}, got {datatype.id}")
+        self.gps.link.send_packet(self.gps.link.pid_image_data_cmplt, image_id.get_data())
+        log.info(f"Completed send pixel array for image ID {image_id.id}")
+
+
+class ScreenshotTransfer:
+
+    def __init__(self, gps):
+        self.gps = gps
+
+    def get_image(self, callback=None):
+        log.info("Request screenshot...")
+        self.gps.link.send_packet(self.gps.link.pid_command_data, self.gps.command.cmnd_transfer_screen)
+        log.info("Expect screen data")
+        packet = self.gps.link.expect_packet(self.gps.link.pid_screen_data)
+        datatype = ScreenshotHeader()
+        datatype.unpack(packet['data'])
+        bpp = datatype.bpp
+        height = datatype.height
+        width = datatype.width
+        bytesize = datatype.get_bytesize()
+        colors_used = datatype.get_colors_used()
+        row_size = datatype.get_row_size()
+        # Each row is padded to a multiple of 4 bytes in size. The bytewidth can
+        # be calculated with the formula below, but the bytewidth is also given
+        # in the header.
+        # bytewidth = math.ceil(row_size / 4) * 4
+        bytewidth = datatype.bytewidth
+        log.info(f"Dimensions: {datatype.width}x{datatype.height} pixels")
+        log.info(f"Color depth: {datatype.bpp} bits per pixel")
+        bmp = MicroBMP(width, height, bpp)
+        # The data is sent in chunks of maximum 128 bytes, so larger rows are
+        # split up to multiple packets
+        max_chunk_size = 128
+        pixel_array_size = math.ceil(bytewidth / max_chunk_size) * height
+        start = 0
+        if bpp not in [1, 2, 4, 8, 16, 24, 32]:
+            raise GarminError(f"Unsupported color depth {bpp} bpp")
+        elif bpp > 8:
+            # A color table is mandatory for bitmaps with color depths ≤ 8 bits
+            log.info(f"{bpp}-bit color depth has no color table")
+            chunk_count = pixel_array_size
+        elif bpp == 2:
+            # For some reason the Screenshot Transfer Protocol doesn't send a
+            # color table for the 2 bpp format. The palette should contain the
+            # grayscale colors (255, 255, 255), (192, 192, 192), (128, 128,
+            # 128), (0, 0, 0).
+            bmp.palette = [bytearray((255, 255, 255)), bytearray((192, 192, 192)), bytearray((128, 128, 128)), bytearray((0, 0, 0))]
+            chunk_count = pixel_array_size
+        else:
+            log.info("Expect color table")
+            # The color table is sent per color, so each packet data size is 11
+            # bytes, consisting of 4 bytes for the section, 4 bytes for the
+            # offset, and 3 bytes for the color.
+            color_table_size = colors_used
+            chunk_count = color_table_size + pixel_array_size
+            color_table = []
+            for idx in range(chunk_count):
+                packet = self.gps.link.expect_packet(self.gps.link.pid_screen_data)
+                start += 1
+                datatype = ScreenshotColor()
+                datatype.unpack(packet['data'])
+                section = datatype.get_section()
+                if section != 'color_table':
+                    raise ProtocolError(f"Invalid section: expected color_table, got {section}")
+                color = datatype.get_color().get_bytearray()
+                color_table.append(color)
+                bmp.palette = color_table
+                if callback:
+                    callback(datatype, idx+1, chunk_count)
+        log.info("Expect pixel array")
+        # The pixel array is sent per row, "bottom-up", with a packet data size
+        # of maximum 136 bytes, consisting of 4 bytes for the section, 4 bytes
+        # for the offset, and maximum 128 bytes for the chunk of pixel array.
+        pixel_array = bytearray()
+        for idx in range(start, chunk_count):
+            packet = self.gps.link.expect_packet(self.gps.link.pid_screen_data)
+            datatype = ScreenshotChunk()
+            datatype.unpack(packet['data'])
+            if datatype.get_section() != 'pixel_array':
+                raise ProtocolError(f"Invalid section: expected pixel_array, got {section}")
+            pixel_array.extend(datatype.chunk)
+            if callback:
+                callback(datatype, idx+1, chunk_count)
+        # Rearrange the pixel array from bottom-up to top-down and remove padding
+        bmp.parray = bytearray()
+        for pos in range(0, len(pixel_array), bytewidth):
+            row = pixel_array[::-1][pos:pos+row_size]
+            bmp.parray.extend(row)
+        return bmp
 
 
 class DataType():
@@ -3415,7 +3608,7 @@ class D108(D103):
         self.cross_road = cross_road
 
     def get_wpt_class(self):
-        """return the waypoint class value.
+        """Return the waypoint class value.
 
         if an invalid value is received, the value will be user_wpt.
 
@@ -3423,7 +3616,7 @@ class D108(D103):
         return self._wpt_class.get(self.wpt_class, 0)
 
     def get_color(self):
-        """return the color value.
+        """Return the color value.
 
         """
         return self._color.get(self.color, 255)
@@ -4443,6 +4636,10 @@ class D800(PVT):
             }
 
 
+class D900(DataType):
+    """Undocumented unlock code communication datatype."""
+
+
 class Lap(DataType):
 
     def get_start_datetime(self):
@@ -4467,6 +4664,21 @@ class D906(Lap):
                ('track_index', 'B'),         # See below
                ('unused', 'B'),              # Unused. Set to 0.
                ]
+
+class D907(DataType):
+    """Undocumented datatype."""
+
+
+class D908(DataType):
+    """Undocumented datatype."""
+
+
+class D909(DataType):
+    """Undocumented datatype."""
+
+
+class D910(DataType):
+    """Undocumented datatype."""
 
 
 class Step(DataType):
@@ -4540,7 +4752,7 @@ class D1001(Lap):
                ('start_time', f'{_time_fmt}'),  # Start of lap time
                ('total_time', 'I'),             # Duration of lap, in hundredths of a second
                ('total_dist', 'f'),             # Distance in meters
-               ('max_speed;', 'f'),             # In meters per second
+               ('max_speed', 'f'),              # In meters per second
                ('begin', f'({_posn_fmt})'),     # Invalid if both lat and lon are 0x7FFFFFFF
                ('end', f'({_posn_fmt})'),       # Invalid if both lat and lon are 0x7FFFFFFF
                ('calories', 'H'),               # Calories burned this lap
@@ -4567,34 +4779,40 @@ class D1003(WorkoutOccurrence):
     _fields = WorkoutOccurrence._fields
 
 
-class HeartRateZones(DataType):
+class HeartRateZone(DataType):
     _fields = [('low_heart_rate', 'B'),   # In beats-per-minute, must be > 0
                ('high_heart_rate', 'B'),  # In beats-per-minute, must be > 0
                ('unused', 'H'),           # Unused. Set to 0.
                ]
 
 
-class SpeedZones(DataType):
+class SpeedZone(DataType):
     _fields = [('low_speed', 'f'),   # In meters-per-second
                ('high_speed', 'f'),  # In meters-per-second
                ('name', '16s'),      # Null-terminated speed-zone name
                ]
 
 
-class Activities(DataType):
-    _fields = [('gear_weight', 'f'),     # Weight of equipment in kilograms
-               ('max_heart_rate', 'B'),  # In beats-per-minute, must be > 0
-               ('unused1', 'B'),         # Unused. Set to 0.
-               ('unused2', 'H'),         # Unused. Set to 0.
+class Activity(DataType):
+    _heart_rate_zone_fmt = HeartRateZone.get_format()
+    _speed_zone_fmt = SpeedZone.get_format()
+    _fields = [('heart_rate_zones', f'5[{_heart_rate_zone_fmt}]'),
+               ('speed_zones', f'10[{_speed_zone_fmt}]'),
+               ('gear_weight', 'f'),                                # Weight of equipment in kilograms
+               ('max_heart_rate', 'B'),                             # In beats-per-minute, must be > 0
+               ('unused1', 'B'),                                    # Unused. Set to 0.
+               ('unused2', 'H'),                                    # Unused. Set to 0.
                ]
 
 
 class FitnessUserProfile(DataType):
-    _fields = [('weight', 'f'),       # User’s weight, in kilograms
-               ('birth_year', 'H'),   # No base value (i.e. 1990 means 1990)
-               ('birth_month', 'B'),  # 1 = January, etc.
-               ('birth_day', 'B'),    # 1 = first day of month, etc.
-               ('gender', 'B'),       # See below
+    _activity_fmt = Activity.get_format()
+    _fields = [('activities', f'3[{_activity_fmt}]'),
+               ('weight', 'f'),                        # User’s weight, in kilograms
+               ('birth_year', 'H'),                    # No base value (i.e. 1990 means 1990)
+               ('birth_month', 'B'),                   # 1 = January, etc.
+               ('birth_day', 'B'),                     # 1 = first day of month, etc.
+               ('gender', 'B'),                        # See below
                ]
     _gender = {0: 'female',
                1: 'male',
@@ -4795,6 +5013,10 @@ class ExternalTimeSyncData(DataType):
             else:
                 return timedelta(0)
 
+class D1015(D1011):
+    """Undocumented datatype."""
+    _fields = D1011._fields + [('unknown', '(5B)')]  # unknown additional bytes
+
 
 class D1051(ExternalTimeSyncData):
     pass
@@ -4968,7 +5190,7 @@ class RGBA(DataType):
     """RGBA is a sRGB format that uses 32 bits of data per pixel.
 
     Each channel (red, green, blue, and alpha) is allocated 8 bits per pixel
-    (BPP). The alpha channel is unused. Instead, a color is used for
+    (bpp). The alpha channel is unused. Instead, a color is used for
     transparency. Most devices make magenta (255,0,255) transparent.
 
     """
@@ -4983,6 +5205,14 @@ class RGBA(DataType):
         self.green = green
         self.blue = blue
         self.unused = unused
+
+    def get_bytearray(self):
+        """Return the color as bytearray."""
+        return bytearray([self.red, self.green, self.blue])
+
+    def get_rgb(self):
+        """Return an RGB tuple."""
+        return (self.red, self.green, self.blue)
 
 
 class ImageProp(DataType):
@@ -5016,9 +5246,9 @@ class ImageInformationHeader(DataType):
     _fields = (('unknown1', 'B'),
                ('bpp', 'B'),                 # bits per pixel or color depth
                ('unknown2', 'H'),
-               ('height', 'H'),              # heigth in pixels
+               ('height', 'H'),              # height in pixels
                ('width', 'H'),               # width in pixels
-               ('bytewidth', 'H'),           # width in bytes?
+               ('bytewidth', 'H'),           # width in bytes
                ('unknown3', 'H'),
                ('color', f'({_rgba_fmt})'),  # transparent color
                )
@@ -5029,6 +5259,12 @@ class ImageInformationHeader(DataType):
     def get_size(self):
         return (self.bpp * self.width * self.height) // 8
 
+    def get_row_size(self):
+        return (self.width * self.bpp // 8)
+
+    def get_bytesize(self):
+        return (self.bytewidth * self.height)
+
     def get_colors_used(self):
         if self.bpp <= 8:
             return 1 << self.bpp
@@ -5036,7 +5272,8 @@ class ImageInformationHeader(DataType):
             return 0
 
     def get_color(self):
-        return RGBA(*self.colors)
+        if any(x != 0 for x in self.color):
+            return RGBA(*self.color)
 
 
 class ImageId(DataType):
@@ -5065,30 +5302,32 @@ class ImageColorTable(DataType):
                ('colors', f'{{{_rgba_fmt}}}'),
                ]
 
+    def __init__(self, id=0, colors=b''):
+        self.id = id
+        self.colors = colors
+
     def get_colors(self):
         return [ RGBA(*color) for color in self.colors ]
 
     def get_palette(self):
-        """Returns the RGB color palette as a list of ints."""
-        palette = []
-        for color in self.get_colors():
-            palette.extend([color.red, color.green, color.blue])
+        """Returns the RGB color palette as a list of bytearray."""
+        palette = [ color.get_bytearray() for color in self.get_colors() ]
         return palette
 
 
 class ImageChunk(DataType):
     _id_fmt = ImageId.get_format()
     _fields = [('id', f'{_id_fmt}'),
-               ('data', '$'),
+               ('chunk', '$'),
                ]
 
-    def __init__(self, id=0, data=b''):
+    def __init__(self, id=0, chunk=b''):
         self.id = id
-        self.data = data
+        self.chunk = chunk
 
 
-class BGR(DataType):
-    """BGR is a sRGB format that uses 24 bits of data per per pixel.
+class RGB(DataType):
+    """RGB is a sRGB format that uses 24 bits of data per per pixel.
 
     Each color channel (blue, green, and red) is allocated 8 bits per pixel
     (BPP).
@@ -5103,6 +5342,14 @@ class BGR(DataType):
         self.blue = blue
         self.green = green
         self.red = red
+
+    def get_bytearray(self):
+        """Return the color as bytearray."""
+        return bytearray([self.red, self.green, self.blue])
+
+    def get_rgb(self):
+        """Return an RGB tuple."""
+        return (self.red, self.green, self.blue)
 
 
 class Screenshot(DataType):
@@ -5121,9 +5368,12 @@ class Screenshot(DataType):
     bitmap data stores a single value used as an index into the color palette.
     1-, 4-, and 8-bit BMP files are expected to always contain a color palette.
     16-, 24-, and 32-bit BMP files never contain color palettes. 16- and 32-bit
-    BMP files contain bitfields mask values in place of the color palette.
+    BMP files contain bitfields mask values in place of the color palette. 2-bit
+    BMP files were added for Windows CE
+    (http://fileformats.archiveteam.org/wiki/Pocket_PC_Bitmap), but are not well
+    supported.
 
-    The pixel data is a series of values representing either color palette
+    The pixel array is a series of values representing either color palette
     indices or actual RGB color values. Pixels are packed into bytes and
     arranged as scan lines. In a BMP file, each scan line must end on a 4-byte
     boundary, so one, two, or three bytes of padding may follow each scan line.
@@ -5136,7 +5386,7 @@ class Screenshot(DataType):
                ]
 
     _section = { 0: 'header',
-                 1: 'pixel_data',
+                 1: 'pixel_array',
                  2: 'color_table',
                 }
 
@@ -5145,13 +5395,11 @@ class Screenshot(DataType):
 
 
 class ScreenshotHeader(Screenshot):
-    _fields = Screenshot._fields + [('unknown1', 'I'),   # width in bytes?
+    _fields = Screenshot._fields + [('bytewidth', 'I'),  # width in bytes
                                     ('bpp', 'I'),        # bits per pixel or color depth
                                     ('width', 'I'),      # width in pixels
-                                    ('height', 'I'),     # heigth in pixels
-                                    ('unknown2', 'I'),
-                                    ('unknown3', 'I'),
-                                    ('unknown4', 'I'),
+                                    ('height', 'I'),     # height in pixels
+                                    ('unknown2', '(12B)'),
                                     ]
 
     def get_dimensions(self):
@@ -5160,6 +5408,12 @@ class ScreenshotHeader(Screenshot):
     def get_size(self):
         return (self.bpp * self.width * self.height) // 8
 
+    def get_row_size(self):
+        return (self.width * self.bpp // 8)
+
+    def get_bytesize(self):
+        return (self.bytewidth * self.height)
+
     def get_colors_used(self):
         if self.bpp <= 8:
             return 1 << self.bpp
@@ -5167,16 +5421,95 @@ class ScreenshotHeader(Screenshot):
             return 0
 
 
-class ScreenshotColorTable(Screenshot):
-    _bgr_fmt = BGR.get_format()
-    _fields = Screenshot._fields + [('color', f'{_bgr_fmt}')]
+class ScreenshotColor(Screenshot):
+    _rgb_fmt = RGB.get_format()
+    _fields = Screenshot._fields + [('color', f'({_rgb_fmt})')]
 
-    def get_colors(self):
-        return BGR(*self.color)
+    def get_color(self):
+        return RGB(*self.color)
 
 
 class ScreenshotChunk(Screenshot):
     _fields = Screenshot._fields + [('chunk', '$')]
+
+
+class SatelliteRecord(DataType):
+    _fields = [('svid', 'B'),    # space vehicle identification (1–32 and 33–64 for WAAS)
+               ('snr', 'H'),     # signal-to-noise ratio
+               ('elev', 'B'),    # satellite elevation in degrees
+               ('azmth', 'H'),   # satellite azimuth in degrees
+               ('status', 'B'),  # status bit-field
+               ]
+
+    def __init__(self, svid, snr, elev, azmth, status):
+        self.svid = svid
+        self.snr = snr
+        self.elev = elev
+        self.azmth = azmth
+        self.status = status
+
+    # The status bit field represents a set of booleans described below:
+
+    # ===== ====================================================================
+    #  Bit   Meaning when bit is one (1)
+    # ===== ====================================================================
+    #    0   The unit has ephemeris data for the specified satellite
+    #    1   The unit has a differential correction for the specified satellite
+    #    2   The unit is using this satellite in the solution
+    #  ===== ====================================================================
+
+    def has_eph(self):
+        """Return whether the unit has ephemeris data for the specified satellite."""
+        bits = f"{self.status:08b}"[::-1]  # reverse because of little endian byteorder
+        has_eph = True if bits[0] == '1' else False
+        return has_eph
+
+    def has_diff(self):
+        """Return whether the unit has a differential correction for the specified satellite."""
+        bits = f"{self.status:08b}"[::-1]  # reverse because of little endian byteorder
+        has_diff = True if bits[1] == '1' else False
+        return has_diff
+
+    def is_used(self):
+        """Return whether the unit is using this satellite in the solution."""
+        bits = f"{self.status:08b}"[::-1]  # reverse because of little endian byteorder
+        is_used = True if bits[2] == '1' else False
+        return is_used
+
+    def get_prn(self):
+        """Return the PRN.
+
+        The ``svid`` member identifies a satellite in the GPS constellation as
+        follows: PRN-01 through PRN-32 are indicated by ``svid`` equal to 0
+        through 31, respectively.
+
+        """
+        return self.svid + 1
+
+
+class Satellite(DataType):
+    """Satellite datatype.
+
+    The satellite records contain post-process information, such as position and velocity
+    information.
+
+    This datatype is undocumented in the spec, but it is described in the GPS
+    16/17 Technical Specifications
+    (https://static.garmin.com/pumac/470_GPS16_17TechnicalSpecification.pdf) and
+    the GPS 18x Technical Specifications
+    (https://static.garmin.com/pumac/GPS_18x_Tech_Specs.pdf).
+
+    """
+    _satellite_record_fmt = SatelliteRecord.get_format()
+    _fields = [('records', f'12[{_satellite_record_fmt}]'),
+               ]
+
+    def __init__(self, records=None):
+        self.records = records
+
+    def get_records(self):
+        return [ SatelliteRecord(*record) for record in self.records ]
+
 
 
 # Garmin models ==============================================
@@ -5399,7 +5732,7 @@ device_protocol_capabilities = {
 }
 
 
-class Garmin:
+class Garmin():
     """Garmin GPS device object.
 
     The class provides methods to communicate with the hardware.
@@ -5453,10 +5786,14 @@ class Garmin:
         'A906': 'lap_transfer_protocol',
         'A1000': 'run_transfer_protocol',
         'A1002': 'workout_transfer_protocol',
+        'A1003': 'workout_occurrence_transfer_protocol',
         'A1004': 'fitness_user_profile_transfer_protocol',
         'A1005': 'workout_limits_transfer_protocol',
         'A1006': 'course_transfer_protocol',
+        'A1007': 'course_lap_transfer_protocol',
+        'A1008': 'course_point_transfer_protocol',
         'A1009': 'course_limits_transfer_protocol',
+        'A1012': 'course_track_transfer_protocol',
         'A1051': 'external_time_data_sync_protocol',
     }
 
@@ -5479,42 +5816,141 @@ class Garmin:
         self.registered_protocols = self._register_protocols(self.supported_protocols)
         #: Link Protocol
         self.link = self._create_protocol('link_protocol', self.phys)
-        #: Device Command Protocol
-        self.command = self._create_protocol('device_command_protocol', self.link)
-        #: Transmission Protocol
-        self.transmission = self._create_protocol('transmission_protocol', self.phys, self.link, self.command)
-        #: Waypoint Transfer Protocol
-        self.waypoint_transfer = self._create_protocol('waypoint_transfer_protocol', self.link, self.command)
-        #: Waypoint Category Transfer Protocol
-        self.waypoint_category_transfer = self._create_protocol('waypoint_category_transfer_protocol', self.link, self.command)
-        #: Route Transfer Protocol
-        self.route_transfer = self._create_protocol('route_transfer_protocol', self.link, self.command)
-        #: Track Log Transfer Protocol
-        self.track_log_transfer = self._create_protocol('track_log_transfer_protocol', self.link, self.command)
-        #: Proximity Waypoint Transfer Protocol
-        self.proximity_waypoint_transfer = self._create_protocol('proximity_waypoint_transfer_protocol', self.link, self.command)
-        #: Almanac Transfer Protocol
-        self.almanac_transfer = self._create_protocol('almanac_transfer_protocol', self.link, self.command)
-        #: Date And Time Initialization Protocol
-        self.date_and_time_initialization = self._create_protocol('date_and_time_initialization_protocol', self.link, self.command)
-        #: Flightbook Transfer Protocol
-        self.flightbook_transfer = self._create_protocol('flightbook_transfer_protocol', self.link, self.command)
-        #: Position Initialization Protocol
-        self.position_initialization = self._create_protocol('position_initialization_protocol', self.link, self.command)
-        #: PVT Protocol
-        self.pvt = self._create_protocol('pvt_protocol', self.link, self.command)
-        #: Map Transfer Protocol
-        self.map_transfer = self._create_protocol('map_transfer_protocol', self.link, self.command)
-        #: Map Unlock Protocol
-        self.map_unlock = self._create_protocol('map_unlock_protocol', self.link, self.command)
-        #: Lap Transfer Protocol
-        self.lap_transfer = self._create_protocol('lap_transfer_protocol', self.link, self.command)
-        #: Run Transfer Protocol
-        self.run_transfer = self._create_protocol('run_transfer_protocol', self.link, self.command)
-        #: Screenshot Transfer Protocol
-        self.screenshot_transfer = ScreenshotTransfer(self.link, self.command)
-        #: Image Transfer Protocol
-        self.image_transfer = ImageTransfer(self.link, self.command)
+
+    @property
+    def command(self):
+        """Device Command Protocol."""
+        return self._create_protocol('device_command_protocol', self)
+
+    @property
+    def transmission(self):
+        """Transmission Protocol."""
+        return self._create_protocol('transmission_protocol', self)
+
+    @property
+    def waypoint_transfer(self):
+        """Waypoint Transfer Protocol."""
+        return self._create_protocol('waypoint_transfer_protocol', self)
+
+    @property
+    def waypoint_category_transfer(self):
+        """Waypoint Category Transfer Protocol."""
+        return self._create_protocol('waypoint_category_transfer_protocol', self)
+
+    @property
+    def route_transfer(self):
+        """Route Transfer Protocol."""
+        return self._create_protocol('route_transfer_protocol', self)
+
+    @property
+    def track_log_transfer(self):
+        """Track Log Transfer Protocol."""
+        return self._create_protocol('track_log_transfer_protocol', self)
+
+    @property
+    def proximity_waypoint_transfer(self):
+        """Proximity Waypoint Transfer Protocol."""
+        return self._create_protocol('proximity_waypoint_transfer_protocol', self)
+
+    @property
+    def almanac_transfer(self):
+        """Almanac Transfer Protocol."""
+        return self._create_protocol('almanac_transfer_protocol', self)
+
+    @property
+    def date_and_time_initialization(self):
+        """Date And Time Initialization Protocol."""
+        return self._create_protocol('date_and_time_initialization_protocol', self)
+
+    @property
+    def flightbook_transfer(self):
+        """Flightbook Transfer Protocol."""
+        return self._create_protocol('flightbook_transfer_protocol', self)
+
+    @property
+    def position_initialization(self):
+        """Position Initialization Protocol."""
+        return self._create_protocol('position_initialization_protocol', self)
+
+    @property
+    def pvt(self):
+        """PVT Protocol."""
+        return self._create_protocol('pvt_protocol', self)
+
+    @property
+    def map_transfer(self):
+        """Map Transfer Protocol."""
+        return self._create_protocol('map_transfer_protocol', self)
+
+    @property
+    def map_unlock(self):
+        """Map Unlock Protocol."""
+        return self._create_protocol('map_unlock_protocol', self)
+
+    @property
+    def lap_transfer(self):
+        """Lap Transfer Protocol."""
+        return self._create_protocol('lap_transfer_protocol', self)
+
+    @property
+    def run_transfer(self):
+        """Run Transfer Protocol."""
+        return self._create_protocol('run_transfer_protocol', self)
+
+    @property
+    def workout_transfer(self):
+        """Workout Transfer Protocol."""
+        return self._create_protocol('workout_transfer_protocol', self)
+
+    @property
+    def workout_occurrence_transfer(self):
+        """Workout Occurrence Transfer Protocol."""
+        return self._create_protocol('workout_occurrence_transfer_protocol', self)
+
+    @property
+    def fitness_user_profile_transfer(self):
+        """Fitness User Profile Transfer Protocol."""
+        return self._create_protocol('fitness_user_profile_transfer_protocol', self)
+
+    @property
+    def workout_limits_transfer(self):
+        """Workout Limits Transfer Protocol."""
+        return self._create_protocol('workout_limits_transfer_protocol', self)
+
+    @property
+    def course_transfer(self):
+        """Course Transfer Protocol."""
+        return self._create_protocol('course_transfer_protocol', self)
+
+    @property
+    def course_lap_transfer(self):
+        """Course Lap Transfer Protocol."""
+        return self._create_protocol('course_lap_transfer_protocol', self)
+
+    @property
+    def course_point_transfer(self):
+        """Course Point Transfer Protocol."""
+        return self._create_protocol('course_point_transfer_protocol', self)
+
+    @property
+    def course_limits_transfer(self):
+        """Course Limits Transfer Protocol."""
+        return self._create_protocol('course_limits_transfer_protocol', self)
+
+    @property
+    def course_track_transfer(self):
+        """Course Track Transfer Protocol."""
+        return self._create_protocol('course_track_transfer_protocol', self)
+
+    @property
+    def screenshot_transfer(self):
+        """Screenshot Transfer Protocol."""
+        return ScreenshotTransfer(self)
+
+    @property
+    def image_transfer(self):
+        """Image Transfer Protocol."""
+        return ImageTransfer(self)
 
     @staticmethod
     def _class_by_name(name):
@@ -5709,32 +6145,6 @@ class Garmin:
             raise GarminError("Protocol proximity_waypoint_transfer_protocol is not supported")
         return self.proximity_waypoint_transfer.put_data(data, callback)
 
-    def get_laps(self, callback=None):
-        """Download laps.
-
-        :param callback: optional callback function
-        :type callback: function or None
-        :return: list of lap datatypes
-        :rtype: list
-
-        """
-        if self.lap_transfer is None:
-            raise GarminError("Protocol lap_transfer_protocol is not supported")
-        return self.lap_transfer.get_data(callback)
-
-    def get_runs(self, callback=None):
-        """Download runs.
-
-        :param callback: optional callback function
-        :type callback: function or None
-        :return: list of run datatypes
-        :rtype: list
-
-        """
-        if self.run_transfer is None:
-            raise GarminError("Protocol run_transfer_protocol is not supported")
-        return self.run_transfer.get_data(callback)
-
     def get_almanac(self, callback=None):
         return self.almanac_transfer.get_data(callback)
 
@@ -5782,6 +6192,18 @@ class Garmin:
 
         """
         return self.pvt.get_data(callback)
+
+    def get_memory_properties(self):
+        """Return memory info."""
+        if self.map_transfer is None:
+            raise GarminError("Protocol map_transfer_protocol is not supported")
+        return self.map_transfer.get_memory_properties()
+
+    def get_map_properties(self):
+        """Return map info."""
+        if self.map_transfer is None:
+            raise GarminError("Protocol map_transfer_protocol is not supported")
+        return self.map_transfer.get_map_properties()
 
     def del_map(self):
         """Delete map."""
@@ -5856,6 +6278,149 @@ class Garmin:
         if isinstance(self.phys, SerialLink) and self.transmission:
             self.transmission.set_baudrate(current_baudrate)
 
+    def get_laps(self, callback=None):
+        """Download laps.
+
+        :param callback: optional callback function
+        :type callback: function or None
+        :return: list of lap datatypes
+        :rtype: list
+
+        """
+        if self.lap_transfer is None:
+            raise GarminError("Protocol lap_transfer_protocol is not supported")
+        return self.lap_transfer.get_data(callback)
+
+    def get_runs(self, callback=None):
+        """Download runs.
+
+        :param callback: optional callback function
+        :type callback: function or None
+        :return: list of run datatypes
+        :rtype: list
+
+        """
+        if self.run_transfer is None:
+            raise GarminError("Protocol run_transfer_protocol is not supported")
+        return self.run_transfer.get_data(callback)
+
+    def get_workouts(self, callback=None):
+        """Download workouts.
+
+        :param callback: optional callback function
+        :type callback: function or None
+        :return: list of workout datatypes
+        :rtype: list
+
+        """
+        if self.workout_transfer is None:
+            raise GarminError("Protocol workout_transfer_protocol is not supported")
+        return self.workout_transfer.get_data(callback)
+
+    def get_workout_occurrences(self, callback=None):
+        """Download workout occurrences.
+
+        :param callback: optional callback function
+        :type callback: function or None
+        :return: list of workout occurrence datatypes
+        :rtype: list
+
+        """
+        if self.workout_occurrence_transfer is None:
+            raise GarminError("Protocol workout_occurrence_transfer_protocol is not supported")
+        return self.workout_occurrence_transfer.get_data(callback)
+
+    def get_fitness_user_profiles(self, callback=None):
+        """Download workout occurrences.
+
+        :param callback: optional callback function
+        :type callback: function or None
+        :return: list of workout occurrence datatypes
+        :rtype: list
+
+        """
+        if self.fitness_user_profile_transfer is None:
+            raise GarminError("Protocol fitness_user_profile_transfer_protocol is not supported")
+        return self.fitness_user_profile_transfer.get_data(callback)
+
+    def get_workout_limits(self, callback=None):
+        """Download workout limits.
+
+        :param callback: optional callback function
+        :type callback: function or None
+        :return: list of workout limits datatypes
+        :rtype: list
+
+        """
+        if self.workout_limits_transfer is None:
+            raise GarminError("Protocol workout_limits_transfer_protocol is not supported")
+        return self.workout_limits_transfer.get_data(callback)
+
+    def get_courses(self, callback=None):
+        """Download workout occurrences.
+
+        :param callback: optional callback function
+        :type callback: function or None
+        :return: list of workout occurrence datatypes
+        :rtype: list
+
+        """
+        if self.course_transfer is None:
+            raise GarminError("Protocol course_transfer_protocol is not supported")
+        return self.course_transfer.get_data(callback)
+
+    def get_course_laps(self, callback=None):
+        """Download workout occurrences.
+
+        :param callback: optional callback function
+        :type callback: function or None
+        :return: list of workout occurrence datatypes
+        :rtype: list
+
+        """
+        if self.course_lap_transfer is None:
+            raise GarminError("Protocol course_lap_transfer_protocol is not supported")
+        return self.course_lap_transfer.get_data(callback)
+
+    def get_course_points(self, callback=None):
+        """Download workout occurrences.
+
+        :param callback: optional callback function
+        :type callback: function or None
+        :return: list of workout occurrence datatypes
+        :rtype: list
+
+        """
+        if self.course_point_transfer is None:
+            raise GarminError("Protocol course_point_transfer_protocol is not supported")
+        return self.course_point_transfer.get_data(callback)
+
+    def get_course_limits(self, callback=None):
+        """Download course limits.
+
+        :param callback: optional callback function
+        :type callback: function or None
+        :return: list of course limits datatypes
+        :rtype: list
+
+        """
+        if self.course_limits_transfer is None:
+            raise GarminError("Protocol course_limits_transfer_protocol is not supported")
+        return self.course_limits_transfer.get_data(callback)
+
+    def get_course_tracks(self, callback=None):
+        """Download workout occurrences.
+
+        :param callback: optional callback function
+        :type callback: function or None
+        :return: list of workout occurrence datatypes
+        :rtype: list
+
+        """
+        if self.course_track_transfer is None:
+            raise GarminError("Protocol course_track_transfer_protocol is not supported")
+        return self.course_track_transfer.get_data(callback)
+
     def get_screenshot(self, callback=None):
         """Capture screenshot.
 
@@ -5864,7 +6429,7 @@ class Garmin:
         :param callback: optional callback function
         :type callback: function or None
         :return: image file of the device's display
-        :rtype: PIL.Image
+        :rtype: MicroBMP
 
         """
         return self.screenshot_transfer.get_image(callback)
@@ -5911,7 +6476,7 @@ class Garmin:
         :param callback: optional callback function
         :type callback: function or None
         :return: image file of the device's display
-        :rtype: PIL.Image
+        :rtype: MicroBMP
 
         """
         return self.image_transfer.get_image(idx, callback)
@@ -5925,13 +6490,22 @@ class Garmin:
         :param idx: index of image to upload
         :type idx: int
         :param data: image data to upload
-        :type data: PIL.Image
+        :type data: MicroBMP or str or io.BufferedReader
         :param callback: optional callback function
         :type callback: function or None
 
         """
-        with PIL.Image.open(data) as image:
-            self.image_transfer.put_image(idx, image, callback)
+        if data is None:
+            raise GarminError("No image")
+        elif isinstance(data, MicroBMP):
+            bmp = data
+        elif isinstance(data, str):
+            bmp = MicroBMP().load(data)
+        elif isinstance(data, io.BufferedReader):
+            bmp = MicroBMP().read_io(data)
+        else:
+            raise GarminError("Invalid image")
+        self.image_transfer.put_image(idx, bmp, callback)
 
     def abort_transfer(self):
         """Abort transfer"""

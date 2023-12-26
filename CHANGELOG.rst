@@ -1,6 +1,11 @@
 Changelog
 =========
 
+[1.1.1] 2023-12-26
+------------------
+
+- Use the same license (GPLv2 or later) for the package as the source
+
 [1.1.0] 2023-12-26
 ------------------
 

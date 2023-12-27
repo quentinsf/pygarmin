@@ -1,6 +1,11 @@
 Changelog
 =========
 
+[1.1.2] 2023-12-27
+------------------
+
+- Fix GPX export of Garmin Forerunner 305 tracks
+
 [1.1.1] 2023-12-26
 ------------------
 

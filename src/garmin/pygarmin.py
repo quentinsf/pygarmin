@@ -631,7 +631,9 @@ class GPXTracks(GPX):
             if isinstance(point, garmin.TrkHdr):
                 # Possible fields: ('color', 'trk_ident', 'index', 'dspl')
                 gpx_track = gpxpy.gpx.GPXTrack()
-                name = point.trk_ident
+                identifier = point.get_dict().get('trk_ident')
+                index = point.get_dict().get('index')
+                name = identifier if identifier else str(index).encode()
                 gpx.tracks.append(gpx_track)
                 gpx_track.name = name.decode(encoding='latin_1')
                 track_extension = ET.Element(f'{{{gpxx}}}TrackExtension')
@@ -647,7 +649,7 @@ class GPXTracks(GPX):
                 if len(gpx.tracks) == 0:
                     gpx_track = gpxpy.gpx.GPXTrack()
                     gpx.tracks.append(gpx_track)
-                if point.new_trk is True or len(gpx_track.segments) == 0:
+                if point.get_dict().get('new_trk') is True or len(gpx_track.segments) == 0:
                     gpx_segment = gpxpy.gpx.GPXTrackSegment()
                     gpx_track.segments.append(gpx_segment)
                 if point.get_posn().is_valid():

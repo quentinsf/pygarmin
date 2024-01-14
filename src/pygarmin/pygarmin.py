@@ -41,7 +41,7 @@ from tabulate import tabulate
 from tqdm import tqdm
 import xml.etree.ElementTree as ET
 import io
-from . import garmin
+from .garmin import garmin
 
 logging_levels = {
     0: logging.NOTSET,

@@ -42,6 +42,7 @@ from tqdm import tqdm
 import xml.etree.ElementTree as ET
 import io
 from . import garmin
+from . import __version__ as garmin_version
 
 logging_levels = {
     0: logging.NOTSET,
@@ -1670,7 +1671,7 @@ def main():
         command = getattr(app, args.command)
         command(args)
     elif args.version:
-        print(f"pygarmin version {__version__}")
+        print(f"pygarmin version {__version__} using garmin module version {garmin_version}")
     else:
         parser.print_usage()
 

@@ -6560,8 +6560,8 @@ class Garmin():
             raise GarminError("Protocol workout_occurrence_transfer_protocol is not supported")
         return self.workout_occurrence_transfer.get_data(callback)
 
-    def get_fitness_user_profiles(self, callback=None):
-        """Download workout occurrences.
+    def get_fitness_user_profile(self, callback=None):
+        """Download fitness user profile.
 
         :param callback: optional callback function
         :type callback: function or None

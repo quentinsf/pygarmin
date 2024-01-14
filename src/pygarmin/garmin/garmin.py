@@ -58,7 +58,7 @@
 """
 
 from array import array
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from functools import cached_property
 import io
 import json
@@ -4693,6 +4693,55 @@ class Step(DataType):
                ('unused', 'H'),                   # Unused. Set to 0
                ]
 
+    _intensity = {0: 'active',  # This is a standard, active lap
+                  1: 'rest',    # This is a rest lap in a workout
+                  }
+    _duration_type = {0: 'time',                     # In seconds
+                      1: 'distance',                 # In meters
+                      2: 'heart rate less than',     # A value from 0 – 100
+                                                     # indicates a percentage of
+                                                     # max heart rate. A value
+                                                     # above 100 indicates
+                                                     # beats-per-minute (255
+                                                     # max) plus 100.
+                      3: 'heart rate greater than',  # A value from 0 – 100
+                                                     # indicates a percentage of
+                                                     # max heart rate. A value
+                                                     # above 100 indicates
+                                                     # beats-per-minute (255
+                                                     # max) plus 100.
+                      4: 'calories burned',          # In calories
+                      5: 'open',                     # Undefined
+                      6: 'repeat',                   # Number of the step to
+                                                     # loop back to. Steps are
+                                                     # assumed to be in the
+                                                     # order in which they are
+                                                     # received, and are
+                                                     # numbered starting at one.
+                                                     # The ``custom_name`` and
+                                                     # ``intensity`` members are
+                                                     # undefined for this
+                                                     # duration type.
+                      }
+
+    _target_type = {0: 'speed',
+                    1: 'heart rate',
+                    2: 'open',
+                    }
+
+    def get_custom_name(self):
+        values = rawutil.unpack('<n', self.custom_name)
+        name = values[0].decode()
+        return name
+
+    def get_intensity(self):
+        return self._intensity.get(self.intensity)
+
+    def get_duration_type(self):
+        return self._duration_type.get(self.duration_type)
+
+    def get_target_type(self):
+        return self._target_type.get(self.target_type)
 
 class Run(DataType):
     _fields = [('track_index', 'I'),      # Index of associated track
@@ -4710,16 +4759,26 @@ class Run(DataType):
                      2: 'workout',          # Completed as part of a workout
                      }
 
+    def get_sport_type(self):
+        return self._sport_type.get(self.sport_type)
+
+    def get_program_type(self):
+        return self._program_type.get(self.program_type)
+
 
 class VirtualPartner(DataType):
-    _fields = ([('time', 'I'),      # Time result of virtual partner
-                ('distance', 'f'),  # Distance result of virtual partner
+    _time_fmt = Time.get_format()
+    _fields = ([('time', f'{_time_fmt}'),  # Time result of virtual partner
+                ('distance', 'f'),         # Distance result of virtual partner
                 ])
+
+    def get_datetime(self):
+        return Time(self.time).get_datetime()
 
 
 class Workout(DataType):
     _fields = [('num_valid_steps', 'I'),  # Number of valid steps (1-20)
-               ('steps', '/0[32c]'),      # Steps
+               ('steps', '/0(32s)'),      # Steps
                ('name', '16s'),           # Null-terminated workout name
                ('sport_type', 'B'),       # Same as D1000
                ]
@@ -4735,6 +4794,18 @@ class Workout(DataType):
             step.unpack(data)
             steps.append(step)
         return steps
+
+    def get_name(self):
+        # Sometimes the name contains no null-terminated string, resulting in an error
+        if b'\x00' in self.name:
+            values = rawutil.unpack('<n', self.name)
+            name = values[0].decode()
+            return name
+        else:
+            return str()
+
+    def get_sport_type(self):
+        return self._sport_type.get(self.sport_type)
 
 
 class D1000(Run):
@@ -4764,6 +4835,9 @@ class D1001(Lap):
                   1: 'rest',    # This is a rest lap in a workout
                   }
 
+    def get_intensity(self):
+        return self._intensity.get(self.intensity)
+
 
 class D1002(Workout):
     pass
@@ -4785,6 +4859,10 @@ class HeartRateZone(DataType):
                ('unused', 'H'),           # Unused. Set to 0.
                ]
 
+    def __init__(self, low_heart_rate=0, high_heart_rate=0, unused=0):
+        self.low_heart_rate = low_heart_rate
+        self.high_heart_rate = high_heart_rate
+
 
 class SpeedZone(DataType):
     _fields = [('low_speed', 'f'),   # In meters-per-second
@@ -4792,6 +4870,9 @@ class SpeedZone(DataType):
                ('name', '16s'),      # Null-terminated speed-zone name
                ]
 
+    def __init__(self, low_speed=0.0, high_speed=0.0, name=bytes(16)):
+        self.low_speed = low_speed
+        self.high_speed = high_speed
 
 class Activity(DataType):
     _heart_rate_zone_fmt = HeartRateZone.get_format()
@@ -4803,6 +4884,34 @@ class Activity(DataType):
                ('unused1', 'B'),                                    # Unused. Set to 0.
                ('unused2', 'H'),                                    # Unused. Set to 0.
                ]
+
+    def __init__(self,
+                 heart_rate_zones=[[93, 111, 0],
+                                   [111, 130, 0],
+                                   [130, 148, 0],
+                                   [148, 167, 0],
+                                   [167, 185, 0]],
+                 speed_zones=[[0.6705600023269653, 1.3410999774932861, b'Snail\x00\x00\x00\xb4\xd6!\x00i\xa0\x10\x04'],
+                              [1.3410999774932861, 1.6763999462127686, b'Turtle\x00\x00\xa8\x00"\x00B\x00\x00\x00'],
+                              [1.6763999462127686, 2.4384000301361084, b'Squirrel\x00\x00\x00\x00\xb4\xd6!\x00'],
+                              [2.4384000301361084, 3.829900026321411, b'Elephant\x00\x00\x00\x00\xf8\x00!\x00'],
+                              [3.829900026321411, 4.0, b'Rabbit\x00\x04G\x9a\x10\x04\x14\x00\x00\x00'],
+                              [4.0, 5.0, b'Greyhound\x00\x00\x00?g\x10\x04'],
+                              [5.0, 6.0, b'Horse\x00!\x00\xf8\x00\x00\x000\xd7!\x00'],
+                              [6.0, 7.0, b'Lion\x00\xd7!\x00\x0c\x00\x00\x00\xf8\x00\x00\x00'],
+                              [7.0, 8.0, b'Antelope\x00/A\x00\xff\x00\x00\x00'],
+                              [8.0, 9.0, b'Cheetah\x00runnB\x00\x00\x00']],
+                 gear_weight=0.0, max_heart_rate=0, unused1=0, unused2=0):
+        self.heart_rate_zones = heart_rate_zones
+        self.speed_zones = speed_zones
+        self.gear_weight = gear_weight
+        self.max_heart_rate = max_heart_rate
+
+    def get_heart_rate_zones(self):
+        return [ HeartRateZone(*heart_rate_zone) for heart_rate_zone in self.heart_rate_zones ]
+
+    def get_speed_zones(self):
+        return [ SpeedZone(*speed_zone) for speed_zone in self.speed_zones ]
 
 
 class FitnessUserProfile(DataType):
@@ -4817,6 +4926,12 @@ class FitnessUserProfile(DataType):
     _gender = {0: 'female',
                1: 'male',
                }
+
+    def get_activities(self):
+        return [ Activity(*activity) for activity in self.activities ]
+
+    def get_birth_date(self):
+        return date(self.birth_year, self.birth_month, self.birth_day)
 
     def get_gender(self):
         return self._gender.get(self.gender)
@@ -4838,27 +4953,23 @@ class D1005(WorkoutLimits):
 
 
 class Course(DataType):
-    pass
-
-
-class D1006(Course):
     _fields = [('index', 'H'),          # Unique among courses on device
                ('unused', 'H'),         # Unused. Set to 0.
                ('course_name', '16s'),  # Null-terminated, unique course name
                ('track_index', 'H'),    # Index of the associated track
                ]
 
+    def get_course_name(self):
+        values = rawutil.unpack('<n', self.course_name)
+        name = values[0].decode()
+        return name
+
+
+class D1006(Course):
+    pass
+
 
 class CourseLap(DataType):
-
-    def get_begin(self):
-        return Position(*self.begin)
-
-    def get_end(self):
-        return Position(*self.end)
-
-
-class D1007(CourseLap):
     _posn_fmt = Position.get_format()
     _fields = [('course_index', 'H'),        # Index of associated course
                ('lap_index', 'H'),           # This lap’s index in the course
@@ -4871,6 +4982,22 @@ class D1007(CourseLap):
                ('intensity', 'B'),           # Same as D1001
                ('avg_cadence', 'B'),         # In revolutions-per-minute, invalid if 0xFF
                ]
+    _intensity = {0: 'active',  # This is a standard, active lap
+                  1: 'rest',    # This is a rest lap in a workout
+                  }
+
+    def get_begin(self):
+        return Position(*self.begin)
+
+    def get_end(self):
+        return Position(*self.end)
+
+    def get_intensity(self):
+        return self._intensity.get(self.intensity)
+
+
+class D1007(CourseLap):
+    pass
 
 
 class D1008(Workout):
@@ -4878,13 +5005,117 @@ class D1008(Workout):
 
 
 class D1009(Run):
-    _fields = Run._fields + [('multisport', 'B'),
-                                 ('unused1', 'B'),
-                                 ('unused2', 'H'),
-                                 ('quick_workout_time', 'I'),
-                                 ('quick_workout_distance', 'f'),
-                                 ]
+    _fields = [('track_index', 'H'),      # Index of associated track
+               ('first_lap_index', 'H'),  # Index of first associated lap
+               ('last_lap_index', 'I'),   # Index of last associated lap
+               ('sport_type', 'B'),       # Same as D1000
+               ('program_type', 'B'),     # See below
+               ('multisport', 'B'),       # See below
+               ('unused1', 'B'),          # Unused. Set to 0.
+               ('unused2', 'H'),          # Unused. Set to 0.
+               ('quick_workout', '8s'),
+               ('workout', '$'),
+               ]
+    _multisport = {0: 'no',                 # Not a MultiSport run
+                   1: 'yes',                # Part of a MultiSport session
+                   2: 'yesAndLastInGroup',  # The last of a MultiSport session
+                   }
 
+    def get_track_index(self):
+        """Return the track_index.
+
+        The value of the ``track_index`` member must be 0xFFFF if there is no
+        associated track.
+
+        """
+        return self.track_index if self.track_index != 65535 else None
+
+    def get_quick_workout(self):
+        quick_workout = QuickWorkout()
+        quick_workout.unpack(self.quick_workout)
+        return quick_workout
+
+    def get_workout(self):
+        workout = Workout()
+        workout.unpack(self.workout)
+        return workout
+
+    def get_program_type(self):
+        """Return the color value.
+
+        The ``program_type`` member is a bit field that indicates the type of run
+        this is. The following table describes the meaning of each bit:
+
+        Bit Field: program_type
+        ============================= ===========================================
+         Bit                           Interpretation
+        ============================= ===========================================
+         0 (least significant bit)     This is a virtual partner run
+         1                             This is associated with a workout
+         2                             This is a quick workout
+         3                             This is associated with a course
+         4                             This is an interval workout
+         5                             This is part of an auto-MultiSport session
+         6-7 (most significant bits)   Undefined. Set to 0.
+        ============================= ===========================================
+
+        If the ``program_type`` member indicates that this run is associated with
+        a course, then the ``workout`` member contains the name of the associated
+        course in its ``name`` field.
+
+        """
+        bits = f"{self.program_type:08b}"[::-1]
+        return bits
+
+    def is_virtual_partner_run(self):
+        """Return whether the virtual partner bit is set."""
+        bits = f"{self.program_type:08b}"[::-1]
+        is_virtual_partner_run = True if bits[0] == '1' else False
+        return is_virtual_partner_run
+
+    def has_workout(self):
+        """Return whether the workout bit is set."""
+        bits = f"{self.program_type:08b}"[::-1]
+        has_workout = True if bits[1] == '1' else False
+        return has_workout
+
+    def is_quick_workout(self):
+        """Return whether the quick workout bit is set."""
+        bits = f"{self.program_type:08b}"[::-1]
+        is_quick_workout = True if bits[2] == '1' else False
+        return is_quick_workout
+
+    def has_course(self):
+        """Return whether the course bit is set."""
+        bits = f"{self.program_type:08b}"[::-1]
+        has_course = True if bits[3] == '1' else False
+        return has_course
+
+    def is_interval_workout(self):
+        """Return whether the interval workout bit is set."""
+        bits = f"{self.program_type:08b}"[::-1]
+        is_interval_workout = True if bits[4] == '1' else False
+        return is_interval_workout
+
+    def is_auto_multisport(self):
+        """Return whether the auto MultiSport bit is set.
+
+        If the ``auto MultiSport`` bit is set in the ``program_type`` member,
+        and if the last lap in the run is a rest lap, then that last lap’s time
+        represents the time during which the user was transitioning to the next
+        sport.
+
+        """
+
+        bits = f"{self.program_type:08b}"[::-1]
+        is_auto_multisport = True if bits[5] == '1' else False
+        return is_auto_multisport
+
+    def get_multisport(self):
+        """Return the multisport value.
+
+        """
+        return self._multisport.get(self.multisport)
 
 class D1011(Lap):
     _time_fmt = Time.get_format()
@@ -5509,7 +5740,6 @@ class Satellite(DataType):
 
     def get_records(self):
         return [ SatelliteRecord(*record) for record in self.records ]
-
 
 
 # Garmin models ==============================================

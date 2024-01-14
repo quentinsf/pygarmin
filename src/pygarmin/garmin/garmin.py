@@ -2127,21 +2127,25 @@ class A1006(TransferProtocol):
     """
 
     def get_data(self, callback=None):
-        runs = TransferProtocol.get_data(self,
-                                         self.gps.command.cmnd_transfer_runs,
-                                         self.gps.link.pid_run,
-                                         callback=callback)
-        course_laps = gps.course_lap_transfer.get_data(callback)
+        courses = TransferProtocol.get_data(self,
+                                            self.gps.command.cmnd_transfer_courses,
+                                            self.gps.link.pid_course,
+                                            callback=callback)
+        course_laps = self.gps.course_lap_transfer.get_data(callback)
         # If the A1012 Course Track Transfer Protocol is supported, then the associated
         # datatypes are used. Otherwise the datatypes used by the A302 Track Log
         # Transfer Protocol are used.
-        if gps.registered_protocols.get('course_track_transfer_protocol') is not None:
-            course_tracks = gps.course_track_transfer.get_data(callback)
+        if self.gps.registered_protocols.get('course_track_transfer_protocol') is not None:
+            course_tracks = self.gps.course_track_transfer.get_data(callback)
         else:
-            protocol = A1012(gps, gps.track_log_transfer.datatypes)
-            course_tracks = protocol.get_data(callback)
-        course_points = gps.course_point_transfer.get_data(callback)
-        return runs + course_tracks + course_points
+            datatypes = self.gps.registered_protocols['track_log_transfer_protocol'][1:]
+            protocol = TransferProtocol(self.gps, datatypes)
+            course_tracks = protocol.get_data(self.gps.command.cmnd_transfer_course_tracks,
+                                              self.gps.link.pid_course_trk_hdr,
+                                              self.gps.link.pid_course_trk_data,
+                                              callback=callback)
+        course_points = self.gps.course_point_transfer.get_data(callback)
+        return courses + course_laps + course_tracks + course_points
 
 
 class A1007(TransferProtocol):

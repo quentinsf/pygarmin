@@ -1994,8 +1994,8 @@ class A1000(TransferProtocol):
                                          self.gps.command.cmnd_transfer_runs,
                                          self.gps.link.pid_run,
                                          callback=callback)
-        laps = gps.lap_transfer.get_data(callback)
-        tracks = gps.track_log_transfer.get_data(callback)
+        laps = self.gps.lap_transfer.get_data(callback)
+        tracks = self.gps.track_log_transfer.get_data(callback)
         return runs + laps + tracks
 
 
@@ -2027,7 +2027,7 @@ class A1002(TransferProtocol):
                                              self.gps.command.cmnd_transfer_workouts,
                                              self.gps.link.pid_workout,
                                              callback=callback)
-        workout_occurrences = gps.workout_occurrence_transfer.get_data(callback)
+        workout_occurrences = self.gps.workout_occurrence_transfer.get_data(callback)
         return workouts + workout_occurrences
 
 

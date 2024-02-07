@@ -3339,7 +3339,7 @@ class D100(Wpt):
                ('cmnt', '40s'),             # comment
                ]
 
-    def __init__(self, ident=b'', posn=[0, 0], cmnt=b''):
+    def __init__(self, ident=bytes(6), posn=[0, 0], cmnt=bytes(40)):
         self.ident = ident
         self.posn = posn
         self.unused = 0
@@ -3477,7 +3477,7 @@ class D105(D101):
                ('wpt_ident', 'n'),          # waypoint identifier
                ]
 
-    def __init__(self, wpt_ident=b'', **kwargs):
+    def __init__(self, wpt_ident=b'\x00', **kwargs):
         super().__init__(**kwargs)
         self.wpt_ident = wpt_ident
 
@@ -3493,7 +3493,7 @@ class D106(D101):
                ('lnk_ident', 'n'),          # link identifier
                ]
 
-    def __init__(self, wpt_class=0, subclass=(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0), wpt_ident=b'', lnk_ident=b'', **kwargs):
+    def __init__(self, wpt_class=0, subclass=(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0), wpt_ident=b'\x00', lnk_ident=b'\x00', **kwargs):
         super().__init__(**kwargs)
         self.wpt_class = wpt_class
         self.subclass = subclass
@@ -3593,7 +3593,7 @@ class D108(D103):
               255: 'clr_default_color'
               }
 
-    def __init__(self, wpt_class=0, color=255, attr=96, smbl=0, subclass=(0, 0, 0, 0, 0, 0, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255), alt=1.0e25, dpth=1.0e25, dist=1.0e25, state=b'', cc=b'', cmnt=b'', facility=b'', city=b'', addr=b'', cross_road=b'', **kwargs):
+    def __init__(self, wpt_class=0, color=255, attr=96, smbl=0, subclass=(0, 0, 0, 0, 0, 0, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255), alt=1.0e25, dpth=1.0e25, dist=1.0e25, state=bytes(2), cc=bytes(2), cmnt=b'\x00', facility=b'\x00', city=b'\x00', addr=b'\x00', cross_road=b'\x00', **kwargs):
         super().__init__(**kwargs)
         self.wpt_class = wpt_class
         self.color = color
@@ -3883,7 +3883,7 @@ class D120(WptCat):
     _fields = [('name', '17s'),  # category name
                ]
 
-    def __init__(self, name=b''):
+    def __init__(self, name=bytes(17)):
         self.name = name
 
 
@@ -3909,8 +3909,9 @@ class D150(Wpt):
                   7: 'locked_wpt_class',  # locked waypoint class
                   }
 
-    def __init__(self, ident=b'', cc=b'', wpt_class=0, posn=[0, 0], alt=1.0e25,
-                 city=b'', state=b'', facility=b'', cmnt=b''):
+    def __init__(self, ident=bytes(6), cc=bytes(2), wpt_class=0, posn=[0, 0],
+                 alt=1.0e25, city=bytes(24), state=bytes(2), facility=bytes(30),
+                 cmnt=bytes(40)):
         self.ident = ident
         self.cc = cc
         self.wpt_class = wpt_class
@@ -3954,7 +3955,7 @@ class D151(D150):
                   3: 'locked_wpt_class'  # locked waypoint class
                   }
 
-    def __init__(self, dst=0, name=b'', **kwargs):
+    def __init__(self, dst=0, name=bytes(30), **kwargs):
         super().__init__(**kwargs)
         self.unused = 0
         self.dst = dst
@@ -4046,7 +4047,7 @@ class D201(RteHdr):
                ('cmnt', '20s'),  # comment
                ]
 
-    def __init__(self, nmbr=0, cmnt=b''):
+    def __init__(self, nmbr=0, cmnt=bytes(20)):
         self.nmbr = nmbr
         self.cmnt = cmnt
 
@@ -4055,7 +4056,7 @@ class D202(RteHdr):
     _fields = [('ident', 'n'),  # identifier
                ]
 
-    def __init__(self, ident=b''):
+    def __init__(self, ident=b'\x00'):
         self.ident = ident
 
 
@@ -4077,7 +4078,7 @@ class D210(RteLink):
                   3:   'direct',
                   255: 'snap'}
 
-    def __init__(self, lnk_class=0, subclass=(0, 0, 0, 0, 0, 0, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255), ident=b''):
+    def __init__(self, lnk_class=0, subclass=(0, 0, 0, 0, 0, 0, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255), ident=b'\x00'):
         self.lnk_class = lnk_class
         self.subclass = subclass
         self.ident = ident
@@ -4291,7 +4292,7 @@ class D310(TrkHdr):
               255: 'clr_default_color'
               }
 
-    def __init__(self, dspl=True, color=255, trk_ident=b''):
+    def __init__(self, dspl=True, color=255, trk_ident=b'\x00'):
         self.dspl = dspl
         self.color = color
         self.trk_ident = trk_ident
@@ -4921,7 +4922,7 @@ class SpeedZone(DataType):
                ('name', '16s'),      # Null-terminated speed-zone name
                ]
 
-    def __init__(self, low_speed=0.0, high_speed=0.0, name=bytes(16)):
+    def __init__(self, low_speed=0, high_speed=0, name=bytes(16)):
         self.low_speed = low_speed
         self.high_speed = high_speed
 

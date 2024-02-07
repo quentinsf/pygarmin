@@ -690,7 +690,7 @@ class L000:
                 # properties of the device and are not formatted for display to the
                 # end user. According to the specification the host should ignore
                 # it.
-                log.info(f"Got packet type {self.pid_ext_product_data}, ignoring...")
+                log.info(f"Got packet type {self.pid_ext_product_data}. Ignoring...")
                 datatype = ExtProductData()
                 datatype.unpack(packet['data'])
                 for property in datatype.properties:

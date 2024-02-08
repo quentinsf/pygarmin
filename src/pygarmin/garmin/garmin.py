@@ -694,7 +694,7 @@ class L000:
                 datatype = ExtProductData()
                 datatype.unpack(packet['data'])
                 for property in datatype.properties:
-                    log.debug(f"Extra Product Data: {property[0].decode()}")
+                    log.debug(f"Extra Product Data: {property[0].decode('ascii')}")
             else:
                 break
         return packet
@@ -832,7 +832,7 @@ class A000:
         datatype.unpack(packet['data'])
         log.info(f"Product ID: {datatype.product_id}")
         log.info(f"Software version: {datatype.software_version:.2f}")
-        log.info(f"Product description: {datatype.product_description.decode()}")
+        log.info(f"Product description: {datatype.product_description.decode('ascii')}")
         return datatype
 
 
@@ -2240,7 +2240,7 @@ class ImageTransfer:
             packet = self.gps.link.expect_packet(self.gps.link.pid_image_type_name_tx)
             datatype = ImageName()
             datatype.unpack(packet['data'])
-            name = datatype.name.decode()
+            name = datatype.name.decode('ascii')
             log.info(f"Image type name: {name}")
             image_types.append({'idx': idx, 'name': name})
         return image_types
@@ -2260,7 +2260,7 @@ class ImageTransfer:
             packet = self.gps.link.expect_packet(self.gps.link.pid_image_name_tx)
             datatype = ImageName()
             datatype.unpack(packet['data'])
-            name = datatype.name.decode()
+            name = datatype.name.decode('ascii')
             log.info(f"Image name: {name}")
             image_dict['name'] = name
             images.append(image_dict)
@@ -4565,7 +4565,7 @@ class PVT(DataType):
             "etrex golflogix": 2.49,
         }
         pattern = r'(?P<device>[\w ]+) Software Version (?P<version>\d+.\d+)'
-        m = re.search(pattern, product_description.decode('ascii'))
+        m = re.search(pattern, product_description)
         device = m.group('device').lower()
         version = float(m.group('version'))
         last_version = devices.get(device)
@@ -4781,7 +4781,7 @@ class Step(DataType):
 
     def get_custom_name(self):
         values = rawutil.unpack('<n', self.custom_name)
-        name = values[0].decode()
+        name = values[0].decode('ascii')
         return name
 
     def get_intensity(self):
@@ -4859,7 +4859,7 @@ class Workout(DataType):
 
     def get_name(self):
         values = rawutil.unpack('<n', self.name)
-        name = values[0].decode()
+        name = values[0].decode('ascii')
         return name
 
     def get_sport_type(self):
@@ -5013,7 +5013,7 @@ class Course(DataType):
 
     def get_course_name(self):
         values = rawutil.unpack('<n', self.course_name)
-        name = values[0].decode()
+        name = values[0].decode('ascii')
         return name
 
 
@@ -5267,7 +5267,7 @@ class CoursePoint(DataType):
 
     def get_name(self):
         values = rawutil.unpack('<n', self.name)
-        name = values[0].decode()
+        name = values[0].decode('ascii')
         return name
 
     def get_track_point_datetime(self):
@@ -6113,7 +6113,7 @@ class Garmin():
         #: Software version
         self.software_version = self.product_data.software_version / 100
         #: Product description
-        self.product_description = self.product_data.product_description
+        self.product_description = self.product_data.product_description.decode('ascii')
         self.protocol_capability = A001(self.link)
         #: Protocol capabilities and device-specific data types
         self.supported_protocols = self._get_protocols()

@@ -507,7 +507,7 @@ class Pygarmin:
         for almanac in almanacs:
             args.filename.write(f"{func(almanac)}\n")
 
-    def time(self, args):
+    def get_time(self, args):
         time = self.gps.get_time()
         if args.format == 'txt':
             args.filename.write(f"{time.get_datetime()}\n")
@@ -1015,18 +1015,18 @@ get_almanac.add_argument('filename',
                          type=argparse.FileType(mode='w'),
                          default=sys.stdout,
                          help="Set output file")
-time = subparsers.add_parser('time', help="Download current date and time")
-time.set_defaults(command='time')
-time.add_argument('-t',
-                  '--format',
-                  choices=['txt', 'garmin'],
-                  default='garmin',
-                  help="Set output format. ``txt`` returns a JSON string that consists of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype.")
-time.add_argument('filename',
-                  nargs='?',
-                  type=argparse.FileType(mode='w'),
-                  default=sys.stdout,
-                  help="Set output file")
+get_time = subparsers.add_parser('get-time', help="Download current date and time")
+get_time.set_defaults(command='get_time')
+get_time.add_argument('-t',
+                      '--format',
+                      choices=['txt', 'garmin'],
+                      default='garmin',
+                      help="Set output format. ``txt`` returns a human readable string of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype. ``json`` returns a JSON string of the datatypes.")
+get_time.add_argument('filename',
+                      nargs='?',
+                      type=argparse.FileType(mode='w'),
+                      default=sys.stdout,
+                      help="Set output file")
 position = subparsers.add_parser('position', help="Download current position")
 position.set_defaults(command='position')
 position.add_argument('-t',

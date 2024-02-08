@@ -514,7 +514,7 @@ class Pygarmin:
         elif args.format == 'garmin':
             args.filename.write(f"{repr(time)}\n")
 
-    def position(self, args):
+    def get_position(self, args):
         position = self.gps.get_position()
         if args.format == 'txt':
             func = str
@@ -1027,18 +1027,18 @@ get_time.add_argument('filename',
                       type=argparse.FileType(mode='w'),
                       default=sys.stdout,
                       help="Set output file")
-position = subparsers.add_parser('position', help="Download current position")
-position.set_defaults(command='position')
-position.add_argument('-t',
-                      '--format',
-                      choices=['txt', 'garmin'],
-                      default='garmin',
-                      help="Set output format. ``txt`` returns a JSON string that consists of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype.")
-position.add_argument('filename',
-                      nargs='?',
-                      type=argparse.FileType(mode='w'),
-                      default=sys.stdout,
-                      help="Set output file")
+get_position = subparsers.add_parser('get-position', help="Download current position")
+get_position.set_defaults(command='get_position')
+get_position.add_argument('-t',
+                          '--format',
+                          choices=['txt', 'garmin'],
+                          default='garmin',
+                          help="Set output format. ``txt`` returns a JSON string that consists of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype.")
+get_position.add_argument('filename',
+                          nargs='?',
+                          type=argparse.FileType(mode='w'),
+                          default=sys.stdout,
+                          help="Set output file")
 pvt = subparsers.add_parser('pvt', help="Download pvt")
 pvt.set_defaults(command='pvt')
 pvt.add_argument('-t',

@@ -58,7 +58,7 @@
 """
 
 from array import array
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from functools import cached_property
 import io
 import json
@@ -2514,8 +2514,8 @@ class DataType():
     byteorder = 'little'
     #: binary data
     data = bytes()
-    #: ``datetime`` of 12:00 am December 31, 1989 UTC
-    epoch = datetime(1989, 12, 31, 12, 0)
+    #: ``datetime`` of 12:00 AM December 31, 1989 UTC
+    epoch = datetime(1989, 12, 31, 0, 0, tzinfo=timezone.utc)
     #: regex matching upper-case letters and numbers
     re_upcase_digit = r'[A-Z0-9]'
     #: regex matching upper-case letters, numbers and space
@@ -2839,7 +2839,7 @@ class DegreePosition(DataType):
 
 
 class Time(DataType):
-    _epoch = datetime(1989, 12, 31, 12, 0)  # 12:00 am December 31, 1989 UTC
+    _epoch = datetime(1989, 12, 31, 0, 0, tzinfo=timezone.utc)  # 12:00 AM December 31, 1989 UTC
     _fields = [('time', 'I'),  # timestamp, invalid if 0xFFFFFFFF
                ]
 

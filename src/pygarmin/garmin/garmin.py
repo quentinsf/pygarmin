@@ -6331,7 +6331,8 @@ class Garmin():
         else:
             log.info(f"Protocol {key} is not supported.")
 
-    def get_unit_id(self):
+    @cached_property
+    def unit_id(self):
         """Return the device’s unit ID.
 
         This feature is undocumented in the spec. The implementation is derived

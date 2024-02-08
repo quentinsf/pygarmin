@@ -166,7 +166,7 @@ class TPV(Gpsd):
     def __init__(self, pvt):
         self.pvt = pvt
         self.mode = self._get_mode()
-        self.time = self.pvt.get_datetime().isoformat()
+        self.time = self.pvt.get_datetime().astimezone().isoformat()
         self.alt_hae = self.pvt.alt
         self.alt_msl = self.pvt.get_msl_alt()
         # Gpsd assumes a confidence of 50%, and applies a correction to

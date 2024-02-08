@@ -186,7 +186,7 @@ class TPV(Gpsd):
 
     def _get_mode(self, product_description=None):
         if product_description:
-            fix = self.pvt.get_fix(str(product_description, 'latin_1'))
+            fix = self.pvt.get_fix(product_description)
         else:
             fix = self.pvt.get_fix()
         if fix == '2D' or fix == '2D_diff':
@@ -306,8 +306,8 @@ class Pygarmin:
         info += "===================\n"
         info += f"Product ID: {self.gps.product_id}\n"
         info += f"Software version: {self.gps.software_version:.2f}\n"
-        info += f"Product description: {str(self.gps.product_description, 'latin_1')}\n"
-        info += f"Unit ID: {self.gps.get_unit_id()}\n"
+        info += f"Product description: {self.gps.product_description}\n"
+        info += f"Unit ID: {self.gps.unit_id}\n"
         args.filename.write(info)
 
     def protocols(self, args):

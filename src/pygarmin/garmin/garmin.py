@@ -2796,11 +2796,11 @@ class RadianPosition(DataType):
 
     def as_degrees(self):
         return DegreePosition(lat=self.to_degrees(self.lat),
-                                  lon=self.to_degrees(self.lon))
+                              lon=self.to_degrees(self.lon))
 
     def as_semicircles(self):
         return Position(lat=self.to_semicircles(self.lat),
-                            lon=self.to_semicircles(self.lon))
+                        lon=self.to_semicircles(self.lon))
 
 
 class DegreePosition(DataType):
@@ -2831,11 +2831,11 @@ class DegreePosition(DataType):
 
     def as_semicircles(self):
         return Position(lat=self.to_semicircles(self.lat),
-                            lon=self.to_semicircles(self.lon))
+                        lon=self.to_semicircles(self.lon))
 
     def as_radians(self):
         return RadianPosition(lat=self.to_radians(self.lat),
-                                  lon=self.to_radians(self.lon))
+                              lon=self.to_radians(self.lon))
 
 
 class Time(DataType):

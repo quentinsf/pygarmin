@@ -4612,7 +4612,6 @@ class PVT(DataType):
         fix = self.fix
         if product_description and self.is_legacy(product_description):
             fix += 1
-
         return self._fix.get(fix)
 
 
@@ -6274,7 +6273,6 @@ class Garmin():
             protocols.append(("A000"))
             protocols.append(("A600", "D600"))
             protocols.append(("A700", "D700"))
-
         return protocols
 
     def _get_protocols(self):
@@ -6295,7 +6293,6 @@ class Garmin():
             except KeyError:
                 raise ProtocolError("Couldn't determine protocol capabilities")
         log.debug(f"Supported protocols and data types: {protocols}")
-
         return protocols
 
     def _register_protocols(self, supported_protocols):
@@ -6347,7 +6344,6 @@ class Garmin():
         log.info("Expect Product Id packet")
         packet = self.link.expect_packet(self.link.pid_unit_id)
         unit_id = int.from_bytes(packet['data'], byteorder='little')
-
         return unit_id
 
     def get_waypoints(self, callback=None):

@@ -3486,14 +3486,14 @@ class D106(D101):
     _posn_fmt = Position.get_format()
     _smbl_fmt = Symbol.get_format()
     _fields = [('wpt_class', 'B'),          # class
-               ('subclass', '(13B)'),       # subclass
+               ('subclass', '13s'),         # subclass
                ('posn', f'({_posn_fmt})'),  # position
                ('smbl', f'{_smbl_fmt}'),    # symbol id
                ('wpt_ident', 'n'),          # waypoint identifier
                ('lnk_ident', 'n'),          # link identifier
                ]
 
-    def __init__(self, wpt_class=0, subclass=(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0), wpt_ident=b'\x00', lnk_ident=b'\x00', **kwargs):
+    def __init__(self, wpt_class=0, subclass=bytes((0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)), wpt_ident=b'\x00', lnk_ident=b'\x00', **kwargs):
         super().__init__(**kwargs)
         self.wpt_class = wpt_class
         self.subclass = subclass
@@ -3546,7 +3546,7 @@ class D108(D103):
                ('dspl', 'B'),               # display option
                ('attr', 'B'),               # attributes (0x60 for D108)
                ('smbl', f'{_smbl_fmt}'),    # symbol id
-               ('subclass', '(18B)'),       # subclass
+               ('subclass', '18s'),         # subclass
                ('posn', f'({_posn_fmt})'),  # position
                ('alt', 'f'),                # altitude in meters
                ('dpth', 'f'),               # depth in meters
@@ -3593,7 +3593,7 @@ class D108(D103):
               255: 'clr_default_color'
               }
 
-    def __init__(self, wpt_class=0, color=255, attr=96, smbl=0, subclass=(0, 0, 0, 0, 0, 0, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255), alt=1.0e25, dpth=1.0e25, dist=1.0e25, state=bytes(2), cc=bytes(2), cmnt=b'\x00', facility=b'\x00', city=b'\x00', addr=b'\x00', cross_road=b'\x00', **kwargs):
+    def __init__(self, wpt_class=0, color=255, attr=96, smbl=0, subclass=bytes((0, 0, 0, 0, 0, 0, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255)), alt=1.0e25, dpth=1.0e25, dist=1.0e25, state=bytes(2), cc=bytes(2), cmnt=b'\x00', facility=b'\x00', city=b'\x00', addr=b'\x00', cross_road=b'\x00', **kwargs):
         super().__init__(**kwargs)
         self.wpt_class = wpt_class
         self.color = color
@@ -3665,7 +3665,7 @@ class D109(D108):
                ('dspl_color', 'B'),         # display & color
                ('attr', 'B'),               # attributes (0x70 for d109)
                ('smbl', f'{_smbl_fmt}'),    # symbol id
-               ('subclass', '(18B)'),       # subclass
+               ('subclass', '18s'),         # subclass
                ('posn', f'({_posn_fmt})'),  # position
                ('alt', 'f'),                # altitude in meters
                ('dpth', 'f'),               # depth in meters
@@ -3720,7 +3720,7 @@ class D110(D109):
                ('dspl_color', 'B'),         # display & color
                ('attr', 'B'),               # attributes (0x80 for D110)
                ('smbl', f'{_smbl_fmt}'),    # symbol id
-               ('subclass', '(18B)'),       # subclass
+               ('subclass', '18s'),         # subclass
                ('posn', f'({_posn_fmt})'),  # position
                ('alt', 'f'),                # altitude in meters
                ('dpth', 'f'),               # depth in meters
@@ -4061,9 +4061,9 @@ class RteLink(DataType):
 
 
 class D210(RteLink):
-    _fields = [('lnk_class', 'H'),     # link class
-               ('subclass', '(18B)'),  # subclass
-               ('ident', 'n'),         # identifier
+    _fields = [('lnk_class', 'H'),   # link class
+               ('subclass', '18s'),  # subclass
+               ('ident', 'n'),       # identifier
                ]
     _lnk_class = {0:   'line',
                   1:   'link',
@@ -4071,7 +4071,7 @@ class D210(RteLink):
                   3:   'direct',
                   255: 'snap'}
 
-    def __init__(self, lnk_class=0, subclass=(0, 0, 0, 0, 0, 0, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255), ident=b'\x00'):
+    def __init__(self, lnk_class=0, subclass=bytes((0, 0, 0, 0, 0, 0, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255)), ident=b'\x00'):
         self.lnk_class = lnk_class
         self.subclass = subclass
         self.ident = ident

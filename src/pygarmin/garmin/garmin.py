@@ -1343,7 +1343,7 @@ class A201(TransferProtocol):
 
     def put_data(self, routes, callback=None):
         packets = []
-        for point in routes:
+        for route in routes:
             header = route[0]
             points = route[1:]
             pid = self.gps.link.pid_rte_hdr

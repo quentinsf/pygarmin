@@ -3688,33 +3688,26 @@ class D109(D108):
         self.attr = attr
         self.ete = ete
 
+    # The ``dspl_color`` member contains three fields; bits 0-4 specify the color,
+    # bits 5-6 specify the waypoint display attribute and bit 7 is unused and
+    # must be 0.
+
     def get_color(self):
-        """Return the color value.
-
-        The ``dspl_color`` member contains three fields; bits 0-4 specify the color,
-        bits 5-6 specify the waypoint display attribute and bit 7 is unused and
-        must be 0.
-
-        """
-        bits = f"{self.dspl_color:08b}"
-        color = int(bits[0:5], 2)
+        """Return the color value."""
+        bit_size = 5
+        shift = 3
+        mask = pow(2, bit_size) - 1
+        color = self.dspl_color >> shift & mask
         # According to the specification the default color value should be 0x1f,
         # but this is an invalid value. It probably should be 0xff.
         return self._color.get(color, 255)
 
     def get_dspl(self):
-        """Return the display attribute value.
-
-        The ``dspl_color`` member contains three fields; bits 0-4 specify the
-        color, bits 5-6 specify the waypoint display attribute and bit 7 is
-        unused and must be 0.
-
-        If an invalid display attribute value is received, the value will be
-        Name.
-
-        """
-        bits = f"{self.dspl_color:08b}"
-        dspl = int(bits[5:7], 2)
+        """Return the display attribute value."""
+        bit_size = 2
+        shift = 1
+        mask = pow(2, bit_size) - 1
+        dspl = self.dspl_color >> shift & mask
         return self._dspl.get(dspl, 0)
 
 
@@ -3794,33 +3787,33 @@ class D110(D109):
         """
         return self._wpt_class.get(self.wpt_class, 0)
 
+    # The ``dspl_color`` member contains three fields; bits 0-4 specify the
+    # color, bits 5-6 specify the waypoint display attribute and bit 7 is
+    # unused and must be 0.
+
     def get_color(self):
         """Return the color value.
-
-        The ``dspl_color`` member contains three fields; bits 0-4 specify the color,
-        bits 5-6 specify the waypoint display attribute and bit 7 is unused and
-        must be 0.
 
         If an invalid color value is received, the value will be Black.
 
         """
-        bits = f"{self.dspl_color:08b}"
-        color = int(bits[0:5], 2)
+        bit_size = 5
+        shift = 3
+        mask = pow(2, bit_size) - 1
+        color = self.dspl_color >> shift & mask
         return self._color.get(color, 0)
 
     def get_dspl(self):
         """Return the display attribute value.
 
-        The ``dspl_color`` member contains three fields; bits 0-4 specify the
-        color, bits 5-6 specify the waypoint display attribute and bit 7 is
-        unused and must be 0.
-
         If an invalid display attribute value is received, the value will be
         Name.
 
         """
-        bits = f"{self.dspl_color:08b}"
-        dspl = int(bits[5:7], 2)
+        bit_size = 2
+        shift = 1
+        mask = pow(2, bit_size) - 1
+        dspl = self.dspl_color >> shift & mask
         return self._dspl.get(dspl, 0)
 
     def get_datetime(self):
@@ -5764,21 +5757,24 @@ class SatelliteRecord(DataType):
 
     def has_eph(self):
         """Return whether the unit has ephemeris data for the specified satellite."""
-        bits = f"{self.status:08b}"[::-1]  # reverse because of little endian byteorder
-        has_eph = True if bits[0] == '1' else False
-        return has_eph
+        shift = 7
+        mask = 1
+        bit = self.program_type >> shift & mask
+        return bool(bit)
 
     def has_diff(self):
         """Return whether the unit has a differential correction for the specified satellite."""
-        bits = f"{self.status:08b}"[::-1]  # reverse because of little endian byteorder
-        has_diff = True if bits[1] == '1' else False
-        return has_diff
+        shift = 6
+        mask = 1
+        bit = self.program_type >> shift & mask
+        return bool(bit)
 
     def is_used(self):
         """Return whether the unit is using this satellite in the solution."""
-        bits = f"{self.status:08b}"[::-1]  # reverse because of little endian byteorder
-        is_used = True if bits[2] == '1' else False
-        return is_used
+        shift = 5
+        mask = 1
+        bit = self.program_type >> shift & mask
+        return bool(bit)
 
     def get_prn(self):
         """Return the PRN.

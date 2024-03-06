@@ -1415,7 +1415,7 @@ class A300(TransferProtocol):
             elif isinstance(point, dict):
                 datatype = self.datatypes[0](**point)
             else:
-                raise ProtocolError("Invalid class type: expected dict or {datatypes[0].__name__}")
+                raise ProtocolError("Invalid class type: expected dict or {self.datatypes[0].__name__}")
             packet = (pid, datatype)
             packets.append(packet)
         return TransferProtocol.put_data(self,
@@ -1461,7 +1461,7 @@ class A301(TransferProtocol):
             elif isinstance(header, dict):
                 datatype = self.datatypes[0](**header)
             else:
-                raise ProtocolError("Invalid class type: expected dict or {datatypes[0].__name__}")
+                raise ProtocolError("Invalid class type: expected dict or {self.datatypes[0].__name__}")
             packet = (pid, datatype)
             packets.append(packet)
             for point in points:
@@ -1471,7 +1471,7 @@ class A301(TransferProtocol):
                 elif isinstance(point, dict):
                     datatype = self.datatypes[1](**point)
                 else:
-                    raise ProtocolError("Invalid class type: expected dict or {datatypes[1].__name__}")
+                    raise ProtocolError("Invalid class type: expected dict or {self.datatypes[1].__name__}")
                 packet = (pid, datatype)
                 packets.append(packet)
         return TransferProtocol.put_data(self,

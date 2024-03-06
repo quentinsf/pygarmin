@@ -1150,7 +1150,6 @@ class TransferProtocol:
             if callback:
                 callback(datatype, idx+1, packet_count)
         self.gps.link.expect_packet(self.gps.link.pid_xfer_cmplt)
-
         return result
 
     def put_data(self, cmd, packets, callback=None):

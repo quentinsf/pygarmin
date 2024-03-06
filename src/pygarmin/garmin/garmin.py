@@ -1194,17 +1194,17 @@ class A100(TransferProtocol):
                                          self.gps.link.pid_wpt_data,
                                          callback=callback)
 
-    def put_data(self, points, callback=None):
+    def put_data(self, waypoints, callback=None):
         packets = []
         log.info(f"Datatypes: {*[datatype.__name__ for datatype in self.datatypes],}")
-        for point in points:
+        for waypoint in waypoints:
             pid = self.gps.link.pid_wpt_data
-            if isinstance(point, Wpt):
-                datatype = point
-            elif isinstance(point, dict):
-                datatype = self.datatypes[0](**point)
+            if isinstance(waypoint, Wpt):
+                datatype = waypoint
+            elif isinstance(waypoint, dict):
+                datatype = self.datatypes[0](**waypoint)
             else:
-                raise ProtocolError("Invalid class type: expected dict or {datatypes[0].__name__}")
+                raise ProtocolError("Invalid class type: expected dict or {self.datatypes[0].__name__}")
             packet = {'id': pid, 'data': datatype}
             packets.append(packet)
         return TransferProtocol.put_data(self,
@@ -1247,7 +1247,7 @@ class A101(TransferProtocol):
             elif isinstance(point, dict):
                 datatype = self.datatypes[0](**point)
             else:
-                raise ProtocolError("Invalid class type: expected dict or {datatypes[0].__name__}")
+                raise ProtocolError("Invalid class type: expected dict or {self.datatypes[0].__name__}")
             packet = {'id': pid, 'data': datatype}
             packets.append(packet)
         return TransferProtocol.put_data(self,
@@ -1284,28 +1284,29 @@ class A200(TransferProtocol):
 
     def put_data(self, routes, callback=None):
         packets = []
-        for route in routes:
-            header = route[0]
-            points = route[1:]
-            pid = self.gps.link.pid_rte_hdr
-            if isinstance(header, RteHdr):
-                datatype = header
-            elif isinstance(header, dict):
-                datatype = self.datatypes[0](**header)
-            else:
-                raise ProtocolError("Invalid class type: expected dict or {datatypes[0].__name__}")
-            packet = {'id': pid, 'data': datatype}
-            packets.append(packet)
-            for point in points:
-                pid = self.gps.link.pid_rte_wpt_data
-                if isinstance(point, Wpt):
-                    datatype = point
-                elif isinstance(point, dict):
-                    datatype = self.datatypes[0](**point)
+        if all(isinstance(datatype, DataType) for datatype in routes):
+            for datatype in routes:
+                if isinstance(datatype, RteHdr):
+                    pid = self.gps.link.pid_rte_hdr
+                elif isinstance(datatype, Wpt):
+                    pid = self.gps.link.pid_rte_wpt_data
                 else:
-                    raise ProtocolError("Invalid class type: expected dict or {datatypes[0].__name__}")
+                    raise ProtocolError("Invalid datatype: expected {self.datatypes[0].__name__} or {self.datatypes[1].__name__}")
                 packet = {'id': pid, 'data': datatype}
                 packets.append(packet)
+        elif all(isinstance(datatype, dict) for route in routes for datatype in route):
+            for route in routes:
+                header = route[0]
+                points = route[1:]
+                pid = self.gps.link.pid_rte_hdr
+                datatype = self.datatypes[0](**header)
+                packet = {'id': pid, 'data': datatype}
+                packets.append(packet)
+                for point in points:
+                    pid = self.gps.link.pid_rte_wpt_data
+                    datatype = self.datatypes[0](**point)
+                    packet = {'id': pid, 'data': datatype}
+                    packets.append(packet)
         return TransferProtocol.put_data(self,
                                          self.gps.command.cmnd_transfer_rte,
                                          packets,
@@ -1343,22 +1344,38 @@ class A201(TransferProtocol):
 
     def put_data(self, routes, callback=None):
         packets = []
-        for route in routes:
-            header = route[0]
-            points = route[1:]
-            pid = self.gps.link.pid_rte_hdr
-            datatype = self.datatypes[0](**header)
-            packet = {'id': pid, 'data': datatype}
-            packets.append(packet)
-            is_even = lambda x: x % 2 == 0
-            for idx, point in enumerate(points):
-                if is_even(idx):
+        if all(isinstance(datatype, DataType) for datatype in routes):
+            for datatype in routes:
+                if isinstance(datatype, RteHdr):
+                    pid = self.gps.link.pid_rte_hdr
+                elif isinstance(datatype, Wpt):
                     pid = self.gps.link.pid_rte_wpt_data
-                else:
+                elif isinstance(datatype, RteLink):
                     pid = self.gps.link.pid_rte_link_data
-                datatype = self.datatypes[idx+1](**point)
+                else:
+                    raise ProtocolError("Invalid datatype: expected {self.datatypes[0].__name__}, {self.datatypes[1].__name__}, or {self.datatypes[2].__name__}")
                 packet = {'id': pid, 'data': datatype}
                 packets.append(packet)
+        elif all(isinstance(datatype, dict) for route in routes for datatype in route):
+            for route in routes:
+                header = route[0]
+                points = route[1:]
+                pid = self.gps.link.pid_rte_hdr
+                datatype = self.datatypes[0](**header)
+                packet = {'id': pid, 'data': datatype}
+                packets.append(packet)
+                is_even = lambda x: x % 2 == 0
+                for idx, point in enumerate(points):
+                    if is_even(idx):
+                        pid = self.gps.link.pid_rte_wpt_data
+                        datatype = self.datatypes[1](**point)
+                    else:
+                        pid = self.gps.link.pid_rte_link_data
+                        datatype = self.datatypes[2](**point)
+                    packet = {'id': pid, 'data': datatype}
+                    packets.append(packet)
+        else:
+            raise ProtocolError("Invalid class types: expected dict or datatypes {*[datatype.__name__ for datatype in self.datatypes],}")
         return TransferProtocol.put_data(self,
                                          self.gps.command.cmnd_transfer_rte,
                                          packets,
@@ -1501,16 +1518,16 @@ class A400(TransferProtocol):
                                          self.gps.link.pid_prx_wpt_data,
                                          callback=callback)
 
-    def put_data(self, points, callback=None):
+    def put_data(self, waypoints, callback=None):
         packets = []
-        for point in points:
+        for waypoint in waypoints:
             pid = self.gps.link.pid_prx_wpt_data
-            if isinstance(point, PrxWpt):
-                datatype = point
-            elif isinstance(point, dict):
-                datatype = self.datatypes[0](**point)
+            if isinstance(waypoint, PrxWpt):
+                datatype = waypoint
+            elif isinstance(waypoint, dict):
+                datatype = self.datatypes[0](**waypoint)
             else:
-                raise ProtocolError("Invalid class type: expected dict or {datatypes[0].__name__}")
+                raise ProtocolError("Invalid class type: expected dict or {self.datatypes[0].__name__}")
             packet = {'id': pid, 'data': datatype}
             packets.append(packet)
         return TransferProtocol.put_data(self,
@@ -1549,6 +1566,23 @@ class A500(TransferProtocol):
                                          self.gps.link.pid_almanac_data,
                                          callback=callback)
 
+    def put_data(self, almanac_data, callback=None):
+        packets = []
+        for satellite in almanac_data:
+            pid = self.gps.link.pid_almanac_data
+            if isinstance(satellite, Almanac):
+                datatype = satellite
+            elif isinstance(satellite, dict):
+                datatype = self.datatypes[0](**satellite)
+            else:
+                raise ProtocolError("Invalid class type: expected dict or {self.datatypes[0].__name__}")
+            packet = (pid, datatype)
+            packets.append(packet)
+        return TransferProtocol.put_data(self,
+                                         self.gps.command.cmnd_transfer_alm,
+                                         packets,
+                                         callback=callback)
+
 
 class A600(TransferProtocol):
     """Date and Time Initialization Protocol.
@@ -1572,6 +1606,20 @@ class A600(TransferProtocol):
         if callback:
             callback(datatype, 1, 1)
         return datatype
+
+    def put_data(self, date_time, callback=None):
+        pid = self.gps.link.pid_almanac_data
+        if isinstance(date_time, Almanac):
+            datatype = date_time
+        elif isinstance(date_time, dict):
+            datatype = self.datatypes[0](**date_time)
+        else:
+            raise ProtocolError("Invalid class type: expected dict or {self.datatypes[0].__name__}")
+        packet = (pid, datatype)
+        return TransferProtocol.put_data(self,
+                                         self.gps.command.cmnd_transfer_time,
+                                         packets,
+                                         callback=callback)
 
 
 class A601(TransferProtocol):
@@ -1602,6 +1650,23 @@ class A650(TransferProtocol):
                                          self.gps.link.pid_flightbook_record,
                                          callback=callback)
 
+    def put_data(self, records, callback=None):
+        packets = []
+        for record in records:
+            pid = self.gps.link.pid_record
+            if isinstance(record, Almanac):
+                datatype = record
+            elif isinstance(record, dict):
+                datatype = self.datatypes[0](**record)
+            else:
+                raise ProtocolError("Invalid class type: expected dict or {self.datatypes[0].__name__}")
+            packet = (pid, datatype)
+            packets.append(packet)
+        return TransferProtocol.put_data(self,
+                                         self.gps.command.cmnd_flightbook_transfer,
+                                         packets,
+                                         callback=callback)
+
 
 class A700(TransferProtocol):
     """Position initialisation protocol.
@@ -1625,6 +1690,20 @@ class A700(TransferProtocol):
         if callback:
             callback(datatype, 1, 1)
         return datatype
+
+    def put_data(self, position, callback=None):
+        pid = self.gps.link.pid_position_data
+        if isinstance(position, Almanac):
+            datatype = position
+        elif isinstance(position, dict):
+            datatype = self.datatypes[0](**position)
+        else:
+            raise ProtocolError("Invalid class type: expected dict or {self.datatypes[0].__name__}")
+        packet = (pid, datatype)
+        return TransferProtocol.put_data(self,
+                                         self.gps.command.cmnd_transfer_posn,
+                                         packets,
+                                         callback=callback)
 
 
 class A800(TransferProtocol):
@@ -6386,7 +6465,7 @@ class Garmin():
         """Upload routes.
 
         :param data: data
-        :type data: list of route datatypes
+        :type data: list of route datatypes or list of lists of dicts
         :param callback: optional callback function
         :type callback: function or None
         :return: None
@@ -6411,7 +6490,7 @@ class Garmin():
         """Upload tracks.
 
         :param data: data
-        :type data: list of track datatypes
+        :type data: list of track datatypes or list of lists of dicts
         :param callback: optional callback function
         :type callback: function or None
         :return: None

@@ -1214,7 +1214,7 @@ class A100(TransferProtocol):
 
 
 class A101(TransferProtocol):
-    """Waypoint Transfer Protocol.
+    """Waypoint Category Transfer Protocol.
 
     Packet sequence:
 
@@ -3382,9 +3382,7 @@ class Symbol(DataType):
         return f'{self.get_smbl()}'
 
     def get_smbl(self):
-        """Return the symbol value.
-
-        """
+        """Get the symbol value."""
         return self._smbl.get(self.smbl)
 
     def set_smbl(self, value):
@@ -4186,9 +4184,7 @@ class D210(RteLink):
         self.ident = ident
 
     def get_lnk_class(self):
-        """Return the link class value.
-
-        """
+        """Return the link class value."""
         return self._lnk_class.get(self.lnk_class, 0)
 
 

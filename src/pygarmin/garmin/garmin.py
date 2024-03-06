@@ -2943,6 +2943,10 @@ class Time(DataType):
             delta = timedelta(seconds=self.time)
             return self._epoch + delta
 
+    def set_datetime(self, datetime):
+        delta = datetime - self._epoch
+        self.time = round(delta.total_seconds())
+
     def is_valid(self):
         """Return whether the time is valid.
 
@@ -3382,6 +3386,11 @@ class Symbol(DataType):
 
         """
         return self._smbl.get(self.smbl)
+
+    def set_smbl(self, value):
+        """Set the symbol value."""
+        keys = [key for key, item in self._smbl.items() if item == value]
+        self.smbl = keys[0] if keys else 0
 
 
 class Wpt(DataType):
@@ -3869,6 +3878,12 @@ class D110(D109):
     # The ``dspl_color`` member contains three fields; bits 0-4 specify the
     # color, bits 5-6 specify the waypoint display attribute and bit 7 is
     # unused and must be 0.
+    def color(self):
+        bit_size = 5
+        shift = 3
+        mask = pow(2, bit_size) - 1
+        color = self.dspl_color >> shift & mask
+        return color
 
     def get_color(self):
         """Return the color value.
@@ -3876,11 +3891,22 @@ class D110(D109):
         If an invalid color value is received, the value will be Black.
 
         """
+        color = self.color()
+        return self._color.get(color, 0)
+
+    def set_color(self, value):
+        """Set the color value."""
         bit_size = 5
         shift = 3
+        color = value << shift
+        self.dspl_color = self.dspl() + color
+
+    def dspl(self):
+        bit_size = 2
+        shift = 1
         mask = pow(2, bit_size) - 1
-        color = self.dspl_color >> shift & mask
-        return self._color.get(color, 0)
+        dspl = self.dspl_color >> shift & mask
+        return dspl
 
     def get_dspl(self):
         """Return the display attribute value.
@@ -3889,11 +3915,15 @@ class D110(D109):
         Name.
 
         """
+        dspl = self.dspl()
+        return self._dspl.get(dspl, 0)
+
+    def set_dspl(self, value):
+        """Set the dspl value."""
         bit_size = 2
         shift = 1
-        mask = pow(2, bit_size) - 1
-        dspl = self.dspl_color >> shift & mask
-        return self._dspl.get(dspl, 0)
+        dspl = value << shift
+        self.dspl_color = dspl + self.color()
 
     def get_datetime(self):
         return Time(self.time).get_datetime()

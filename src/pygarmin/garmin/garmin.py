@@ -6476,6 +6476,17 @@ class Garmin():
         """
         return self.waypoint_transfer.put_data(data, callback)
 
+    def get_waypoint_categories(self, callback=None):
+        """Download waypoint categories.
+
+        :param callback: optional callback function
+        :type callback: function or None
+        :return: list of waypoint category datatypes
+        :rtype: list
+
+        """
+        return self.waypoint_category_transfer.get_data(callback)
+
     def get_routes(self, callback=None):
         """Download routes.
 

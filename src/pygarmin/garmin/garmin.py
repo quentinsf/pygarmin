@@ -3600,7 +3600,7 @@ class D107(D103):
                ('dst', 'f'),                # proximity distance (meters)
                ('color', 'B'),              # waypoint color
                ]
-    _color = {0: 'clr_default',  # default waypoint color
+    _color = {0: 'clr_default_color',  # default waypoint color
               1: 'clr_red',      # red
               2: 'clr_green',    # green
               3: 'clr_blue',     # blue
@@ -4438,7 +4438,7 @@ class D312(D310):
               14:  'clr_cyan',
               15:  'clr_white',
               16:  'clr_transparent',
-              255: 'clr_defaultcolor',
+              255: 'clr_default_color',
               }
 
 

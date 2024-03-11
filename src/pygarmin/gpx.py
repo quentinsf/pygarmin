@@ -7,10 +7,10 @@ from . import logger as mod_logger
 
 class GPX:
     _display_mode = {
-        'dspl_smbl_none': "SymbolOnly",
-        'dspl_smbl_only': "SymbolOnly",
-        'dspl_smbl_name': "SymbolAndName",
-        'dspl_smbl_cmnt': "SymbolAndDescription",
+        'dspl_smbl_none': 'SymbolOnly',
+        'dspl_smbl_only': 'SymbolOnly',
+        'dspl_smbl_name': 'SymbolAndName',
+        'dspl_smbl_cmnt': 'SymbolAndDescription',
     }
 
     _display_color = {

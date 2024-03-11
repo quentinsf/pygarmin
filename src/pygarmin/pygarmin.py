@@ -39,8 +39,12 @@ import sys
 from tabulate import tabulate
 from tqdm import tqdm
 import io
-from .garmin import garmin
-from .gpx import gpx as GPX
+from . import garmin as mod_garmin
+from . import error as mod_error
+from . import link as mod_link
+from . import logger as mod_logger
+from . import datatype as mod_datatype
+from . import gpx as GPX
 
 logging_levels = {
     0: logging.NOTSET,
@@ -49,8 +53,7 @@ logging_levels = {
     3: logging.DEBUG,
 }
 
-log = logging.getLogger('garmin')
-log.addHandler(logging.StreamHandler())
+mod_logger.log.addHandler(logging.StreamHandler())
 
 def to_pixel_data(pixel_values, bpp):
     """Returns the pixel array of the image.
@@ -112,26 +115,26 @@ def bmp_to_pil(bmp):
     :rtype: Image.Image
 
     """
-    log.info("Converting BMP to PIL image")
+    mod_logger.log.info("Converting BMP to PIL image")
     # PIL supports images of 1/8/24/32-bit color depth
     bpp = bmp.DIB_depth
     if bpp == 1:
-        log.info("Using black and white mode (1)")
+        mod_logger.log.info("Using black and white mode (1)")
         mode = '1'
     elif bpp in (1, 2, 4):
         # Convert BMP to 8-bit PIL image
-        log.info(f"Converting {bpp} bpp image to 8 bpp color depth")
+        mod_logger.log.info(f"Converting {bpp} bpp image to 8 bpp color depth")
         pixel_values = to_pixel_values(bmp.parray, bpp)
         pixel_data = to_pixel_data(pixel_values, 8)
-        log.info("Using palette mode (P)")
+        mod_logger.log.info("Using palette mode (P)")
         mode = 'P'
     elif bpp == 8:
         pixel_data = bmp.parray
-        log.info("Using palette mode (P)")
+        mod_logger.log.info("Using palette mode (P)")
         mode = 'P'
     elif bpp == 24:
         pixel_data = bmp.parray
-        log.info("Using true color mode (RGB)")
+        mod_logger.log.info("Using true color mode (RGB)")
         mode = 'RGB'
     else:
         sys.exit(f"{bpp}-bit color depth is not supported")
@@ -140,13 +143,14 @@ def bmp_to_pil(bmp):
                                 data=pixel_data,
                                 decoder_name='raw')
     if mode == 'P':
-        log.info("Attaching palette to image")
+        mod_logger.log.info("Attaching palette to image")
         # The BMP palette is a list of bytearrays, but the PIL palette must be a
         # flat list of integers (or a single bytearray)
         palette = [ channel for color in bmp.palette for channel in color ]
-        log.debug(f"RGB color palette: {*[ tuple(color) for color in bmp.palette ], }")
+        mod_logger.log.debug(f"RGB color palette: {*[ tuple(color) for color in bmp.palette ], }")
         image.putpalette(palette, rawmode='RGB')
     return image
+
 
 class ProgressBar(tqdm):
 
@@ -297,9 +301,9 @@ class Pygarmin:
 
 
     def get_gps(self, port):
-        phys = garmin.USBLink() if port == 'usb:' else garmin.SerialLink(port)
-        log.info(f"Listening on port {port}")
-        return garmin.Garmin(phys)
+        phys = mod_link.USBLink() if port == 'usb:' else mod_link.SerialLink(port)
+        mod_logger.log.info(f"Listening on port {port}")
+        return mod_garmin.Garmin(phys)
 
     def info(self, args):
         info = "Product information\n"
@@ -335,19 +339,19 @@ class Pygarmin:
             info += f"Maximum number of tiles: {data.max_tiles}\n"
             info += f"Memory size: {data.mem_size}\n"
             args.filename.write(info)
-        except garmin.GarminError as e:
+        except mod_error.GarminError as e:
             sys.exit(f"{e}")
 
     def map_info(self, args):
         try:
             records = self.gps.get_map_properties()
             if records is None:
-                log.warning("Map not found")
+                mod_logger.log.warning("Map not found")
             else:
                 info = "Map information\n"
                 info += "===============\n"
                 for record in records:
-                    if isinstance(record, garmin.MapSegment):
+                    if isinstance(record, mod_datatype.MapSegment):
                         info += "Map segment description\n"
                         info += "-----------------------\n"
                         info += f"Product ID: {record.pid}\n"
@@ -357,17 +361,17 @@ class Pygarmin:
                         info += f"Segment name: {str(record.segment_name, 'latin_1')}\n"
                         info += f"Area name: {str(record.area_name, 'latin_1')}\n"
                         info += "\n"
-                    elif isinstance(record, garmin.MapSet):
+                    elif isinstance(record, mod_datatype.MapSet):
                         info += "Map set description\n"
                         info += "-------------------\n"
                         info += f"Mapset name: {str(record.mapset_name, 'latin_1')}\n"
                         info += "\n"
-                    elif isinstance(record, garmin.MapUnlock):
+                    elif isinstance(record, mod_datatype.MapUnlock):
                         info += "Map unlock description\n"
                         info += "----------------------\n"
                         info += f"Unlock code: {str(unlock_code, 'latin_1')}\n"
                         info += "\n"
-                    elif isinstance(record, garmin.MapProduct):
+                    elif isinstance(record, mod_datatype.MapProduct):
                         info += "Map product description\n"
                         info += "-----------------------\n"
                         info += f"Product ID: {record.pid}\n"
@@ -375,7 +379,7 @@ class Pygarmin:
                         info += f"Family name: {str(record.name, 'latin_1')}\n"
                         info += "\n"
                 args.filename.write(info)
-        except garmin.GarminError as e:
+        except mod_error.GarminError as e:
             sys.exit(f"{e}")
 
     def get_waypoints(self, args):
@@ -453,6 +457,16 @@ class Pygarmin:
             for point in tracks:
                 args.filename.write(f"{repr(point)}\n")
         elif args.format == 'gpx':
+            if any(isinstance(datatype, mod_datatype.TrkHdr) for datatype in datatypes):
+                # Track headers and associated points are grouped
+                tracks = []
+                for datatype in datatypes:
+                    if isinstance(datatype, mod_datatype.TrkHdr):
+                        tracks.append([datatype])
+                    elif isinstance(datatype, mod_datatype.TrkPoint):
+                        tracks[-1].append(datatype)
+            else:
+                tracks = [datatypes]
             gpx = GPX.GPXTracks(tracks)
             args.filename.write(f"{str(gpx)}\n")
 
@@ -526,7 +540,7 @@ class Pygarmin:
         def signal_handler(signal, frame):
             self.gps.pvt_off()
             sys.exit(0)
-        log.warning("Press Ctrl-C to quit")
+        mod_logger.log.warning("Press Ctrl-C to quit")
         # Catch interrupt from keyboard (Control-C)
         signal.signal(signal.SIGINT, signal_handler)
         self.gps.pvt_on()
@@ -541,12 +555,12 @@ class Pygarmin:
             elif args.format == 'garmin':
                 args.filename.write(f"{repr(pvt)}\n")
             elif args.format == 'gpsd':
-                if isinstance(pvt, garmin.D800):
+                if isinstance(pvt, mod_datatype.D800):
                     args.filename.write(f"{TPV(pvt)}\n")
-                elif isinstance(pvt, garmin.Satellite):
+                elif isinstance(pvt, mod_datatype.Satellite):
                     args.filename.write(f"{SKY(pvt)}\n")
                 else:
-                    log.warning(f"Unknown datatype {type(pvt).__name__}")
+                    mod_logger.log.warning(f"Unknown datatype {type(pvt).__name__}")
             args.filename.flush()
 
     def get_laps(self, args):
@@ -581,11 +595,11 @@ class Pygarmin:
             else:
                 data = self.gps.get_map()
             if data is None:
-                log.warning("Map not found")
+                mod_logger.log.warning("Map not found")
             else:
                 with open(args.filename, 'wb') as f:
                     f.write(data)
-        except garmin.GarminError as e:
+        except mod_error.GarminError as e:
             sys.exit(f"{e}")
 
     def put_map(self, args):
@@ -596,53 +610,53 @@ class Pygarmin:
                         self.gps.put_map(f, callback=progress_bar.update_to)
                 else:
                     self.gps.put_map(f)
-        except garmin.GarminError as e:
+        except mod_error.GarminError as e:
             sys.exit(f"{e}")
 
     def del_map(self, args):
         try:
             self.gps.del_map()
-        except garmin.GarminError as e:
+        except mod_error.GarminError as e:
             sys.exit(f"{e}")
 
     def get_screenshot(self, args):
-        log.info(f"Downloading screenshot")
+        mod_logger.log.info(f"Downloading screenshot")
         if args.progress:
             with ProgressBar() as progress_bar:
                 bmp = self.gps.get_screenshot(callback=progress_bar.update_to)
         else:
             bmp = self.gps.get_screenshot()
-        log.info(f"Received BMP image of {bmp.DIB_w}x{bmp.DIB_h} pixels and {bmp.DIB_depth} bpp")
+        mod_logger.log.info(f"Received BMP image of {bmp.DIB_w}x{bmp.DIB_h} pixels and {bmp.DIB_depth} bpp")
         if args.filename is None:
             if args.format is None:
                 # No format is given, so use the BMP format by default
-                log.info(f"Using the BMP format")
+                mod_logger.log.info(f"Using the BMP format")
                 filename = "Screenshot.bmp"
             else:
                 # Determine the filename extension
-                log.debug(f"Supported formats: {*Image.registered_extensions().values(), }")
-                log.info(f"Trying to find an extension matching the {args.format.upper()} format")
+                mod_logger.log.debug(f"Supported formats: {*Image.registered_extensions().values(), }")
+                mod_logger.log.info(f"Trying to find an extension matching the {args.format.upper()} format")
                 extensions = [ extension for (extension, format) in Image.registered_extensions().items() if format == args.format.upper() ]
                 if len(extensions) == 0:
                     sys.exit(f"Image format {args.format.upper()} is not supported")
                 elif len(extensions) == 1:
-                    log.info(f"Found extension {extensions[0]}")
+                    mod_logger.log.info(f"Found extension {extensions[0]}")
                     filename = "Screenshot" + extensions[0]
                 elif len(extensions) > 1:
-                    log.info(f"Found extensions {*extensions, }")
+                    mod_logger.log.info(f"Found extensions {*extensions, }")
                     # If a format has multiple extensions, prefer the
                     # extension with the same name as the format.
                     preferred_extension = [ extension for extension in extensions if extension == '.' + args.format.lower() ]
                     if preferred_extension:
-                        log.info(f"Prefer extension {preferred_extension[0]}")
+                        mod_logger.log.info(f"Prefer extension {preferred_extension[0]}")
                         filename = "Screenshot" + preferred_extension[0]
                     else:
                         sys.exit("The extension could not be determined")
         else:
             filename = args.filename
         if args.format is not None and not path.endswith(args.format.lower()):
-            log.warning(f"Override format by saving {path} as {args.format.upper()}")
-        log.info(f"Saving {path}")
+            mod_logger.log.warning(f"Override format by saving {path} as {args.format.upper()}")
+        mod_logger.log.info(f"Saving {path}")
         if args.format == 'bmp' or path.endswith('bmp'):
             # BMP supports images of 1/2/4/8/24-bit color depth
             bmp.save(path)
@@ -668,44 +682,44 @@ class Pygarmin:
         image_list = self.gps.get_image_list()
         if args.index is None:
             indices = [ image['idx'] for image in image_list ]
-            log.info("Download all images")
+            mod_logger.log.info("Download all images")
         else:
             indices = args.index
-            log.info(f"Download image {*[idx for idx in indices],}")
+            mod_logger.log.info(f"Download image {*[idx for idx in indices],}")
         for idx in indices:
             basename = image_list[idx].get('name')
-            log.info(f"Downloading {basename}")
+            mod_logger.log.info(f"Downloading {basename}")
             if args.progress:
                 with ProgressBar() as progress_bar:
                     bmp = self.gps.get_image(idx, callback=progress_bar.update_to)
             else:
                 bmp = self.gps.get_image(idx)
-            log.info(f"Received BMP image of {bmp.DIB_w}x{bmp.DIB_h} pixels and {bmp.DIB_depth} bpp")
+            mod_logger.log.info(f"Received BMP image of {bmp.DIB_w}x{bmp.DIB_h} pixels and {bmp.DIB_depth} bpp")
             single_modulo = '(?<!%)%(?!%)'  # match a single % character
             # Determine filename
             if args.filename is None or os.path.isdir(args.filename):
                 # No filename is given, so use the basename by default
                 if args.format is None:
                     # No format is given, so use the BMP format by default
-                    log.info(f"Using the BMP format")
+                    mod_logger.log.info(f"Using the BMP format")
                     filename = basename + '.bmp'
                 else:
                     # Determine the filename extension
-                    log.debug(f"Supported formats: {*Image.registered_extensions().values(), }")
-                    log.info(f"Trying to find an extension matching the {args.format.upper()} format")
+                    mod_logger.log.debug(f"Supported formats: {*Image.registered_extensions().values(), }")
+                    mod_logger.log.info(f"Trying to find an extension matching the {args.format.upper()} format")
                     extensions = [ extension for (extension, format) in Image.registered_extensions().items() if format == args.format.upper() ]
                     if len(extensions) == 0:
                         sys.exit(f"Image format {args.format.upper()} is not supported")
                     elif len(extensions) == 1:
-                        log.info(f"Found extension {extensions[0]}")
+                        mod_logger.log.info(f"Found extension {extensions[0]}")
                         filename = basename + extensions[0]
                     elif len(extensions) > 1:
-                        log.info(f"Found extensions {*extensions, }")
+                        mod_logger.log.info(f"Found extensions {*extensions, }")
                         # If a format has multiple extensions, prefer the
                         # extension with the same name as the format.
                         preferred_extension = [ extension for extension in extensions if extension == '.' + args.format.lower() ]
                         if preferred_extension:
-                            log.info(f"Prefer extension {preferred_extension[0]}")
+                            mod_logger.log.info(f"Prefer extension {preferred_extension[0]}")
                             filename = basename + preferred_extension[0]
                         else:
                             sys.exit("The extension could not be determined")
@@ -722,8 +736,8 @@ class Pygarmin:
                 if len(indices) > 1:
                     sys.exit(f"Cannot download {len(indices)} files to 1 filename")
             if args.format is not None and not path.endswith(args.format.lower()):
-                log.warning(f"Override format by saving {path} as {args.format.upper()}")
-            log.info(f"Saving {path}")
+                mod_logger.log.warning(f"Override format by saving {path} as {args.format.upper()}")
+            mod_logger.log.info(f"Saving {path}")
             if args.format == 'bmp' or path.endswith('bmp'):
                 # BMP supports images of 1/2/4/8/24-bit color depth
                 bmp.save(path)
@@ -742,13 +756,13 @@ class Pygarmin:
             sys.exit(f"Cannot upload {len(files)} files to {len(indices)} indices")
         for idx, filename in zip(indices, files):
             basename = image_list[idx].get('name')
-            log.info(f"{image_list[idx]['writable']}")
+            mod_logger.log.info(f"{image_list[idx]['writable']}")
             if not image_list[idx]['writable']:
                 sys.exit(f"Image {basename} with index {idx} is not writable")
             # If the file is a BMP with the correct color depth, dimensions, and
             # color table it can be uploaded as is
             try:
-                log.info(f"Trying to load {filename} image as a BMP image")
+                mod_logger.log.info(f"Trying to load {filename} image as a BMP image")
                 bmp = MicroBMP().load(filename)
                 props = self.gps.image_transfer.get_image_properties(idx)
                 bpp = props.bpp
@@ -769,9 +783,9 @@ class Pygarmin:
             # If the file is not a BMP image or it has the wrong attributes, it
             # has to be converted before uploading
             except Exception as e:
-                log.info(e)
+                mod_logger.log.info(e)
                 try:
-                    log.info(f"Trying to load {filename} image as a PIL image")
+                    mod_logger.log.info(f"Trying to load {filename} image as a PIL image")
                     image = Image.open(filename)
                     # Convert PIL image to BMP
                     image_id = self.gps.image_transfer.get_image_id(idx)
@@ -780,7 +794,7 @@ class Pygarmin:
                     # color, so it doesn't display.
                     if image.mode in ('RGBA', 'LA', 'PA'):
                         transparency = props.get_color().get_rgb()
-                        log.info(f"Replacing the alpha channel with the transparency color {transparency}")
+                        mod_logger.log.info(f"Replacing the alpha channel with the transparency color {transparency}")
                         # Create a mask with the transparent pixels converted to black
                         alpha = image.getchannel('A')
                         mask = alpha.convert(mode='1')
@@ -793,21 +807,21 @@ class Pygarmin:
                         # by the transparency color
                         image = background
                     if image.width!= width or image.height != height:
-                        log.info(f"Resizing image to {width}x{height} pixels")
+                        mod_logger.log.info(f"Resizing image to {width}x{height} pixels")
                         image = image.resize((width, height))
-                    log.info(f"Creating BMP image of {width}x{height} pixels and {bpp} bpp")
+                    mod_logger.log.info(f"Creating BMP image of {width}x{height} pixels and {bpp} bpp")
                     bmp = MicroBMP(width, height, bpp)
                     # Images with a color depth of 1, 2, 4, or 8 bpp have a palette
                     if bpp in (1, 2, 4, 8):
                         if image.mode != 'P':
-                            log.info("Converting image to palette mode (P)")
+                            mod_logger.log.info("Converting image to palette mode (P)")
                             image = image.convert(mode='P')
                         # The palette must be the same as Garmin's
                         color_table = self.gps.image_transfer.get_color_table(image_id)
                         palette = color_table.get_palette()[:colors_used]
                         # The BMP palette is a list of bytearray, and the PIL palette is a byte object
                         if image.palette.palette != b''.join(palette):
-                            log.info(f"Quantizing image to the received color palette")
+                            mod_logger.log.info(f"Quantizing image to the received color palette")
                             image = image.convert(mode='RGB')
                             new_image = Image.new('P', (width, height))
                             new_palette = ImagePalette.ImagePalette(palette=b''.join(palette))
@@ -816,23 +830,23 @@ class Pygarmin:
                         bmp.palette = palette
                         pixel_data = image.tobytes()
                         if bpp != 8:
-                            log.info(f"Converting 8 bpp image to {bpp} bpp color depth")
+                            mod_logger.log.info(f"Converting 8 bpp image to {bpp} bpp color depth")
                             pixel_values = to_pixel_values(pixel_data, 8)
                             pixel_data = to_pixel_data(pixel_values, bpp)
                         bmp.parray = pixel_data
                     # Images with a color depth of 24 bpp
                     elif bpp == 24:
                         if image.mode != 'RGB':
-                            log.info("Converting image to true color mode (RGB)")
+                            mod_logger.log.info("Converting image to true color mode (RGB)")
                             image = image.convert(mode='RGB')
                         pixel_data = image.tobytes()
                         bmp.parray = pixel_data
                     else:
                         sys.exit(f"Images of {bpp} bpp are not supported")
                 except UnidentifiedImageError as e:
-                    log.info(e)
+                    mod_logger.log.info(e)
                     sys.exit(f"Unknown image file format")
-            log.info(f"Uploading {basename}")
+            mod_logger.log.info(f"Uploading {basename}")
             if args.progress:
                 with ProgressBar() as progress_bar:
                     self.gps.put_image(idx, bmp, callback=progress_bar.update_to)
@@ -1136,8 +1150,8 @@ put_image.set_defaults(command='put_image')
 def main():
     args = parser.parse_args()
     logging_level = logging_levels.get(max(args.verbosity, args.debug))
-    log.setLevel(logging_level)
-    log.info(f"Version {__version__}")
+    mod_logger.log.setLevel(logging_level)
+    mod_logger.log.info(f"Version {__version__}")
     if hasattr(args, 'command'):
         app = Pygarmin(args.port)
         command = getattr(app, args.command)

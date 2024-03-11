@@ -1,9 +1,9 @@
-'''gpx.py: Contains the GPX class which is used to encode gpx files.'''
+"""gpx.py: Contains the GPX class which is used to encode gpx files."""
 
 import gpxpy
 import xml.etree.ElementTree as ET
-from ..garmin import garmin
-
+from . import datatype as mod_datatype
+from . import logger as mod_logger
 
 class GPX:
     _display_mode = {
@@ -323,7 +323,7 @@ class GPXWaypoints(GPX):
         nsmap = { gpxx: 'https://www8.garmin.com/xmlschemas/GpxExtensions/v3/GpxExtensionsv3.xsd' }
         gpx.nsmap = nsmap
         for point in waypoints:
-            if isinstance(point, garmin.Wpt) and point.get_posn().is_valid():
+            if isinstance(point, mod_datatype.Wpt) and point.get_posn().is_valid():
                 # Possible fields: ('posn', 'color', 'lnk_ident', 'city',
                 # 'attr', 'facility', 'dspl_color', 'dst', 'dpth', 'cc', 'cmnt',
                 # 'wpt_cat', 'alt', 'state', 'time', 'unused', 'cross_road',
@@ -367,14 +367,14 @@ class GPXWaypoints(GPX):
                 if point.get_dict().get('temp') is not None and point.is_valid_temp() is True:
                     temperature = ET.SubElement(waypoint_extension, f'{{{gpxx}}}Temperature')
                     temperature.text = str(point.temp)
-                if point.get_dict().get('dpth') is not None and point.is_valid_dpth() is True:
+                if point.get_dict().get('dpth') and point.is_valid_dpth():
                     depth = ET.SubElement(waypoint_extension, f'{{{gpxx}}}Depth')
                     depth.text = str(point.dpth)
-                if point.get_dict().get('dspl') is not None:
+                if point.get_dict().get('dspl'):
                     display_mode = ET.SubElement(waypoint_extension,f'{{{gpxx}}}DisplayMode')
                     dspl = point.get_dspl()
-                    display_mode.text = _display_mode.get(dspl)
-                if point.get_dict().get('wpt_cat') is not None and waypoint_categories is not None:
+                    display_mode.text = self._display_mode.get(dspl)
+                if point.get_dict().get('wpt_cat') and waypoint_categories is not None:
                     category_numbers = point.get_wpt_cat()
                     category_names = [ category.name.decode(encoding='latin_1') for category in waypoint_categories ]
                     category_members = [ category_names[number-1] for number in category_numbers ]
@@ -382,7 +382,7 @@ class GPXWaypoints(GPX):
                     for category_member in category_members:
                         category = ET.SubElement(categories, f'{{{gpxx}}}Category')
                         category.text = category_member
-                gpx_point.extensions.append(waypoint_extension)
+                        gpx_point.extensions.append(waypoint_extension)
                 gpx.waypoints.append(gpx_point)
         return gpx
 
@@ -399,66 +399,67 @@ class GPXRoutes(GPX):
         gpxx = 'gpxx'
         nsmap = { gpxx: 'https://www8.garmin.com/xmlschemas/GpxExtensions/v3/GpxExtensionsv3.xsd' }
         gpx.nsmap = nsmap
-        for point in routes:
-            if isinstance(point, garmin.RteHdr):
-                # Possible fields: ('nmbr', 'cmnt', 'ident')
-                gpx_route = gpxpy.gpx.GPXRoute()
-                number = point.get_dict().get('nmbr')
-                name = point.get_dict().get('ident')
-                comment = point.get_dict().get('cmnt')
-                gpx_route.number = number
-                if name is not None:
-                    gpx_route.name = name.decode(encoding='latin_1')
-                if comment is not None:
-                    gpx_route.comment = comment.decode(encoding='latin_1')
-                gpx.routes.append(gpx_route)
-            elif isinstance(point, garmin.Wpt):
-                # Possible fields: ('dist', 'state', 'wpt_ident', 'subclass',
-                # 'dst', 'facility', 'dtyp', 'dspl_color', 'cross_road',
-                # 'wpt_cat', 'attr', 'color', 'smbl', 'addr', 'ete', 'alt',
-                # 'wpt_class', 'lnk_ident', 'dpth', 'city', 'posn', 'dspl',
-                # 'ident', 'unused', 'cmnt', 'temp', 'cc', 'time')
-                if point.get_posn().is_valid():
-                    latitude = point.get_posn().as_degrees().lat
-                    longitude = point.get_posn().as_degrees().lon
-                    if point.get_dict().get('alt') is not None and point.is_valid_alt() is True:
-                        elevation = point.alt
-                    else:
-                        elevation = None
-                    name = point.ident.decode(encoding='latin_1')
-                    comment = point.cmnt.decode(encoding='latin_1')
-                    if point.get_dict().get('time') is not None and point.is_valid_time() is True:
-                        time = point.get_datetime()
-                    else:
-                        time = None
-                    if point.get_dict().get('smbl') is not None:
-                        smbl = point.get_smbl()
-                        if self._symbol.get(smbl) is not None:
-                            symbol = self._symbol.get(smbl)
+        for route in routes:
+            for point in route:
+                if isinstance(point, mod_datatype.RteHdr):
+                    # Possible fields: ('nmbr', 'cmnt', 'ident')
+                    gpx_route = gpxpy.gpx.GPXRoute()
+                    number = point.get_dict().get('nmbr')
+                    name = point.get_dict().get('ident')
+                    comment = point.get_dict().get('cmnt')
+                    gpx_route.number = number
+                    if name is not None:
+                        gpx_route.name = name.decode(encoding='latin_1')
+                    if comment is not None:
+                        gpx_route.comment = comment.decode(encoding='latin_1')
+                    gpx.routes.append(gpx_route)
+                elif isinstance(point, mod_datatype.Wpt):
+                    # Possible fields: ('dist', 'state', 'wpt_ident', 'subclass',
+                    # 'dst', 'facility', 'dtyp', 'dspl_color', 'cross_road',
+                    # 'wpt_cat', 'attr', 'color', 'smbl', 'addr', 'ete', 'alt',
+                    # 'wpt_class', 'lnk_ident', 'dpth', 'city', 'posn', 'dspl',
+                    # 'ident', 'unused', 'cmnt', 'temp', 'cc', 'time')
+                    if point.get_posn().is_valid():
+                        latitude = point.get_posn().as_degrees().lat
+                        longitude = point.get_posn().as_degrees().lon
+                        if point.get_dict().get('alt') is not None and point.is_valid_alt() is True:
+                            elevation = point.alt
                         else:
-                            symbol = smbl
-                    else:
-                        symbol = None
-                    gpx_point = gpxpy.gpx.GPXRoutePoint(latitude=latitude,
-                                                        longitude=longitude,
-                                                        elevation=elevation,
-                                                        name=name,
-                                                        comment=comment,
-                                                        time=time,
-                                                        symbol=symbol)
-                    route_point_extension = ET.Element(f'{{{gpxx}}}RoutePointExtension')
-                    if point.get_dict().get('wpt_class') is not None:
-                        wpt_class = point.get_wpt_class()
-                        if wpt_class != 0:  # Non-user waypoint
-                            subclass = ET.SubElement(route_point_extension, f'{{{gpxx}}}Subclass')
-                            subclass_int = point.subclass
-                            subclass_bytes = bytes(subclass_int)
-                            subclass_hex = subclass_bytes.hex()
-                            subclass.text = subclass_hex
-                    gpx_point.extensions.append(route_point_extension)
-                    gpx_route.points.append(gpx_point)
-            elif isinstance(point, garmin.RteLink):
-                pass
+                            elevation = None
+                        name = point.ident.decode(encoding='latin_1')
+                        comment = point.cmnt.decode(encoding='latin_1')
+                        if point.get_dict().get('time') is not None and point.is_valid_time() is True:
+                            time = point.get_datetime()
+                        else:
+                            time = None
+                        if point.get_dict().get('smbl') is not None:
+                            smbl = point.get_smbl()
+                            if self._symbol.get(smbl) is not None:
+                                symbol = self._symbol.get(smbl)
+                            else:
+                                symbol = smbl
+                        else:
+                            symbol = None
+                        gpx_point = gpxpy.gpx.GPXRoutePoint(latitude=latitude,
+                                                            longitude=longitude,
+                                                            elevation=elevation,
+                                                            name=name,
+                                                            comment=comment,
+                                                            time=time,
+                                                            symbol=symbol)
+                        route_point_extension = ET.Element(f'{{{gpxx}}}RoutePointExtension')
+                        if point.get_dict().get('wpt_class') is not None:
+                            wpt_class = point.get_wpt_class()
+                            if wpt_class != 0:  # Non-user waypoint
+                                subclass = ET.SubElement(route_point_extension, f'{{{gpxx}}}Subclass')
+                                subclass_int = point.subclass
+                                subclass_bytes = bytes(subclass_int)
+                                subclass_hex = subclass_bytes.hex()
+                                subclass.text = subclass_hex
+                        gpx_point.extensions.append(route_point_extension)
+                        gpx_route.points.append(gpx_point)
+                elif isinstance(point, mod_datatype.RteLink):
+                    pass
         return gpx
 
 
@@ -476,56 +477,57 @@ class GPXTracks(GPX):
         nsmap = { gpxx: 'https://www8.garmin.com/xmlschemas/GpxExtensions/v3/GpxExtensionsv3.xsd',
                   gpxtpx: 'http://www8.garmin.com/xmlschemas/TrackPointExtensionv2.xsd' }
         gpx.nsmap = nsmap
-        for point in tracks:
-            if isinstance(point, garmin.TrkHdr):
-                # Possible fields: ('color', 'trk_ident', 'index', 'dspl')
-                gpx_track = gpxpy.gpx.GPXTrack()
-                identifier = point.get_dict().get('trk_ident')
-                index = point.get_dict().get('index')
-                name = identifier if identifier else str(index).encode()
-                gpx.tracks.append(gpx_track)
-                gpx_track.name = name.decode(encoding='latin_1')
-                track_extension = ET.Element(f'{{{gpxx}}}TrackExtension')
-                if point.get_dict().get('color') is not None or point.get_dict().get('dspl_color') is not None:
-                    color = point.get_color()
-                    if self._display_color.get('color') is not None:
-                        display_color = ET.SubElement(track_extension, f'{{{gpxx}}}DisplayColor')
-                        display_color.text = self._display_color.get('color')
-                gpx_track.extensions.append(track_extension)
-            elif isinstance(point, garmin.TrkPoint):
-                # Possible fields: ('new_trk', 'alt', 'heart_rate', 'sensor',
-                # 'dpth', 'cadence', 'posn', 'temp', 'time', 'distance')
-                if len(gpx.tracks) == 0:
+        for track in tracks:
+            for point in track:
+                if isinstance(point, mod_datatype.TrkHdr):
+                    # Possible fields: ('color', 'trk_ident', 'index', 'dspl')
                     gpx_track = gpxpy.gpx.GPXTrack()
+                    identifier = point.get_dict().get('trk_ident')
+                    index = point.get_dict().get('index')
+                    name = identifier if identifier else str(index).encode()
                     gpx.tracks.append(gpx_track)
-                if point.get_dict().get('new_trk') is True or len(gpx_track.segments) == 0:
-                    gpx_segment = gpxpy.gpx.GPXTrackSegment()
-                    gpx_track.segments.append(gpx_segment)
-                if point.get_posn().is_valid():
-                    latitude = point.get_posn().as_degrees().lat
-                    longitude = point.get_posn().as_degrees().lon
-                    time = point.get_datetime()
-                    if point.is_valid_alt() is True:
-                        elevation = point.get_dict().get('alt')
-                    else:
-                        elevation = None
-                    gpx_point = gpxpy.gpx.GPXTrackPoint(latitude=latitude,
-                                                        longitude=longitude,
-                                                        elevation=elevation,
-                                                        time=time)
-                    track_point_extension = ET.Element(f'{{{gpxtpx}}}TrackPointExtension')
-                    if point.get_dict().get('heart_rate') is not None:
-                        hr = ET.SubElement(track_point_extension, f'{{{gpxtpx}}}hr')
-                        hr.text = str(point.heart_rate)
-                    if point.get_dict().get('dpth') is not None and point.is_valid_dpth() is True:
-                        depth = ET.SubElement(track_point_extension, f'{{{gpxtpx}}}depth')
-                        depth.text = str(point.dpth)
-                    if point.get_dict().get('cadence') is not None:
-                        cad = ET.SubElement(track_point_extension, f'{{{gpxtpx}}}cad')
-                        cad.text = str(point.cadence)
-                    if point.get_dict().get('temp') is not None and point.is_valid_temp() is True:
-                        atemp = ET.SubElement(track_point_extension, f'{{{gpxtpx}}}atemp')
-                        atemp.text = str(point.temp)
-                    gpx_point.extensions.append(track_point_extension)
-                    gpx_segment.points.append(gpx_point)
+                    gpx_track.name = name.decode(encoding='latin_1')
+                    track_extension = ET.Element(f'{{{gpxx}}}TrackExtension')
+                    if point.get_dict().get('color') is not None or point.get_dict().get('dspl_color') is not None:
+                        color = point.get_color()
+                        if self._display_color.get('color') is not None:
+                            display_color = ET.SubElement(track_extension, f'{{{gpxx}}}DisplayColor')
+                            display_color.text = self._display_color.get('color')
+                    gpx_track.extensions.append(track_extension)
+                elif isinstance(point, mod_datatype.TrkPoint):
+                    # Possible fields: ('new_trk', 'alt', 'heart_rate', 'sensor',
+                    # 'dpth', 'cadence', 'posn', 'temp', 'time', 'distance')
+                    if len(gpx.tracks) == 0:
+                        gpx_track = gpxpy.gpx.GPXTrack()
+                        gpx.tracks.append(gpx_track)
+                    if point.get_dict().get('new_trk') is True or len(gpx_track.segments) == 0:
+                        gpx_segment = gpxpy.gpx.GPXTrackSegment()
+                        gpx_track.segments.append(gpx_segment)
+                    if point.get_posn().is_valid():
+                        latitude = point.get_posn().as_degrees().lat
+                        longitude = point.get_posn().as_degrees().lon
+                        time = point.get_datetime()
+                        if point.is_valid_alt() is True:
+                            elevation = point.get_dict().get('alt')
+                        else:
+                            elevation = None
+                        gpx_point = gpxpy.gpx.GPXTrackPoint(latitude=latitude,
+                                                            longitude=longitude,
+                                                            elevation=elevation,
+                                                            time=time)
+                        track_point_extension = ET.Element(f'{{{gpxtpx}}}TrackPointExtension')
+                        if point.get_dict().get('heart_rate') is not None:
+                            hr = ET.SubElement(track_point_extension, f'{{{gpxtpx}}}hr')
+                            hr.text = str(point.heart_rate)
+                        if point.get_dict().get('dpth') is not None and point.is_valid_dpth() is True:
+                            depth = ET.SubElement(track_point_extension, f'{{{gpxtpx}}}depth')
+                            depth.text = str(point.dpth)
+                        if point.get_dict().get('cadence') is not None:
+                            cad = ET.SubElement(track_point_extension, f'{{{gpxtpx}}}cad')
+                            cad.text = str(point.cadence)
+                        if point.get_dict().get('temp') is not None and point.is_valid_temp() is True:
+                            atemp = ET.SubElement(track_point_extension, f'{{{gpxtpx}}}atemp')
+                            atemp.text = str(point.temp)
+                        gpx_point.extensions.append(track_point_extension)
+                        gpx_segment.points.append(gpx_point)
         return gpx

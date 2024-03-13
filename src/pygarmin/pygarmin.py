@@ -388,14 +388,6 @@ class Pygarmin:
                 waypoints = self.gps.get_waypoints(callback=progress_bar.update_to)
         else:
             waypoints = self.gps.get_waypoints()
-        if self.gps.waypoint_category_transfer is not None:
-            if args.progress:
-                with ProgressBar() as progress_bar:
-                    waypoint_categories = self.gps.waypoint_category_transfer.get_data(callback=progress_bar.update_to)
-            else:
-                waypoint_categories = self.gps.waypoint_category_transfer.get_data()
-        else:
-            waypoint_categories = None
         if args.format == 'txt':
             for waypoint in waypoints:
                 args.filename.write(f"{str(waypoint)}\n")

@@ -28,6 +28,7 @@
 __version__ = '0.2'
 
 import argparse
+import base64
 import json
 import logging
 from microbmp import MicroBMP
@@ -150,6 +151,28 @@ def bmp_to_pil(bmp):
         mod_logger.log.debug(f"RGB color palette: {*[ tuple(color) for color in bmp.palette ], }")
         image.putpalette(palette, rawmode='RGB')
     return image
+
+
+class BytesEncoder(json.JSONEncoder):
+    """Custom encoder to serialize bytes by decoding them to a string."""
+
+    def default(self, o):
+        if isinstance(o, bytes):
+            return base64.b64encode(o).decode('ascii')
+        else:
+            return super().default(o)
+
+
+class BytesDecoder(json.JSONDecoder):
+    """Custom decoder to deserialize bytes by decoding them from a string."""
+
+    def __init__(self, *args, **kwargs):
+        json.JSONDecoder.__init__(self, object_hook=self.object_hook, *args, **kwargs)
+
+    def object_hook(self, dct):
+        if any(isinstance(v, str) for v in dct.values()):
+            return {k: (base64.b64decode(v) if isinstance(v, str) else v) for (k, v) in dct.items()}
+        return dct
 
 
 class ProgressBar(tqdm):
@@ -385,24 +408,31 @@ class Pygarmin:
     def get_waypoints(self, args):
         if args.progress:
             with ProgressBar() as progress_bar:
-                waypoints = self.gps.get_waypoints(callback=progress_bar.update_to)
+                datatypes = self.gps.get_waypoints(callback=progress_bar.update_to)
         else:
-            waypoints = self.gps.get_waypoints()
+            datatypes = self.gps.get_waypoints()
         if args.format == 'txt':
-            for waypoint in waypoints:
-                args.filename.write(f"{str(waypoint)}\n")
+            for datatype in datatypes:
+                args.filename.write(f"{str(datatype)}\n")
         elif args.format == 'garmin':
-            for waypoint in waypoints:
-                args.filename.write(f"{repr(waypoint)}\n")
+            for datatype in datatypes:
+                args.filename.write(f"{repr(datatype)}\n")
+        elif args.format == 'json':
+            waypoints = [datatype.get_dict() for datatype in datatypes]
+            json.dump(waypoints, args.filename, cls=BytesEncoder)
         elif args.format == 'gpx':
-            gpx = GPX.GPXWaypoints(waypoints)
-            args.filename.write(f"{str(gpx)}\n")
+            gpx = GPX.GPXWaypoints()
+            gpx_waypoints = gpx.waypoints_to_gpx(datatypes)
+            args.filename.write(f"{str(gpx_waypoints)}\n")
 
     def put_waypoints(self, args):
-        data = []
-        for line in args.filename:
-            object = eval(line)
-            data.append(object)
+        if args.format == 'garmin':
+            data = []
+            for line in args.filename:
+                object = eval('mod_datatype.' + line)
+                data.append(object)
+        elif args.format == 'json':
+            data = json.load(args.filename, cls=BytesDecoder)
         if args.progress:
             with ProgressBar() as progress_bar:
                 self.gps.put_waypoints(data, callback=progress_bar.update_to)
@@ -412,24 +442,45 @@ class Pygarmin:
     def get_routes(self, args):
         if args.progress:
             with ProgressBar() as progress_bar:
-                routes = self.gps.get_routes(callback=progress_bar.update_to)
+                datatypes = self.gps.get_routes(callback=progress_bar.update_to)
         else:
-            routes = self.gps.get_routes()
+            datatypes = self.gps.get_routes()
         if args.format == 'txt':
-            for point in routes:
-                args.filename.write(f"{str(point)}\n")
+            for datatype in datatypes:
+                args.filename.write(f"{str(datatype)}\n")
         elif args.format == 'garmin':
-            for point in routes:
-                args.filename.write(f"{repr(point)}\n")
-        elif args.format == 'gpx':
-            gpx = GPX.GPXRoutes(routes)
-            args.filename.write(f"{str(gpx)}\n")
+            for datatype in datatypes:
+                args.filename.write(f"{repr(datatype)}\n")
+        else:
+            if any(isinstance(datatype, mod_datatype.RteHdr) for datatype in datatypes):
+                # Route headers and associated points are grouped
+                routes = []
+                for datatype in datatypes:
+                    if isinstance(datatype, mod_datatype.RteHdr):
+                        routes.append([datatype])
+                    elif isinstance(datatype, mod_datatype.Wpt):
+                        routes[-1].append(datatype)
+            else:
+                routes = [datatypes]
+            if args.format == 'json':
+                json.dump([[datatype.get_dict() for datatype in route] for route in routes], args.filename, cls=BytesEncoder)
+            elif args.format == 'gpx':
+                gpx = GPX.GPXRoutes(routes)
+                args.filename.write(f"{str(gpx)}\n")
 
     def put_routes(self, args):
-        data = []
-        for line in args.filename:
-            object = eval(line)
-            data.append(object)
+        if args.format == 'garmin':
+            data = []
+            for line in args.filename:
+                object = eval('mod_datatype.' + line)
+                data.append(object)
+        elif args.format == 'json':
+            data = json.load(args.filename, cls=BytesDecoder)
+        elif args.format == 'gpx':
+            datatypes = self.gps.route_transfer.datatypes
+            gpx = GPX.GarminRoutes()
+            routes = gpx.gpx_to_routes(args.filename, datatypes)
+            data = [repr(datatype) for route in routes for datatype in route]
         if args.progress:
             with ProgressBar() as progress_bar:
                 self.gps.put_routes(data, callback=progress_bar.update_to)
@@ -439,16 +490,16 @@ class Pygarmin:
     def get_tracks(self, args):
         if args.progress:
             with ProgressBar() as progress_bar:
-                tracks = self.gps.get_tracks(callback=progress_bar.update_to)
+                datatypes = self.gps.get_tracks(callback=progress_bar.update_to)
         else:
-            tracks = self.gps.get_tracks()
+            datatypes = self.gps.get_tracks()
         if args.format == 'txt':
-            for point in tracks:
+            for point in datatypes:
                 args.filename.write(f"{str(point)}\n")
         elif args.format == 'garmin':
-            for point in tracks:
+            for point in datatypes:
                 args.filename.write(f"{repr(point)}\n")
-        elif args.format == 'gpx':
+        else:
             if any(isinstance(datatype, mod_datatype.TrkHdr) for datatype in datatypes):
                 # Track headers and associated points are grouped
                 tracks = []
@@ -459,14 +510,20 @@ class Pygarmin:
                         tracks[-1].append(datatype)
             else:
                 tracks = [datatypes]
+        if args.format == 'json':
+                json.dump([[datatype.get_dict() for datatype in track] for track in tracks], args.filename, cls=BytesEncoder)
+        elif args.format == 'gpx':
             gpx = GPX.GPXTracks(tracks)
             args.filename.write(f"{str(gpx)}\n")
 
     def put_tracks(self, args):
-        data = []
-        for line in args.filename:
-            object = eval(line)
-            data.append(object)
+        if args.format == 'garmin':
+            data = []
+            for line in args.filename:
+                object = eval('mod_datatype.' + line)
+                data.append(object)
+        elif args.format == 'json':
+            data = json.load(args.filename, cls=BytesDecoder)
         if args.progress:
             with ProgressBar() as progress_bar:
                 self.gps.put_tracks(data, callback=progress_bar.update_to)
@@ -476,24 +533,31 @@ class Pygarmin:
     def get_proximities(self, args):
         if args.progress:
             with ProgressBar() as progress_bar:
-                proximities = self.gps.get_proximities(callback=progress_bar.update_to)
+                datatypes = self.gps.get_proximities(callback=progress_bar.update_to)
         else:
-            proximities = self.gps.get_proximities()
+            datatypes = self.gps.get_proximities()
         if args.format == 'txt':
-            for waypoint in proximities:
-                args.filename.write(f"{str(waypoint)}\n")
+            for datatype in datatypes:
+                args.filename.write(f"{str(datatype)}\n")
         elif args.format == 'garmin':
-            for waypoint in proximities:
-                args.filename.write(f"{repr(waypoint)}\n")
+            for datatype in datatypes:
+                args.filename.write(f"{repr(datatype)}\n")
+        elif args.format == 'json':
+            proximities = [datatype.get_dict() for datatype in datatypes]
+            json.dump(proximities, args.filename, cls=BytesEncoder)
         elif args.format == 'gpx':
-            gpx = self.waypoints_to_gpx(proximities)
-            args.filename.write(gpx.to_xml())
+            gpx = GPX.GPXWaypoints()
+            gpx_proximities = gpx.waypoints_to_gpx(proximities)
+            args.filename.write(f"{str(gpx_proximities)}\n")
 
     def put_proximities(self, args):
-        data = []
-        for line in args.filename:
-            object = eval(line)
-            data.append(object)
+        if args.format == 'garmin':
+            data = []
+                for line in args.filename:
+                object = eval(line)
+                data.append(object)
+        elif args.format == 'json':
+            data = json.load(args.filename, cls=BytesDecoder)
         if args.progress:
             with ProgressBar() as progress_bar:
                 self.gps.put_proximities(data, callback=progress_bar.update_to)
@@ -503,15 +567,18 @@ class Pygarmin:
     def get_almanac(self, args):
         if args.progress:
             with ProgressBar() as progress_bar:
-                almanacs = self.gps.get_almanac(callback=progress_bar.update_to)
+                datatypes = self.gps.get_almanac(callback=progress_bar.update_to)
         else:
-            almanacs = self.gps.get_almanac()
+            datatypes = self.gps.get_almanac()
         if args.format == 'txt':
-            func = str
+            for datatype in datatypes:
+                args.filename.write(f"{str(datatype)}\n")
         elif args.format == 'garmin':
-            func = repr
-        for almanac in almanacs:
-            args.filename.write(f"{func(almanac)}\n")
+            for datatype in datatypes:
+                args.filename.write(f"{repr(datatype)}\n")
+        elif args.format == 'json':
+            almanacs = [datatype.get_dict() for datatype in datatypes]
+            json.dump(almanacs, args.filename, cls=BytesEncoder)
 
     def get_time(self, args):
         time = self.gps.get_time()
@@ -519,14 +586,17 @@ class Pygarmin:
             args.filename.write(f"{time.get_datetime()}\n")
         elif args.format == 'garmin':
             args.filename.write(f"{repr(time)}\n")
+        elif args.format == 'json':
+            json.dump(time.get_dict(), args.filename, cls=BytesEncoder)
 
     def get_position(self, args):
         position = self.gps.get_position()
         if args.format == 'txt':
-            func = str
+            args.filename.write(f"{str(position.as_degrees())}\n")
         elif args.format == 'garmin':
-            func = repr
-        args.filename.write(f"{func(position.as_degrees())}\n")
+            args.filename.write(f"{repr(position)}\n")
+        elif args.format == 'json':
+            json.dump(position.get_dict(), args.filename, cls=BytesEncoder)
 
     def pvt(self, args):
         def signal_handler(signal, frame):
@@ -917,9 +987,9 @@ get_waypoints = subparsers.add_parser('get-waypoints', help="Download waypoints"
 get_waypoints.set_defaults(command='get_waypoints')
 get_waypoints.add_argument('-t',
                            '--format',
-                           choices=['txt', 'garmin', 'gpx'],
+                           choices=['txt', 'garmin', 'json', 'gpx'],
                            default='garmin',
-                           help="Set output format. ``txt`` returns a JSON string that consists of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype. ``gpx`` returns a string in GPS Exchange Format (GPX).")
+                           help="Set output format. ``txt`` returns a human readable string of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype. ``json`` returns a JSON string of the datatypes. ``gpx`` returns a string in GPS Exchange Format (GPX).")
 get_waypoints.add_argument('filename',
                            nargs='?',
                            type=argparse.FileType(mode='w'),
@@ -929,9 +999,9 @@ put_waypoints = subparsers.add_parser('put-waypoints', help="Upload waypoints")
 put_waypoints.set_defaults(command='put_waypoints')
 put_waypoints.add_argument('-t',
                            '--format',
-                           choices=['txt', 'garmin'],
+                           choices=['garmin', 'json'],
                            default='garmin',
-                           help="Set input format. ``txt`` returns a JSON string that consists of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype.")
+                           help="Set input format. ``garmin`` returns a string that can be executed and will yield the same value as the datatype. ``json`` returns a JSON string of the datatypes.")
 put_waypoints.add_argument('filename',
                            nargs='?',
                            type=argparse.FileType(mode='r'),
@@ -941,9 +1011,9 @@ get_routes = subparsers.add_parser('get-routes', help="Download routes")
 get_routes.set_defaults(command='get_routes')
 get_routes.add_argument('-t',
                         '--format',
-                        choices=['txt', 'garmin', 'gpx'],
+                        choices=['txt', 'garmin', 'json', 'gpx'],
                         default='garmin',
-                        help="Set output format. ``txt`` returns a JSON string that consists of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype. ``gpx`` returns a string in GPS Exchange Format (GPX).")
+                        help="Set output format. ``txt`` returns a human readable string of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype. ``json`` returns a JSON string of the datatypes. ``gpx`` returns a string in GPS Exchange Format (GPX).")
 get_routes.add_argument('filename',
                         nargs='?',
                         type=argparse.FileType(mode='w'),
@@ -953,9 +1023,9 @@ put_routes = subparsers.add_parser('put-routes', help="Upload routes")
 put_routes.set_defaults(command='put_routes')
 put_routes.add_argument('-t',
                         '--format',
-                        choices=['txt', 'garmin'],
+                        choices=['garmin', 'json', 'gpx'],
                         default='garmin',
-                        help="Set input format. ``txt`` returns a JSON string that consists of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype.")
+                        help="Set input format. ``garmin`` returns a string that can be executed and will yield the same value as the datatype. ``json`` returns a JSON string of the datatypes. ``gpx`` returns a string in GPS Exchange Format (GPX).")
 put_routes.add_argument('filename',
                         nargs='?',
                         type=argparse.FileType(mode='r'),
@@ -965,9 +1035,9 @@ get_tracks = subparsers.add_parser('get-tracks', help="Download tracks")
 get_tracks.set_defaults(command='get_tracks')
 get_tracks.add_argument('-t',
                         '--format',
-                        choices=['txt', 'garmin', 'gpx'],
+                        choices=['txt', 'garmin', 'json', 'gpx'],
                         default='garmin',
-                        help="Set output format. ``txt`` returns a JSON string that consists of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype. ``gpx`` returns a string in GPS Exchange Format (GPX).")
+                        help="Set output format. ``txt`` returns a human readable string of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype. ``json`` returns a JSON string of the datatypes. ``gpx`` returns a string in GPS Exchange Format (GPX).")
 get_tracks.add_argument('filename',
                         nargs='?',
                         type=argparse.FileType(mode='w'),
@@ -977,9 +1047,9 @@ put_tracks = subparsers.add_parser('put-tracks', help="Upload tracks")
 put_tracks.set_defaults(command='put_tracks')
 put_tracks.add_argument('-t',
                         '--format',
-                        choices=['txt', 'garmin'],
+                        choices=['garmin', 'json'],
                         default='garmin',
-                        help="Set input format. ``txt`` returns a JSON string that consists of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype.")
+                        help="Set input format. ``garmin`` returns a string that can be executed and will yield the same value as the datatype. ``json`` returns a JSON string of the datatypes.")
 put_tracks.add_argument('filename',
                         nargs='?',
                         type=argparse.FileType(mode='r'),
@@ -989,9 +1059,9 @@ get_proximities = subparsers.add_parser('get-proximities', help="Download proxim
 get_proximities.set_defaults(command='get_proximities')
 get_proximities.add_argument('-t',
                              '--format',
-                             choices=['txt', 'garmin', 'gpx'],
+                             choices=['txt', 'garmin', 'json', 'gpx'],
                              default='garmin',
-                             help="Set output format. ``txt`` returns a JSON string that consists of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype. ``gpx`` returns a string in GPS Exchange Format (GPX).")
+                             help="Set output format. ``txt`` returns a human readable string of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype. ``json`` returns a JSON string of the datatypes. ``gpx`` returns a string in GPS Exchange Format (GPX).")
 get_proximities.add_argument('filename',
                              nargs='?',
                              type=argparse.FileType(mode='w'),
@@ -1001,9 +1071,9 @@ put_proximities = subparsers.add_parser('put-proximities', help="Upload proximit
 put_proximities.set_defaults(command='put_proximities')
 put_proximities.add_argument('-t',
                              '--format',
-                             choices=['txt', 'garmin'],
+                             choices=['garmin', 'json'],
                              default='garmin',
-                             help="Set input format. ``txt`` returns a JSON string that consists of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype.")
+                             help="Set input format. ``garmin`` returns a string that can be executed and will yield the same value as the datatype. ``json`` returns a JSON string of the datatypes.")
 put_proximities.add_argument('filename',
                              nargs='?',
                              type=argparse.FileType(mode='r'),
@@ -1013,9 +1083,9 @@ get_almanac = subparsers.add_parser('get-almanac', help="Download almanac")
 get_almanac.set_defaults(command='get_almanac')
 get_almanac.add_argument('-t',
                          '--format',
-                         choices=['txt', 'garmin'],
+                         choices=['txt', 'garmin', 'json'],
                          default='garmin',
-                         help="Set output format. ``txt`` returns a JSON string that consists of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype.")
+                         help="Set output format. ``txt`` returns a human readable string of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype. ``json`` returns a JSON string of the datatypes.")
 get_almanac.add_argument('filename',
                          nargs='?',
                          type=argparse.FileType(mode='w'),
@@ -1025,7 +1095,7 @@ get_time = subparsers.add_parser('get-time', help="Download current date and tim
 get_time.set_defaults(command='get_time')
 get_time.add_argument('-t',
                       '--format',
-                      choices=['txt', 'garmin'],
+                      choices=['txt', 'garmin', 'json'],
                       default='garmin',
                       help="Set output format. ``txt`` returns a human readable string of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype. ``json`` returns a JSON string of the datatypes.")
 get_time.add_argument('filename',
@@ -1037,9 +1107,9 @@ get_position = subparsers.add_parser('get-position', help="Download current posi
 get_position.set_defaults(command='get_position')
 get_position.add_argument('-t',
                           '--format',
-                          choices=['txt', 'garmin'],
+                          choices=['txt', 'garmin', 'json'],
                           default='garmin',
-                          help="Set output format. ``txt`` returns a JSON string that consists of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype.")
+                          help="Set output format. ``txt`` returns a human readable string of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype. ``json`` returns a JSON string of the datatypes.")
 get_position.add_argument('filename',
                           nargs='?',
                           type=argparse.FileType(mode='w'),

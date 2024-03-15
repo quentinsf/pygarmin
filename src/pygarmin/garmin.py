@@ -155,137 +155,137 @@ class Garmin():
         #: Link Protocol
         self.link = self._create_protocol('link_protocol', self.phys)
 
-    @property
+    @cached_property
     def command(self):
         """Device Command Protocol."""
         return self._create_protocol('device_command_protocol', self)
 
-    @property
+    @cached_property
     def transmission(self):
         """Transmission Protocol."""
         return self._create_protocol('transmission_protocol', self)
 
-    @property
+    @cached_property
     def waypoint_transfer(self):
         """Waypoint Transfer Protocol."""
         return self._create_protocol('waypoint_transfer_protocol', self)
 
-    @property
+    @cached_property
     def waypoint_category_transfer(self):
         """Waypoint Category Transfer Protocol."""
         return self._create_protocol('waypoint_category_transfer_protocol', self)
 
-    @property
+    @cached_property
     def route_transfer(self):
         """Route Transfer Protocol."""
         return self._create_protocol('route_transfer_protocol', self)
 
-    @property
+    @cached_property
     def track_log_transfer(self):
         """Track Log Transfer Protocol."""
         return self._create_protocol('track_log_transfer_protocol', self)
 
-    @property
+    @cached_property
     def proximity_waypoint_transfer(self):
         """Proximity Waypoint Transfer Protocol."""
         return self._create_protocol('proximity_waypoint_transfer_protocol', self)
 
-    @property
+    @cached_property
     def almanac_transfer(self):
         """Almanac Transfer Protocol."""
         return self._create_protocol('almanac_transfer_protocol', self)
 
-    @property
+    @cached_property
     def date_and_time_initialization(self):
         """Date And Time Initialization Protocol."""
         return self._create_protocol('date_and_time_initialization_protocol', self)
 
-    @property
+    @cached_property
     def flightbook_transfer(self):
         """Flightbook Transfer Protocol."""
         return self._create_protocol('flightbook_transfer_protocol', self)
 
-    @property
+    @cached_property
     def position_initialization(self):
         """Position Initialization Protocol."""
         return self._create_protocol('position_initialization_protocol', self)
 
-    @property
+    @cached_property
     def pvt(self):
         """PVT Protocol."""
         return self._create_protocol('pvt_protocol', self)
 
-    @property
+    @cached_property
     def map_transfer(self):
         """Map Transfer Protocol."""
         return self._create_protocol('map_transfer_protocol', self)
 
-    @property
+    @cached_property
     def map_unlock(self):
         """Map Unlock Protocol."""
         return self._create_protocol('map_unlock_protocol', self)
 
-    @property
+    @cached_property
     def lap_transfer(self):
         """Lap Transfer Protocol."""
         return self._create_protocol('lap_transfer_protocol', self)
 
-    @property
+    @cached_property
     def run_transfer(self):
         """Run Transfer Protocol."""
         return self._create_protocol('run_transfer_protocol', self)
 
-    @property
+    @cached_property
     def workout_transfer(self):
         """Workout Transfer Protocol."""
         return self._create_protocol('workout_transfer_protocol', self)
 
-    @property
+    @cached_property
     def workout_occurrence_transfer(self):
         """Workout Occurrence Transfer Protocol."""
         return self._create_protocol('workout_occurrence_transfer_protocol', self)
 
-    @property
+    @cached_property
     def fitness_user_profile_transfer(self):
         """Fitness User Profile Transfer Protocol."""
         return self._create_protocol('fitness_user_profile_transfer_protocol', self)
 
-    @property
+    @cached_property
     def workout_limits_transfer(self):
         """Workout Limits Transfer Protocol."""
         return self._create_protocol('workout_limits_transfer_protocol', self)
 
-    @property
+    @cached_property
     def course_transfer(self):
         """Course Transfer Protocol."""
         return self._create_protocol('course_transfer_protocol', self)
 
-    @property
+    @cached_property
     def course_lap_transfer(self):
         """Course Lap Transfer Protocol."""
         return self._create_protocol('course_lap_transfer_protocol', self)
 
-    @property
+    @cached_property
     def course_point_transfer(self):
         """Course Point Transfer Protocol."""
         return self._create_protocol('course_point_transfer_protocol', self)
 
-    @property
+    @cached_property
     def course_limits_transfer(self):
         """Course Limits Transfer Protocol."""
         return self._create_protocol('course_limits_transfer_protocol', self)
 
-    @property
+    @cached_property
     def course_track_transfer(self):
         """Course Track Transfer Protocol."""
         return self._create_protocol('course_track_transfer_protocol', self)
 
-    @property
+    @cached_property
     def screenshot_transfer(self):
         """Screenshot Transfer Protocol."""
         return ScreenshotTransfer(self)
 
-    @property
+    @cached_property
     def image_transfer(self):
         """Image Transfer Protocol."""
         return ImageTransfer(self)

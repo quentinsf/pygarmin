@@ -1121,7 +1121,7 @@ pvt.add_argument('-t',
                  '--format',
                  choices=['txt', 'garmin', 'gpsd'],
                  default='garmin',
-                 help="Set output format. ``txt`` returns a JSON string that consists of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype. ``gpsd`` returns a GPSD JSON object.")
+                 help="Set output format. ``txt`` returns a human readable string of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype. ``gpsd`` returns a GPSD JSON object.")
 pvt.add_argument('filename',
                  nargs='?',
                  type=argparse.FileType(mode='w'),
@@ -1133,7 +1133,7 @@ get_laps.add_argument('-t',
                       '--format',
                       choices=['txt', 'garmin'],
                       default='garmin',
-                      help="Set output format. ``txt`` returns a JSON string that consists of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype.")
+                      help="Set output format. ``txt`` returns a human readable string of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype.")
 get_laps.add_argument('filename',
                       nargs='?',
                       type=argparse.FileType(mode='w'),
@@ -1145,7 +1145,7 @@ get_runs.add_argument('-t',
                       '--format',
                       choices=['txt', 'garmin'],
                       default='garmin',
-                      help="Set output format. ``txt`` returns a JSON string that consists of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype.")
+                      help="Set output format. ``txt`` returns a human readable string of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype.")
 get_runs.add_argument('filename',
                       nargs='?',
                       type=argparse.FileType(mode='w'),

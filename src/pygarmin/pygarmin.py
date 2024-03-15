@@ -553,7 +553,7 @@ class Pygarmin:
     def put_proximities(self, args):
         if args.format == 'garmin':
             data = []
-                for line in args.filename:
+            for line in args.filename:
                 object = eval(line)
                 data.append(object)
         elif args.format == 'json':

@@ -312,7 +312,7 @@ class GPX:
 
 class GPXWaypoints(GPX):
 
-    def __init__(self, waypoints):
+    def __init__(self, waypoints=[]):
         self.gpx = self.waypoints_to_gpx(waypoints)
 
     def waypoints_to_gpx(self, waypoints):
@@ -380,7 +380,7 @@ class GPXWaypoints(GPX):
 
 class GPXRoutes(GPX):
 
-    def __init__(self, routes):
+    def __init__(self, routes=[]):
         self.gpx = self.routes_to_gpx(routes)
 
     def routes_to_gpx(self, routes):
@@ -456,7 +456,7 @@ class GPXRoutes(GPX):
 
 class GPXTracks(GPX):
 
-    def __init__(self, tracks):
+    def __init__(self, tracks=[]):
         self.gpx = self.tracks_to_gpx(tracks)
 
     def tracks_to_gpx(self, tracks):

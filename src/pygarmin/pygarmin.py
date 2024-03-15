@@ -318,7 +318,7 @@ class Pygarmin:
         'A1051': 'External Time Data Sync Protocol',
     }
 
-    def __init__(self, port):
+    def __init__(self, port='usb:'):
         self.port = port
         self.gps = self.get_gps(self.port)
 

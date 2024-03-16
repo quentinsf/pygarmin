@@ -33,6 +33,7 @@ import json
 import logging
 from microbmp import MicroBMP
 import os
+import pathlib
 from PIL import Image, ImagePalette, UnidentifiedImageError
 import re
 import signal
@@ -46,6 +47,7 @@ from . import link as mod_link
 from . import logger as mod_logger
 from . import datatype as mod_datatype
 from . import gpx as GPX
+from . import fit as FIT
 
 logging_levels = {
     0: logging.NOTSET,
@@ -55,6 +57,17 @@ logging_levels = {
 }
 
 mod_logger.log.addHandler(logging.StreamHandler())
+
+def _print(data):
+    if type(data) == str:
+        data = str.encode(data)
+    sys.stdout.buffer.write(data)
+
+def _write(path, data):
+    if type(data) == bytes:
+        path.write_bytes(data)
+    elif type(data) == str:
+        path.write_text(data)
 
 def to_pixel_data(pixel_values, bpp):
     """Returns the pixel array of the image.
@@ -640,14 +653,301 @@ class Pygarmin:
     def get_runs(self, args):
         if args.progress:
             with ProgressBar() as progress_bar:
-                runs = self.gps.get_runs(callback=progress_bar.update_to)
+                datatypes = self.gps.get_runs(callback=progress_bar.update_to)
         else:
-            runs = self.gps.get_runs()
-        for run in runs:
+            datatypes = self.gps.get_runs()
+        runs = []
+        laps = []
+        tracks = []
+        # First, separate the datatypes by type
+        for datatype in datatypes:
+            if isinstance(datatype, mod_datatype.Run):
+                runs.append(datatype)
+            elif isinstance(datatype, mod_datatype.Lap):
+                laps.append(datatype)
+                # Track headers and associated points are grouped
+            elif isinstance(datatype, mod_datatype.TrkHdr):
+                tracks.append([datatype])
+            elif isinstance(datatype, mod_datatype.TrkPoint):
+                tracks[-1].append(datatype)
+        # Second, gather the datatypes per run
+        result = []
+        for idx, run in enumerate(runs):
+            mod_logger.log.info(f"Adding run {idx}")
+            lap_indices = range(run.first_lap_index, run.last_lap_index + 1)
+            track_index = run.track_index
+            laps = [lap for lap in laps if lap.index in lap_indices]
+            for track in tracks:
+                if track[0].index == track_index:
+                    track = track
+                    break
+            result.append([run, laps, track])
+        for idx, run in enumerate(result):
             if args.format == 'txt':
-                args.filename.write(f"{str(run)}\n")
+                datatypes = []
+                datatypes.append(str(run[0]))
+                datatypes.extend([str(lap) for lap in run[1]])
+                datatypes.extend([str(point) for point in run[2]])
+                data = '\n'.join(datatypes)
             elif args.format == 'garmin':
-                args.filename.write(f"{repr(run)}\n")
+                datatypes = []
+                datatypes.append(repr(run[0]))
+                datatypes.extend([repr(lap) for lap in run[1]])
+                datatypes.extend([repr(point) for point in run[2]])
+                data = '\n'.join(datatypes)
+            elif args.format == 'fit':
+                activity = [run]
+                fit = FIT.FITActivity(self.gps, activity)
+                fit_file = fit.build()
+                data = fit_file.to_bytes()
+            else:
+                sys.exit(f"Output format {args.format} is not supported")
+            if args.filename == sys.stdout:
+                _print(data)
+            else:
+                single_modulo = '(?<!%)%(?!%)'  # match a single % character
+                if os.path.isdir(args.filename):
+                    # No filename is given, so use the start time by default
+                    track = run[2]
+                    stem = track[1].get_datetime().astimezone().isoformat()
+                    if args.format == 'fit':
+                        suffix = '.fit'
+                    elif args.format == 'txt' or args.format == 'garmin':
+                        suffix = '.txt'
+                    filename = stem + suffix
+                    path = os.path.join(args.filename, filename)
+                elif re.search(single_modulo, args.filename) is not None:
+                    # filename is a formatting string
+                    path = str(args.filename % idx)
+                else:
+                    # filename doesn't contain a single % and therefore isn't a pattern
+                    path = args.filename
+                    if len(result) > 1:
+                        stem = pathlib.Path(path).stem
+                        suffix = pathlib.Path(path).suffix
+                        path = f"{stem}-{idx}{suffix}"
+                mod_logger.log.info(f"Saving {path}")
+                _write(pathlib.Path(path), data)
+
+    def get_workouts(self, args):
+        if args.progress:
+            with ProgressBar() as progress_bar:
+                datatypes = self.gps.get_workouts(callback=progress_bar.update_to)
+        else:
+            datatypes = self.gps.get_workouts()
+        for idx, datatype in enumerate(datatypes):
+            if args.format == 'txt':
+                data = str(datatype) + '\n'
+            elif args.format == 'garmin':
+                data = repr(datatype) + '\n'
+            elif args.format == 'fit':
+                fit = FIT.FITWorkout(self.gps, datatype)
+                fit_file = fit.build()
+                data = fit_file.to_bytes()
+            else:
+                sys.exit(f"Output format {args.format} is not supported")
+            if args.filename == sys.stdout:
+                _print(data)
+            else:
+                single_modulo = '(?<!%)%(?!%)'  # match a single % character
+                if os.path.isdir(args.filename):
+                    # No filename is given, so use the workout name by default
+                    stem = datatype.get_name()
+                    if args.format == 'fit':
+                        suffix = '.fit'
+                    elif args.format == 'txt' or args.format == 'garmin':
+                        suffix = '.txt'
+                    filename = stem + suffix
+                    path = os.path.join(args.filename, filename)
+                elif re.search(single_modulo, args.filename) is not None:
+                    # filename is a formatting string
+                    path = str(args.filename % idx)
+                else:
+                    # filename doesn't contain a single % and therefore isn't a pattern
+                    path = args.filename
+                    if len(datatypes) > 1:
+                        stem = pathlib.Path(path).stem
+                        suffix = pathlib.Path(path).suffix
+                        path = f"{stem}-{idx}{suffix}"
+                mod_logger.log.info(f"Saving {path}")
+                _write(pathlib.Path(path), data)
+
+    def get_courses(self, args):
+        if args.progress:
+            with ProgressBar() as progress_bar:
+                datatypes = self.gps.get_courses(callback=progress_bar.update_to)
+        else:
+            datatypes = self.gps.get_courses()
+        courses = []
+        laps = []
+        tracks = []
+        points = []
+        # First, separate the datatypes
+        for datatype in datatypes:
+            if isinstance(datatype, mod_datatype.Course):
+                courses.append(datatype)
+            elif isinstance(datatype, mod_datatype.CourseLap):
+                laps.append(datatype)
+                # Track headers and associated points are grouped
+            elif isinstance(datatype, mod_datatype.TrkHdr):
+                tracks.append([datatype])
+            elif isinstance(datatype, mod_datatype.TrkPoint):
+                tracks[-1].append(datatype)
+            elif isinstance(datatype, mod_datatype.CoursePoint):
+                points.append(datatype)
+        # Second, gather the datatypes per course
+        result = []
+        for course in courses:
+            mod_logger.log.info(f"Adding course {course.get_course_name()}")
+            course_index = course.index
+            track_index = course.track_index
+            course_laps = [ lap for lap in laps if lap.course_index == course_index ]
+            for track in tracks:
+                if track[0].index == track_index:
+                    course_track = track
+                    break
+            course_points = [ point for point in points if point.course_index == course_index ]
+            result.append([course, course_laps, course_track, course_points])
+        for idx, course in enumerate(result):
+            if args.format == 'txt':
+                datatypes = []
+                datatypes.append(str(course[0]))
+                datatypes.extend([str(lap) for lap in course[1]])
+                datatypes.append(str(course[2]))
+                datatypes.extend([str(point) for point in course[3]])
+                data = '\n'.join(datatypes)
+            elif args.format == 'garmin':
+                datatypes = []
+                datatypes.append(repr(course[0]))
+                mod_logger.log.info(f"{repr(course[0])}")
+                datatypes.extend([repr(lap) for lap in course[1]])
+                mod_logger.log.info(f"{[repr(lap) for lap in course[1]]}")
+                datatypes.append(repr(course[2]))
+                datatypes.extend([repr(point) for point in course[3]])
+                data = '\n'.join(datatypes)
+            elif args.format == 'fit':
+                fit = FIT.FITCourse(self.gps, course)
+                fit_file = fit.build()
+                data = fit_file.to_bytes()
+            if args.filename == sys.stdout:
+                _print(data)
+            else:
+                single_modulo = '(?<!%)%(?!%)'  # match a single % character
+                if os.path.isdir(args.filename):
+                    # No filename is given, so use the course name by default
+                    stem = course[0].get_course_name()
+                    if args.format == 'fit':
+                        suffix = '.fit'
+                    elif args.format == 'txt' or args.format == 'garmin':
+                        suffix = '.txt'
+                    else:
+                        sys.exit(f"Output format {args.format} is not supported")
+                    filename = stem + suffix
+                    path = os.path.join(args.filename, filename)
+                elif re.search(single_modulo, args.filename) is not None:
+                    # filename is a formatting string
+                    path = str(args.filename % idx)
+                else:
+                    # filename doesn't contain a single % and therefore isn't a pattern
+                    path = args.filename
+                    if len(result) > 1:
+                        stem = pathlib.Path(path).stem
+                        suffix = pathlib.Path(path).suffix
+                        path = f"{stem}-{idx}{suffix}"
+                mod_logger.log.info(f"Saving {path}")
+                _write(pathlib.Path(path), data)
+
+    def get_fitness_user_profile(self, args):
+        if args.progress:
+            with ProgressBar() as progress_bar:
+                fitness_user_profile = self.gps.get_fitness_user_profile(callback=progress_bar.update_to)
+        else:
+            fitness_user_profile = self.gps.get_fitness_user_profile()
+        if args.format == 'txt':
+            args.filename.write(f"{str(fitness_user_profile)}\n")
+        elif args.format == 'garmin':
+            args.filename.write(f"{repr(fitness_user_profile)}\n")
+
+    def get_activities(self, args):
+        if args.progress:
+            with ProgressBar() as progress_bar:
+                datatypes = self.gps.get_runs(callback=progress_bar.update_to)
+        else:
+            datatypes = self.gps.get_runs()
+        runs = []
+        laps = []
+        tracks = []
+        # First, separate the datatypes by type
+        for datatype in datatypes:
+            if isinstance(datatype, mod_datatype.Run):
+                runs.append(datatype)
+            elif isinstance(datatype, mod_datatype.Lap):
+                laps.append(datatype)
+                # Track headers and associated points are grouped
+            elif isinstance(datatype, mod_datatype.TrkHdr):
+                tracks.append([datatype])
+            elif isinstance(datatype, mod_datatype.TrkPoint):
+                tracks[-1].append(datatype)
+        # Second, gather the datatypes per run
+        result = []
+        for idx, run in enumerate(runs):
+            mod_logger.log.info(f"Adding run {idx}")
+            lap_indices = range(run.first_lap_index, run.last_lap_index + 1)
+            track_index = run.track_index
+            run_laps = [lap for lap in laps if lap.index in lap_indices]
+            for track in tracks:
+                if track[0].index == track_index:
+                    run_track = track
+                    break
+            result.append([run, run_laps, run_track])
+        # Third, aggregate multisport runs
+        activities = []
+        multisport_session = False
+        for run in result:
+            multisport = run[0].get_multisport()
+            if multisport == 'no':
+                activities.append([run])
+            elif multisport == 'yes' and multisport_session is False:
+                activities.append([run])
+                multisport_session = True
+            elif multisport == 'yes' and multisport_session is True:
+                activities[-1].append(run)
+            elif multisport == 'yesAndLastInGroup':
+                activities[-1].append(run)
+                multisport_session = False
+            else:
+                mod_logger.log.warning(f"Unknown multisport value {multisport}. Ignoring...")
+        if args.format == 'fit':
+            for idx, activity in enumerate(activities):
+                fit = FIT.FITActivity(self.gps, activity)
+                fit_file = fit.build()
+                data = fit_file.to_bytes()
+                if args.filename == sys.stdout:
+                    _print(data)
+                else:
+                    single_modulo = '(?<!%)%(?!%)'  # match a single % character
+                    if os.path.isdir(args.filename):
+                        # No filename is given, so use the start time by default
+                        first_session = activity[0]
+                        track = first_session[2]
+                        stem = track[1].get_datetime().astimezone().isoformat()
+                        suffix = '.fit'
+                        filename = stem + suffix
+                        path = os.path.join(args.filename, filename)
+                    elif re.search(single_modulo, args.filename) is not None:
+                        # filename is a formatting string
+                        path = str(args.filename % idx)
+                    else:
+                        # filename doesn't contain a single % and therefore isn't a pattern
+                        path = args.filename
+                        if len(activities) > 1:
+                            stem = pathlib.Path(path).stem
+                            suffix = pathlib.Path(path).suffix
+                            path = f"{stem}-{idx}{suffix}"
+                    mod_logger.log.info(f"Saving {path}")
+                    _write(pathlib.Path(path), data)
+        else:
+            sys.exit(f"Output format {args.format} is not supported")
 
     def get_map(self, args):
         try:
@@ -1143,14 +1443,58 @@ get_runs = subparsers.add_parser('get-runs', help="Download runs")
 get_runs.set_defaults(command='get_runs')
 get_runs.add_argument('-t',
                       '--format',
-                      choices=['txt', 'garmin'],
+                      choices=['txt', 'garmin', 'fit'],
                       default='garmin',
-                      help="Set output format. ``txt`` returns a human readable string of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype.")
+                      help="Set output format. ``txt`` returns a human readable string of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype. ``fit`` returns the binary FIT file format.")
 get_runs.add_argument('filename',
                       nargs='?',
-                      type=argparse.FileType(mode='w'),
                       default=sys.stdout,
-                      help="Set output file")
+                      help="Filename or directory to save runs (default is stdout). A filename pattern can contain %%d (or any formatting string using the %% operator), since %%d is replaced by the image index. Example: run%%03d.fit. By default, runs are written to filenames named by the start date and time.")
+get_workouts = subparsers.add_parser('get-workouts', help="Download workouts")
+get_workouts.set_defaults(command='get_workouts')
+get_workouts.add_argument('-t',
+                          '--format',
+                          choices=['txt', 'garmin', 'fit'],
+                          default='garmin',
+                          help="Set output format. ``txt`` returns a human readable string of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype. ``fit`` returns the binary FIT file format.")
+get_workouts.add_argument('filename',
+                          nargs='?',
+                          default=sys.stdout,
+                          help="Filename or directory to save workouts (default is stdout). A filename pattern can contain %%d (or any formatting string using the %% operator), since %%d is replaced by the image index. Example: workout%%03d.fit. By default, the workout name is used as filename.")
+get_courses = subparsers.add_parser('get-courses', help="Download courses")
+get_courses.set_defaults(command='get_courses')
+get_courses.add_argument('-t',
+                         '--format',
+                         choices=['txt', 'garmin', 'fit'],
+                         default='garmin',
+                         help="Set output format. ``txt`` returns a human readable string of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype. ``fit`` returns the binary FIT file format.")
+get_courses.add_argument('filename',
+                         nargs='?',
+                         default=sys.stdout,
+                         help="Filename or directory to save courses (default is stdout). A filename pattern can contain %%d (or any formatting string using the %% operator), since %%d is replaced by the image index. Example: course%%03d.fit. By default, the course name is used as filename.")
+get_fitness_user_profile = subparsers.add_parser('get-fitness-user-profile', help="Download fitness user profile")
+get_fitness_user_profile.set_defaults(command='get_fitness_user_profile')
+get_fitness_user_profile.add_argument('-t',
+                                      '--format',
+                                      choices=['txt', 'garmin'],
+                                      default='garmin',
+                                      help="Set output format. ``txt`` returns a human readable string of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype.")
+get_fitness_user_profile.add_argument('filename',
+                                      nargs='?',
+                                      type=argparse.FileType(mode='w'),
+                                      default=sys.stdout,
+                                      help="Set output file")
+get_activities = subparsers.add_parser('get-activities', help="Download activities. Activities are runs that are grouped by multisport session.")
+get_activities.set_defaults(command='get_activities')
+get_activities.add_argument('-t',
+                            '--format',
+                            choices=['fit'],
+                            default='fit',
+                            help="Set output format. ``txt`` returns a human readable string of a dictionary with the datatypes attributes. ``garmin`` returns a string that can be executed and will yield the same value as the datatype. ``fit`` returns the binary FIT file format.")
+get_activities.add_argument('filename',
+                            nargs='?',
+                            default=sys.stdout,
+                            help="Filename or directory to save activities (default is stdout). A filename pattern can contain %%d (or any formatting string using the %% operator), since %%d is replaced by the image index. Example: activity%%03d.fit. By default, activities are written to filenames named by the start date and time.")
 get_map = subparsers.add_parser('get-map', help="Download map")
 get_map.set_defaults(command='get_map')
 get_map.add_argument('filename',

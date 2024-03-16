@@ -1097,8 +1097,6 @@ class A800(TransferProtocol):
             mod_logger.log.info(f"Datatype {type(datatype).__name__}")
             datatype.unpack(packet['data'])
             mod_logger.log.info(f"{str(datatype)}")
-            if type(datatype).__name__ == 'Satellite':
-                mod_logger.log.info(f"{str(datatype.get_records())}")
             if callback:
                 callback(datatype, 1, 1)
             return datatype

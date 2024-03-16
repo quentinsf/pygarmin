@@ -434,9 +434,8 @@ class Pygarmin:
             waypoints = [datatype.get_dict() for datatype in datatypes]
             json.dump(waypoints, args.filename, cls=BytesEncoder)
         elif args.format == 'gpx':
-            gpx = GPX.GPXWaypoints()
-            gpx_waypoints = gpx.waypoints_to_gpx(datatypes)
-            args.filename.write(f"{str(gpx_waypoints)}\n")
+            gpx_waypoints = GPX.GPXWaypoints(datatypes)
+            args.filename.write(f"{gpx_waypoints.gpx.to_xml()}\n")
 
     def put_waypoints(self, args):
         if args.format == 'garmin':
@@ -478,8 +477,8 @@ class Pygarmin:
             if args.format == 'json':
                 json.dump([[datatype.get_dict() for datatype in route] for route in routes], args.filename, cls=BytesEncoder)
             elif args.format == 'gpx':
-                gpx = GPX.GPXRoutes(routes)
-                args.filename.write(f"{str(gpx)}\n")
+                gpx_routes = GPX.GPXRoutes(routes)
+                args.filename.write(f"{gpx_routes.gpx.to_xml()}\n")
 
     def put_routes(self, args):
         if args.format == 'garmin':
@@ -526,8 +525,8 @@ class Pygarmin:
         if args.format == 'json':
                 json.dump([[datatype.get_dict() for datatype in track] for track in tracks], args.filename, cls=BytesEncoder)
         elif args.format == 'gpx':
-            gpx = GPX.GPXTracks(tracks)
-            args.filename.write(f"{str(gpx)}\n")
+            gpx_tracks = GPX.GPXTracks(tracks)
+            args.filename.write(f"{gpx_tracks.gpx.to_xml()}\n")
 
     def put_tracks(self, args):
         if args.format == 'garmin':
@@ -559,9 +558,8 @@ class Pygarmin:
             proximities = [datatype.get_dict() for datatype in datatypes]
             json.dump(proximities, args.filename, cls=BytesEncoder)
         elif args.format == 'gpx':
-            gpx = GPX.GPXWaypoints()
-            gpx_proximities = gpx.waypoints_to_gpx(proximities)
-            args.filename.write(f"{str(gpx_proximities)}\n")
+            gpx_proximities = GPX.GPXWaypoints(datatypes)
+            args.filename.write(f"{gpx_proximities.gpx.to_xml()}\n")
 
     def put_proximities(self, args):
         if args.format == 'garmin':

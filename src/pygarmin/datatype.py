@@ -949,7 +949,7 @@ class D103(D100):
         """Return the display attribute value.
 
         """
-        return self._dspl.get(self.dspl, 0)
+        return self._dspl.get(self.dspl, 'dspl_smbl_name')
 
 
 class D104(D101):
@@ -977,7 +977,7 @@ class D104(D101):
         """Return the display attribute value.
 
         """
-        return self._dspl.get(self.dspl, 0)
+        return self._dspl.get(self.dspl, 'dspl_smbl_none')
 
 
 class D105(D101):
@@ -1038,7 +1038,7 @@ class D107(D103):
         """Return the color value.
 
         """
-        return self._color.get(self.color, 0)
+        return self._color.get(self.color, 'clr_default_color')
 
     def is_valid_dst(self):
         """Return whether the proximity distance is valid.
@@ -1128,13 +1128,13 @@ class D108(D103):
         if an invalid value is received, the value will be user_wpt.
 
         """
-        return self._wpt_class.get(self.wpt_class, 0)
+        return self._wpt_class.get(self.wpt_class, 'user_wpt')
 
     def get_color(self):
         """Return the color value.
 
         """
-        return self._color.get(self.color, 255)
+        return self._color.get(self.color, 'clr_default_color')
 
     def get_symbol(self):
         return Symbol(self.smbl)
@@ -1334,7 +1334,7 @@ class D110(D109):
         If an invalid value is received, the value will be user_wpt.
 
         """
-        return self._wpt_class.get(self.wpt_class, 0)
+        return self._wpt_class.get(self.wpt_class, 'user_wpt')
 
     def get_color(self):
         color_value = self.get_color_value()
@@ -1452,7 +1452,7 @@ class D150(Wpt):
         If an invalid value is received, the value will be user_wpt.
 
         """
-        return self._wpt_class.get(self.wpt_class, 0)
+        return self._wpt_class.get(self.wpt_class, 'user_wpt')
 
 
 class D151(D150):
@@ -1541,7 +1541,7 @@ class D155(D101, D150):
         """Return the display attribute value.
 
         """
-        return self._dspl.get(self.dspl, 1)
+        return self._dspl.get(self.dspl, 'dspl_smbl_only')
 
 
 class RteHdr(DataType):
@@ -1606,7 +1606,7 @@ class D210(RteLink):
 
     def get_lnk_class(self):
         """Return the link class value."""
-        return self._lnk_class.get(self.lnk_class, 0)
+        return self._lnk_class.get(self.lnk_class, 'line')
 
 
 class TrkPoint(DataType):
@@ -1826,7 +1826,7 @@ class D310(TrkHdr):
         """Return the color value.
 
         """
-        return self._color.get(self.color, 255)
+        return self._color.get(self.color, 'clr_default_color')
 
 
 class D311(TrkHdr):

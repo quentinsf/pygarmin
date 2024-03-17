@@ -107,9 +107,7 @@ class DataType():
         self.__dict__.update(values._asdict())
 
     def pack(self):
-        """Pack the datatype properties in the format defined by the structure.
-
-        """
+        """Pack the datatype properties in the format defined by the structure."""
         struct = self.get_struct()
         values = self.get_values()
         self.data = struct.pack(*values)
@@ -193,9 +191,7 @@ class ProtocolData(DataType):
         self.data = data
 
     def __str__(self):
-        """Format the record to a string consisting of the tag and 3-digit number.
-
-        """
+        """Format the record to a string consisting of the tag and 3-digit number."""
         return f'{chr(self.tag)}{self.data:03}'
 
     def get_tag(self):
@@ -940,15 +936,11 @@ class D103(D100):
         self.dspl = dspl
 
     def get_smbl(self):
-        """Return the symbol value.
-
-        """
+        """Return the symbol value."""
         return _smbl.get(self.smbl)
 
     def get_dspl(self):
-        """Return the display attribute value.
-
-        """
+        """Return the display attribute value."""
         return self._dspl.get(self.dspl, 'dspl_smbl_name')
 
 
@@ -974,9 +966,7 @@ class D104(D101):
         self.dspl = dspl
 
     def get_dspl(self):
-        """Return the display attribute value.
-
-        """
+        """Return the display attribute value."""
         return self._dspl.get(self.dspl, 'dspl_smbl_none')
 
 
@@ -1035,9 +1025,7 @@ class D107(D103):
         self.color = color
 
     def get_color(self):
-        """Return the color value.
-
-        """
+        """Return the color value."""
         return self._color.get(self.color, 'clr_default_color')
 
     def is_valid_dst(self):
@@ -1131,9 +1119,7 @@ class D108(D103):
         return self._wpt_class.get(self.wpt_class, 'user_wpt')
 
     def get_color(self):
-        """Return the color value.
-
-        """
+        """Return the color value."""
         return self._color.get(self.color, 'clr_default_color')
 
     def get_symbol(self):
@@ -1535,9 +1521,7 @@ class D155(D101, D150):
         self.dspl = dspl
 
     def get_dspl(self):
-        """Return the display attribute value.
-
-        """
+        """Return the display attribute value."""
         return self._dspl.get(self.dspl, 'dspl_smbl_only')
 
 
@@ -1820,9 +1804,7 @@ class D310(TrkHdr):
         self.trk_ident = trk_ident
 
     def get_color(self):
-        """Return the color value.
-
-        """
+        """Return the color value."""
         return self._color.get(self.color, 'clr_default_color')
 
 
@@ -1968,9 +1950,7 @@ class D551(D501):
 
 class DateTime(DataType):
     def get_datetime(self):
-        """Return a datetime object of the time.
-
-        """
+        """Return a datetime object of the time."""
         return datetime(self.year,
                         self.month,
                         self.day,
@@ -2110,9 +2090,7 @@ class PVT(DataType):
         return self.msl_hght + self.alt
 
     def get_datetime(self):
-        """Return a datetime object of the time.
-
-        """
+        """Return a datetime object of the time."""
         seconds = math.floor(self.tow - self.leap_scnds)
         days = self.wn_days
         delta = timedelta(days=days, seconds=seconds)

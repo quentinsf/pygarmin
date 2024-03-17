@@ -46,9 +46,7 @@ class L000:
         return packet
 
     def expect_packet(self, pid):
-        """Expect and read a particular packet type. Return data.
-
-        """
+        """Expect and read a particular packet type. Return data."""
         packet = self.read_packet()
         if packet['id'] != pid:
             raise mod_error.ProtocolError(f"Expected {pid:3}, got {packet['id']:3}")
@@ -378,9 +376,7 @@ class T001:
         return baudrates
 
     def set_baudrate(self, baudrate):
-        """Change the baudrate of the device.
-
-        """
+        """Change the baudrate of the device."""
         mod_logger.log.info(f"Change baudrate to {baudrate}...")
         mod_logger.log.info("Turn off async mode")
         self.gps.link.send_packet(self.gps.link.pid_enable_async_events, b'\x00\x00')

@@ -1,7 +1,7 @@
 Garmin exceptions
 =================
 
-.. currentmodule:: garmin
+.. currentmodule:: pygarmin.error
 
 .. autoclass:: GarminError
 .. autoclass:: LinkError

@@ -1,7 +1,7 @@
 Common datatypes
 ================
 
-.. currentmodule:: garmin
+.. currentmodule:: pygarmin.datatype
 
 .. autoclass:: Records
 .. autoclass:: Time

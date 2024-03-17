@@ -1,7 +1,7 @@
 Application protocol
 ====================
 
-.. currentmodule:: garmin
+.. currentmodule:: pygarmin.protocol
 
 .. rubric:: Product Data Protocol
 .. autoclass:: A000

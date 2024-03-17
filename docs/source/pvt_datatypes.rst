@@ -1,7 +1,7 @@
 PVT datatypes
 =============
 
-.. currentmodule:: garmin
+.. currentmodule:: pygarmin.datatype
 
 .. autoclass:: PVT
 .. autoclass:: D800

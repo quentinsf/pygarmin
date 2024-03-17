@@ -33,10 +33,10 @@ waypoints, and ``pygarmin put-map`` to upload a new map.
 Options
 -------
 
-.. currentmodule:: garmin
+.. currentmodule:: pygarmin.pygarmin
 
 .. argparse::
-   :module: pygarmin
+   :module: pygarmin.pygarmin
    :func: parser
    :prog: pygarmin
 
@@ -62,6 +62,14 @@ Show information on the currently installed maps, use the serial port and be ver
 Download all waypoints in gpx format to the file waypoints.gpx::
 
    pygarmin get-waypoints waypoints.gpx -t gpx
+
+Upload all waypoints in the file waypoints.gpx::
+
+   pygarmin put-waypoints waypoints.gpx -t gpx
+
+Download all activities in FIT format to the files activity001.fit to activityNNN.fit in the current directory::
+
+   pygarmin get-activities -t fit activity%03d.fit
 
 Print real-time position, velocity, and time (PVT) in GPSD JSON format to stdout::
 

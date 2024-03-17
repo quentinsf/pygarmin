@@ -1,7 +1,7 @@
 Date Time datatypes
 ===================
 
-.. currentmodule:: garmin
+.. currentmodule:: pygarmin.datatype
 
 .. autoclass:: DateTime
 .. autoclass:: D600

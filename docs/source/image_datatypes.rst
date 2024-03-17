@@ -1,7 +1,7 @@
 Image datatypes
 ===============
 
-.. currentmodule:: garmin
+.. currentmodule:: pygarmin.datatype
 
 .. autoclass:: RGBA
 .. autoclass:: ImageProp

@@ -1,6 +1,6 @@
 Transmission protocol
 =====================
 
-.. currentmodule:: garmin
+.. currentmodule:: pygarmin.protocol
 
 .. autoclass:: T001

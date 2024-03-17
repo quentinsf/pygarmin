@@ -1,7 +1,7 @@
 Satellite datatypes
-================
+===================
 
-.. currentmodule:: garmin
+.. currentmodule:: pygarmin.datatype
 
 .. autoclass:: SatelliteRecord
 .. autoclass:: Satellite

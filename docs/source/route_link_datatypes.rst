@@ -1,7 +1,7 @@
 Route Link datatypes
 ====================
 
-.. currentmodule:: garmin
+.. currentmodule:: pygarmin.datatype
 
 .. autoclass:: RteLink
 .. autoclass:: D210

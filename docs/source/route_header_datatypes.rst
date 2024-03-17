@@ -1,7 +1,7 @@
 Route Header datatypes
 ======================
 
-.. currentmodule:: garmin
+.. currentmodule:: pygarmin.datatype
 
 .. autoclass:: RteHdr
 .. autoclass:: D200

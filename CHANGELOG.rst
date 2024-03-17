@@ -1,6 +1,23 @@
 Changelog
 =========
 
+[1.2.0] 2024-03-17
+------------------
+
+- Fix datetimes that were off by 12 hours
+- Localize datetimes
+- Fix name clashes of classes
+- Fix A201 route transfer protocol
+- Fix D104 waypoint datatype
+- Fix D304 track point datatype
+- Better layout of submodules
+- Support export to and import from JSON
+- Support import from GPX (export to GPX was already supported)
+- Add creator attribute to exported GPX
+- Support export to FIT
+- Use the same version for the module and the application
+- Various bugfixes
+
 [1.1.1] 2023-12-26
 ------------------
 

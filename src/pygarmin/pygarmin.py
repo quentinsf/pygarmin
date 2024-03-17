@@ -25,7 +25,6 @@
    found at https://opensource.org/licenses/gpl-license.html
 
 """
-__version__ = '0.2'
 
 import argparse
 import base64
@@ -41,6 +40,7 @@ import sys
 from tabulate import tabulate
 from tqdm import tqdm
 import io
+from . import __version__
 from . import garmin as mod_garmin
 from . import error as mod_error
 from . import link as mod_link

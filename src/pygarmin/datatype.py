@@ -1350,16 +1350,13 @@ class D110(D109):
     def get_wpt_cat(self):
         """Return a list of waypoint categories.
 
-        The ``wpt_cat`` member contains a 16 bits that provide category membership
+        The ``wpt_cat`` member contains 16 bits that provide category membership
         information for the waypoint. If a bit is set then the waypoint is a
         member of the corresponding category.
 
         """
-        categories = []
-        bits = f"{self.wpt_cat:016b}"
-        for count, bit in enumerate(bits):
-            if bit == '1':
-                categories.append(count + 1)
+        bits = [(self.wpt_cat >> bit) & 1 for bit in range(16)]
+        categories = [bool(bit) for bit in bits]
         return categories
 
     def is_valid(self):

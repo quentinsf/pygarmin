@@ -2748,6 +2748,30 @@ class D1009(Run):
         """Return the multisport value."""
         return self._multisport.get(self.multisport)
 
+
+class D1010(Run):
+    _time_fmt = Time.get_format()
+    _fields = [('track_index', 'I'),      # Index of associated track
+               ('first_lap_index', 'I'),  # Index of first associated lap
+               ('last_lap_index', 'I'),   # Index of last associated lap
+               ('sport_type', 'B'),       # Sport type (same as D1000)
+               ('program_type', 'B'),     # See below
+               ('multisport', 'B'),       # Same as D1009
+               ('unused', 'B'),           # Unused. Set to 0.
+               ('time', f'{_time_fmt}'),  # Time result of virtual partner
+               ('distance', 'f'),         # Distance result of virtual partner
+               ] + \
+               Workout._fields  # Workout
+    _program_type = {0: 'none',
+                     1: 'virtual_partner',  # Completed with Virtual Partner
+                     2: 'workout',          # Completed as part of a workout
+                     3: 'auto_multisport',  # Completed as part of an auto MultiSport
+                     }
+
+    def get_datetime(self):
+        return Time(self.time).get_datetime()
+
+
 class D1011(Lap):
     _time_fmt = Time.get_format()
     _posn_fmt = Position.get_format()
@@ -2775,29 +2799,6 @@ class D1011(Lap):
 
     def get_trigger_method(self):
         return self._trigger_method.get(self.trigger_method)
-
-
-class D1010(Run):
-    _time_fmt = Time.get_format()
-    _fields = [('track_index', 'I'),      # Index of associated track
-               ('first_lap_index', 'I'),  # Index of first associated lap
-               ('last_lap_index', 'I'),   # Index of last associated lap
-               ('sport_type', 'B'),       # Sport type (same as D1000)
-               ('program_type', 'B'),     # See below
-               ('multisport', 'B'),       # Same as D1009
-               ('unused', 'B'),           # Unused. Set to 0.
-               ('time', f'{_time_fmt}'),  # Time result of virtual partner
-               ('distance', 'f'),         # Distance result of virtual partner
-               ] + \
-               Workout._fields  # Workout
-    _program_type = {0: 'none',
-                     1: 'virtual_partner',  # Completed with Virtual Partner
-                     2: 'workout',          # Completed as part of a workout
-                     3: 'auto_multisport',  # Completed as part of an auto MultiSport
-                     }
-
-    def get_datetime(self):
-        return Time(self.time).get_datetime()
 
 
 class CoursePoint(DataType):

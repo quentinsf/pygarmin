@@ -1203,23 +1203,57 @@ class D109(D108):
     # bits 5-6 specify the waypoint display attribute and bit 7 is unused and
     # must be 0.
 
+    # The ``dspl_color`` member contains three fields; bits 0-4 specify the
+    # color, bits 5-6 specify the waypoint display attribute and bit 7 is
+    # unused and must be 0.
     def get_color(self):
-        """Return the color value."""
-        bit_size = 5
-        shift = 3
-        mask = pow(2, bit_size) - 1
-        color = self.dspl_color >> shift & mask
+        color_value = self.get_color_value()
         # According to the specification the default color value should be 0x1f,
         # but this is an invalid value. It probably should be 0xff.
-        return self._color.get(color, 255)
+        return self._color.get(color_value, 'clr_default_color')
+
+    def get_color_value(self):
+        """Return the color value.
+
+        If an invalid color value is received, the value will be Black.
+
+        """
+        bit_size = 5
+        shift = 0
+        mask = pow(2, bit_size) - 1
+        color_value = self.dspl_color >> shift & mask
+        return color_value
+
+    def set_color_value(self, value):
+        """Set the color value."""
+        bit_size = 5
+        shift = 0
+        color_value = value << shift
+        self.dspl_color = self.get_dspl_value() + color_value
 
     def get_dspl(self):
-        """Return the display attribute value."""
+        dspl_value = self.get_dspl_value()
+        return self._dspl.get(dspl_value, 'dspl_smbl_none')
+
+    def get_dspl_value(self):
+        """Return the display attribute value.
+
+        If an invalid display attribute value is received, the value will be
+        Name.
+
+        """
         bit_size = 2
-        shift = 1
+        shift = 5
         mask = pow(2, bit_size) - 1
-        dspl = self.dspl_color >> shift & mask
-        return self._dspl.get(dspl, 0)
+        dspl_value = self.dspl_color >> shift & mask
+        return dspl_value
+
+    def set_dspl_value(self, value):
+        """Set the dspl value."""
+        bit_size = 2
+        shift = 5
+        dspl_value = value << shift
+        self.dspl_color = dspl_value + self.get_color_value()
 
 
 class D110(D109):
@@ -1281,6 +1315,10 @@ class D110(D109):
               15: 'clr_white',
               16: 'clr_transparent'
               }
+    _dspl = {0: 'dspl_smbl_name',
+             1: 'dspl_smbl_only',
+             2: 'dspl_smbl_comment',
+             }
 
     def __init__(self, attr=128, temp=1.0e25, time=4294967295,
                  wpt_cat=0, **kwargs):
@@ -1298,55 +1336,13 @@ class D110(D109):
         """
         return self._wpt_class.get(self.wpt_class, 0)
 
-    # The ``dspl_color`` member contains three fields; bits 0-4 specify the
-    # color, bits 5-6 specify the waypoint display attribute and bit 7 is
-    # unused and must be 0.
     def get_color(self):
         color_value = self.get_color_value()
-        return self._color.get(color_value, 0)
-
-    def get_color_value(self):
-        """Return the color value.
-
-        If an invalid color value is received, the value will be Black.
-
-        """
-        bit_size = 5
-        shift = 3
-        mask = pow(2, bit_size) - 1
-        color_value = self.dspl_color >> shift & mask
-        return color_value
-
-    def set_color_value(self, value):
-        """Set the color value."""
-        bit_size = 5
-        shift = 3
-        color_value = value << shift
-        self.dspl_color = self.get_dspl_value() + color_value
+        return self._color.get(color_value, 'clr_black')
 
     def get_dspl(self):
         dspl_value = self.get_dspl_value()
-        return self._dspl.get(dspl_value, 0)
-
-    def get_dspl_value(self):
-        """Return the display attribute value.
-
-        If an invalid display attribute value is received, the value will be
-        Name.
-
-        """
-        bit_size = 2
-        shift = 1
-        mask = pow(2, bit_size) - 1
-        dspl_value = self.dspl_color >> shift & mask
-        return dspl_value
-
-    def set_dspl_value(self, value):
-        """Set the dspl value."""
-        bit_size = 2
-        shift = 1
-        dspl_value = value << shift
-        self.dspl_color = dspl_value + self.get_color_value()
+        return self._dspl.get(dspl_value, 'dspl_smbl_none')
 
     def get_datetime(self):
         return Time(self.time).get_datetime()

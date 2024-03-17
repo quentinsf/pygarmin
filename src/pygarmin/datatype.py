@@ -959,7 +959,7 @@ class D104(D101):
                ('posn', f'({_posn_fmt})'),  # position
                ('unused', 'I'),             # should be set to zero
                ('cmnt', '40s'),             # comment
-               ('dst', 'B'),                # proximity distance (meters)
+               ('dst', 'f'),                # proximity distance (meters)
                ('smbl', f'{_smbl_fmt}'),    # symbol id
                ('dspl', 'B'),               # display option
                ]

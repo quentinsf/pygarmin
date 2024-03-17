@@ -374,15 +374,6 @@ class GPXWaypoints(GPX):
                     display_mode = ET.SubElement(waypoint_extension,f'{{{gpxx}}}DisplayMode')
                     dspl = point.get_dspl()
                     display_mode.text = self._display_mode.get(dspl)
-                if point.get_dict().get('wpt_cat') and waypoint_categories is not None:
-                    category_numbers = point.get_wpt_cat()
-                    category_names = [ category.name.decode(encoding='latin_1') for category in waypoint_categories ]
-                    category_members = [ category_names[number-1] for number in category_numbers ]
-                    categories = ET.SubElement(waypoint_extension, f'{{{gpxx}}}Categories')
-                    for category_member in category_members:
-                        category = ET.SubElement(categories, f'{{{gpxx}}}Category')
-                        category.text = category_member
-                        gpx_point.extensions.append(waypoint_extension)
                 gpx.waypoints.append(gpx_point)
         return gpx
 

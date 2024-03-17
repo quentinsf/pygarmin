@@ -6,6 +6,8 @@ from . import datatype as mod_datatype
 from . import logger as mod_logger
 
 class GPX:
+    creator = "Pygarmin - https://github.com/quentinsf/pygarmin/"
+
     _display_mode = {
         'dspl_smbl_none': 'SymbolOnly',
         'dspl_smbl_only': 'SymbolOnly',
@@ -319,6 +321,7 @@ class GPXWaypoints(GPX):
         gpx = gpxpy.gpx.GPX()
         gpx.name = 'Waypoints'
         gpx.description = 'Waypoints'
+        gpx.creator = self.creator
         gpxx = 'gpxx'
         nsmap = { gpxx: 'https://www8.garmin.com/xmlschemas/GpxExtensions/v3/GpxExtensionsv3.xsd' }
         gpx.nsmap = nsmap
@@ -387,6 +390,7 @@ class GPXRoutes(GPX):
         gpx = gpxpy.gpx.GPX()
         gpx.name = 'Routes'
         gpx.description = 'Routes'
+        gpx.creator = self.creator
         gpxx = 'gpxx'
         nsmap = { gpxx: 'https://www8.garmin.com/xmlschemas/GpxExtensions/v3/GpxExtensionsv3.xsd' }
         gpx.nsmap = nsmap
@@ -463,6 +467,7 @@ class GPXTracks(GPX):
         gpx = gpxpy.gpx.GPX()
         gpx.name = 'Tracks'
         gpx.description = 'Tracks'
+        gpx.creator = self.creator
         gpxx = 'gpxx'
         gpxtpx = 'gpxtpx'
         nsmap = { gpxx: 'https://www8.garmin.com/xmlschemas/GpxExtensions/v3/GpxExtensionsv3.xsd',

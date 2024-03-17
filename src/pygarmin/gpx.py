@@ -486,9 +486,9 @@ class GPXTracks(GPX):
                     track_extension = ET.Element(f'{{{gpxx}}}TrackExtension')
                     if point.get_dict().get('color') is not None or point.get_dict().get('dspl_color') is not None:
                         color = point.get_color()
-                        if self._display_color.get('color') is not None:
+                        if self._display_color.get(color) is not None:
                             display_color = ET.SubElement(track_extension, f'{{{gpxx}}}DisplayColor')
-                            display_color.text = self._display_color.get('color')
+                            display_color.text = self._display_color.get(color)
                     gpx_track.extensions.append(track_extension)
                 elif isinstance(point, mod_datatype.TrkPoint):
                     # Possible fields: ('new_trk', 'alt', 'heart_rate', 'sensor',

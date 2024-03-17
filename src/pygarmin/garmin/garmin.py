@@ -4226,10 +4226,16 @@ class D303(D301):
 
 
 class D304(D303):
-    _fields = D303._fields + [('distance', 'f'),    # distance traveled in meters, invalid if 1.0e25
-                              ('cadence', 'B'),     # in revolutions per minute, invalid if 0xFF
-                              ('sensor', '?'),      # is a wheel sensor present?
-                              ]
+    _posn_fmt = Position.get_format()
+    _time_fmt = Time.get_format()
+    _fields = [('posn', f'({_posn_fmt})'),  # position
+               ('time', f'{_time_fmt}'),    # time, invalid if 0xFFFFFFFF
+               ('alt', 'f'),                # altitude in meters, invalid if 1.0e25
+               ('distance', 'f'),           # distance traveled in meters, invalid if 1.0e25
+               ('heart_rate', 'B'),         # heart rate in beats per minute, invalid if 0
+               ('cadence', 'B'),            # in revolutions per minute, invalid if 0xFF
+               ('sensor', '?'),             # is a wheel sensor present?
+               ]
 
     def __init__(self, distance=1.0e25, heart_rate=0, cadence=255, sensor=False, **kwargs):
         super().__init__(**kwargs)
@@ -4241,10 +4247,10 @@ class D304(D303):
     def is_valid_distance(self):
         """Return whether the distance is valid.
 
-        A ``distance`` value of 0 indicates that this parameter is not supported or unknown.
+        A ``distance`` value of 1.0e25, indicating that it is invalid.
 
         """
-        return not self.distance == 0
+        return not f"{self.distance:.1e}" == "1.0e+25"
 
     def is_valid_cadence(self):
         """Return whether the cadence is valid.

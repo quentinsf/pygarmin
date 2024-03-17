@@ -371,7 +371,7 @@ class GPXWaypoints(GPX):
                     depth = ET.SubElement(waypoint_extension, f'{{{gpxx}}}Depth')
                     depth.text = str(point.dpth)
                 if point.get_dict().get('dspl'):
-                    display_mode = ET.SubElement(waypoint_extension,f'{{{gpxx}}}DisplayMode')
+                    display_mode = ET.SubElement(waypoint_extension, f'{{{gpxx}}}DisplayMode')
                     dspl = point.get_dspl()
                     display_mode.text = self._display_mode.get(dspl)
                 gpx.waypoints.append(gpx_point)

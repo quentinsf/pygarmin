@@ -445,6 +445,10 @@ class Pygarmin:
                 data.append(object)
         elif args.format == 'json':
             data = json.load(args.filename, cls=BytesDecoder)
+        elif args.format == 'gpx':
+            datatypes = self.gps.waypoint_transfer.datatypes
+            gpx = GPX.GarminWaypoints(args.filename, datatypes)
+            data = gpx.waypoints
         if args.progress:
             with ProgressBar() as progress_bar:
                 self.gps.put_waypoints(data, callback=progress_bar.update_to)
@@ -490,9 +494,8 @@ class Pygarmin:
             data = json.load(args.filename, cls=BytesDecoder)
         elif args.format == 'gpx':
             datatypes = self.gps.route_transfer.datatypes
-            gpx = GPX.GarminRoutes()
-            routes = gpx.gpx_to_routes(args.filename, datatypes)
-            data = [repr(datatype) for route in routes for datatype in route]
+            gpx = GPX.GarminRoutes(args.filename, datatypes)
+            data = gpx.routes
         if args.progress:
             with ProgressBar() as progress_bar:
                 self.gps.put_routes(data, callback=progress_bar.update_to)
@@ -536,6 +539,10 @@ class Pygarmin:
                 data.append(object)
         elif args.format == 'json':
             data = json.load(args.filename, cls=BytesDecoder)
+        elif args.format == 'gpx':
+            datatypes = self.gps.track_log_transfer.datatypes
+            gpx = GPX.GarminTracks(args.filename, datatypes)
+            data = gpx.tracks
         if args.progress:
             with ProgressBar() as progress_bar:
                 self.gps.put_tracks(data, callback=progress_bar.update_to)
@@ -569,6 +576,10 @@ class Pygarmin:
                 data.append(object)
         elif args.format == 'json':
             data = json.load(args.filename, cls=BytesDecoder)
+        elif args.format == 'gpx':
+            datatypes = self.gps.proximity_waypoint_transfer.datatypes
+            gpx = GPX.GarminWaypoints(args.filename, datatypes)
+            data = gpx.waypoints
         if args.progress:
             with ProgressBar() as progress_bar:
                 self.gps.put_proximities(data, callback=progress_bar.update_to)
@@ -1297,9 +1308,9 @@ put_waypoints = subparsers.add_parser('put-waypoints', help="Upload waypoints")
 put_waypoints.set_defaults(command='put_waypoints')
 put_waypoints.add_argument('-t',
                            '--format',
-                           choices=['garmin', 'json'],
+                           choices=['garmin', 'json', 'gpx'],
                            default='garmin',
-                           help="Set input format. ``garmin`` returns a string that can be executed and will yield the same value as the datatype. ``json`` returns a JSON string of the datatypes.")
+                           help="Set input format. ``garmin`` returns a string that can be executed and will yield the same value as the datatype. ``json`` returns a JSON string of the datatypes. ``gpx`` returns a string in GPS Exchange Format (GPX).")
 put_waypoints.add_argument('filename',
                            nargs='?',
                            type=argparse.FileType(mode='r'),
@@ -1345,9 +1356,9 @@ put_tracks = subparsers.add_parser('put-tracks', help="Upload tracks")
 put_tracks.set_defaults(command='put_tracks')
 put_tracks.add_argument('-t',
                         '--format',
-                        choices=['garmin', 'json'],
+                        choices=['garmin', 'json', 'gpx'],
                         default='garmin',
-                        help="Set input format. ``garmin`` returns a string that can be executed and will yield the same value as the datatype. ``json`` returns a JSON string of the datatypes.")
+                        help="Set input format. ``garmin`` returns a string that can be executed and will yield the same value as the datatype. ``json`` returns a JSON string of the datatypes. ``gpx`` returns a string in GPS Exchange Format (GPX).")
 put_tracks.add_argument('filename',
                         nargs='?',
                         type=argparse.FileType(mode='r'),
@@ -1369,9 +1380,9 @@ put_proximities = subparsers.add_parser('put-proximities', help="Upload proximit
 put_proximities.set_defaults(command='put_proximities')
 put_proximities.add_argument('-t',
                              '--format',
-                             choices=['garmin', 'json'],
+                             choices=['garmin', 'json', 'gpx'],
                              default='garmin',
-                             help="Set input format. ``garmin`` returns a string that can be executed and will yield the same value as the datatype. ``json`` returns a JSON string of the datatypes.")
+                             help="Set input format. ``garmin`` returns a string that can be executed and will yield the same value as the datatype. ``json`` returns a JSON string of the datatypes. ``gpx`` returns a string in GPS Exchange Format (GPX).")
 put_proximities.add_argument('filename',
                              nargs='?',
                              type=argparse.FileType(mode='r'),

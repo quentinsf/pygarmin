@@ -5759,21 +5759,21 @@ class SatelliteRecord(DataType):
         """Return whether the unit has ephemeris data for the specified satellite."""
         shift = 7
         mask = 1
-        bit = self.program_type >> shift & mask
+        bit = self.status >> shift & mask
         return bool(bit)
 
     def has_diff(self):
         """Return whether the unit has a differential correction for the specified satellite."""
         shift = 6
         mask = 1
-        bit = self.program_type >> shift & mask
+        bit = self.status >> shift & mask
         return bool(bit)
 
     def is_used(self):
         """Return whether the unit is using this satellite in the solution."""
         shift = 5
         mask = 1
-        bit = self.program_type >> shift & mask
+        bit = self.status >> shift & mask
         return bool(bit)
 
     def get_prn(self):

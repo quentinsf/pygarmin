@@ -17,7 +17,6 @@ class GPX:
     }
 
     _display_color = {
-        'clr_default': None,
         'clr_default_color': None,
         'clr_black': 'Black',
         'clr_dark_red': 'DarkRed',
@@ -559,26 +558,6 @@ class Garmin():
         'Transparent': 'clr_transparent',
     }
 
-    _color_value = {
-        'clr_black':         0,
-        'clr_dark_red':      1,
-        'clr_dark_green':    2,
-        'clr_dark_yellow':   3,
-        'clr_dark_blue':     4,
-        'clr_dark_magenta':  5,
-        'clr_dark_cyan':     6,
-        'clr_light_gray':    7,
-        'clr_dark_gray':     8,
-        'clr_red':           9,
-        'clr_green':        10,
-        'clr_yellow':       11,
-        'clr_blue':         12,
-        'clr_magenta':      13,
-        'clr_cyan':         14,
-        'clr_white':        15,
-        'clr_transparent':  16,
-    }
-
     _symbol = {
         'Dot, White': 'smbl_dot',
         'Residence': 'smbl_house',
@@ -953,8 +932,7 @@ class GarminRoutes(Garmin):
                     if point.comment is not None:
                         rte_wpt.cmnt = str.encode(point.comment)
                     if 'color' in vars():
-                        color_value = self._color_value.get(color)
-                        rte_wpt.set_color_value(color_value)
+                        rte_wpt.set_color(color)
                     if point.symbol is not None:
                         symbol = self._symbol.get(point.symbol)
                         point_symbol = mod_datatype.Symbol()
@@ -1068,8 +1046,7 @@ class GarminTracks(Garmin):
                             if point_time.is_valid():
                                 trk_point.time = point_time.time
                         if 'color' in vars():
-                            color_value = self._color_value.get(color)
-                            trk_point.set_color_value(color_value)
+                            trk_point.set_color(color)
                         extension = next((extension for extension in point.extensions if extension.tag.endswith('TrackPointExtension')), None)
                         if extension is not None:
                             uri = extension.tag.rstrip('TrackPointExtension')

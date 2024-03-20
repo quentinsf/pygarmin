@@ -1,7 +1,7 @@
 Almanac datatypes
 =================
 
-.. currentmodule:: garmin
+.. currentmodule:: pygarmin.datatype
 
 .. autoclass:: Almanac
 .. autoclass:: D500

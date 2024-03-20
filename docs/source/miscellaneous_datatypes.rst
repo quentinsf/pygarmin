@@ -1,7 +1,7 @@
 Miscellaneous datatypes
 =======================
 
-.. currentmodule:: garmin
+.. currentmodule:: pygarmin.datatype
 
 .. autoclass:: Lap
 .. autoclass:: D906
@@ -31,8 +31,8 @@ Miscellaneous datatypes
 .. autoclass:: D1007
 .. autoclass:: D1008
 .. autoclass:: D1009
-.. autoclass:: D1011
 .. autoclass:: D1010
+.. autoclass:: D1011
 .. autoclass:: CoursePoint
 .. autoclass:: D1012
 .. autoclass:: CourseLimits

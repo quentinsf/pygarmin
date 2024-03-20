@@ -1,7 +1,7 @@
 Physical protocols
 ==================
 
-.. currentmodule:: garmin
+.. currentmodule:: pygarmin.link
 
 .. autoclass:: P000
 .. autoclass:: SerialLink

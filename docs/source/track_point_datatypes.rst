@@ -1,7 +1,7 @@
 Track Point datatypes
 =====================
 
-.. currentmodule:: garmin
+.. currentmodule:: pygarmin.datatype
 
 .. autoclass:: TrkPoint
 .. autoclass:: D300

@@ -1,7 +1,7 @@
 Proximity Waypoint datatypes
 ============================
 
-.. currentmodule:: garmin
+.. currentmodule:: pygarmin.datatype
 
 .. autoclass:: PrxWpt
 .. autoclass:: D400

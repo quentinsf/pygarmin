@@ -1,7 +1,7 @@
 Screenshot datatypes
 ====================
 
-.. currentmodule:: garmin
+.. currentmodule:: pygarmin.datatype
 
 .. autoclass:: RGB
 .. autoclass:: Screenshot

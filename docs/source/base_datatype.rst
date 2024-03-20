@@ -1,6 +1,6 @@
 Base datatype
 ================
 
-.. currentmodule:: garmin
+.. currentmodule:: pygarmin.datatype
 
 .. autoclass:: DataType

@@ -1,7 +1,7 @@
 Flightbook Record datatypes
 ===========================
 
-.. currentmodule:: garmin
+.. currentmodule:: pygarmin.datatype
 
 .. autoclass:: FlightBookRecord
 .. autoclass:: D650

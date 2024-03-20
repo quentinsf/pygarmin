@@ -1,6 +1,6 @@
 Garmin API
 ================
 
-.. currentmodule:: garmin
+.. currentmodule:: pygarmin.garmin
 
 .. autoclass:: Garmin

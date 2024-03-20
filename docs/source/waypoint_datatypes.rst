@@ -1,7 +1,7 @@
 Waypoint datatypes
 ==================
 
-.. currentmodule:: garmin
+.. currentmodule:: pygarmin.datatype
 
 .. autoclass:: Wpt
 .. autoclass:: D100

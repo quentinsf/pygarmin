@@ -1,7 +1,7 @@
 External Time Sync datatypes
 ============================
 
-.. currentmodule:: garmin
+.. currentmodule:: pygarmin.datatype
 
 .. autoclass:: ExternalTimeSyncData
 .. autoclass:: D1051

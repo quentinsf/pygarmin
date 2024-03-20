@@ -1,7 +1,7 @@
 Waypoint Category datatypes
 ===========================
 
-.. currentmodule:: garmin
+.. currentmodule:: pygarmin.datatype
 
 .. autoclass:: WptCat
 .. autoclass:: D120

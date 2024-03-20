@@ -1,7 +1,7 @@
 Memory datatypes
 ================
 
-.. currentmodule:: garmin
+.. currentmodule:: pygarmin.datatype
 
 .. autoclass:: MemProperties
 .. autoclass:: MemFile

@@ -1,7 +1,7 @@
 Product datatypes
 =================
 
-.. currentmodule:: garmin
+.. currentmodule:: pygarmin.datatype
 
 .. autoclass:: ProductData
 .. autoclass:: ExtProductData

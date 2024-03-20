@@ -1,7 +1,7 @@
 Protocol datatypes
 ==================
 
-.. currentmodule:: garmin
+.. currentmodule:: pygarmin.datatype
 
 .. autoclass:: ProtocolData
 .. autoclass:: ProtocolArray

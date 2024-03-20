@@ -1,7 +1,7 @@
 Map datatypes
 =============
 
-.. currentmodule:: garmin
+.. currentmodule:: pygarmin.datatype
 
 .. autoclass:: MapProduct
 .. autoclass:: MapSegment

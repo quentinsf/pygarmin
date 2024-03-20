@@ -88,6 +88,14 @@ Download all waypoints in gpx format to the file waypoints.gpx::
 
    pygarmin get-waypoints waypoints.gpx -t gpx
 
+Upload all waypoints in the file waypoints.gpx::
+
+   pygarmin put-waypoints waypoints.gpx -t gpx
+
+Download all activities in FIT format to the files activity001.fit to activityNNN.fit in the current directory::
+
+   pygarmin get-activities -t fit activity%03d.fit
+
 Print real-time position, velocity, and time (PVT) to stdout::
 
    pygarmin pvt -t tpv
@@ -142,11 +150,11 @@ Basics
 
 Almost every model of Garmin receiver implements a slightly different protocol.
 They have many things in common, but there are minor differences. The class
-``garmin.Garmin`` will create instances of the appropriate protocol classes and
+``Garmin`` will create instances of the appropriate protocol classes and
 notes the datatype classes for each type of data used in the transmissions. It
 also has some friendly methods like ``get_waypoints()``, which do what you would
 expect. What you get back when you call this is a list of objects, each of which
-is a child the ``garmin.Wpt`` class.
+is a child the ``Wpt`` class.
 
 Example Code
 ------------
@@ -157,17 +165,16 @@ Here’s a simple Python program:
 
    #!/usr/bin/env python3
    import logging
-   from garmin import garmin
+   from garmin import garmin, link, logger
 
-   log = logging.getLogger('garmin')
-   log.addHandler(logging.StreamHandler())
-   log.setLevel(logging.INFO)
+   logger.log.addHandler(logging.StreamHandler())
+   logger.log.setLevel(logging.INFO)
 
    # Create a 'physical layer' connection using serial port
-   phys = garmin.SerialLink('/dev/ttyUSB0')
+   phys = link.SerialLink('/dev/ttyUSB0')
 
    # ...or using USB
-   phys = garmin.USBLink()
+   phys = link.USBLink()
 
    # Create a Garmin object using this connection
    gps = garmin.Garmin(phys)
@@ -194,10 +201,10 @@ Here’s a simple Python program:
 
    # Put a new waypoint
    print("Upload a new waypoint:")
-   waypoint = {'ident': 'CHURCH',
-               'cmnt': 'LA SAGRADA FAMILIA',
-               'posn': [493961671, 25937164]}
-   gps.put_waypoints(waypoint)
+   waypoints = [{'ident': b'CHURCH',
+                 'cmnt': b'LA SAGRADA FAMILIA',
+                 'posn': [493961671, 25937164]}]
+   gps.put_waypoints(waypoints)
 
 This should work for most models, because all waypoints will have an identity, a
 position (latitude and longitude), and a comment field. The latitude and

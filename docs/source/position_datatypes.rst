@@ -1,7 +1,7 @@
 Position datatypes
 ==================
 
-.. currentmodule:: garmin
+.. currentmodule:: pygarmin.datatype
 
 .. autoclass:: Position
 .. autoclass:: RadianPosition

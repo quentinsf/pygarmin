@@ -1,7 +1,7 @@
 Track Header datatypes
 ======================
 
-.. currentmodule:: garmin
+.. currentmodule:: pygarmin.datatype
 
 .. autoclass:: TrkHdr
 .. autoclass:: D310

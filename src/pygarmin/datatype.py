@@ -940,8 +940,17 @@ class D103(D100):
         return _smbl.get(self.smbl)
 
     def get_dspl(self):
-        """Return the display attribute value."""
+        """Return the display option."""
         return self._dspl.get(self.dspl, 'dspl_smbl_name')
+
+    def set_dspl(self, dspl):
+        """Set the display option.
+
+        If an invalid display value is received, the value will be 'dspl_smbl_name'.
+
+        """
+        dspl_value = next((key for key, value in self._dspl.items() if value == dspl), 0)
+        self.dspl = dspl_value
 
 
 class D104(D101):
@@ -966,8 +975,17 @@ class D104(D101):
         self.dspl = dspl
 
     def get_dspl(self):
-        """Return the display attribute value."""
+        """Return the display option."""
         return self._dspl.get(self.dspl, 'dspl_smbl_none')
+
+    def set_dspl(self, dspl):
+        """Set the display option.
+
+        If an invalid display value is received, the value will be 'dspl_smbl_none'.
+
+        """
+        dspl_value = next((key for key, value in self._dspl.items() if value == dspl), 0)
+        self.dspl = dspl_value
 
 
 class D105(D101):
@@ -1259,20 +1277,24 @@ class D109(D108):
         return self._dspl.get(dspl_value, 'dspl_smbl_none')
 
     def get_dspl_value(self):
-        """Return the display attribute value.
-
-        If an invalid display attribute value is received, the value will be
-        Name.
-
-        """
+        """Return the display attribute value."""
         bit_size = 2
         shift = 5
         mask = pow(2, bit_size) - 1
         dspl_value = self.dspl_color >> shift & mask
         return dspl_value
 
+    def set_dspl(self, dspl):
+        """Set the display option.
+
+        If an invalid display value is received, the value will be 'dspl_smbl_name'.
+
+        """
+        dspl_value = next((key for key, value in self._dspl.items() if value == dspl), 0)
+        self.set_dspl_value = dspl_value
+
     def set_dspl_value(self, value):
-        """Set the dspl value."""
+        """Set the display attribute value."""
         bit_size = 2
         shift = 5
         dspl_value = value << shift
@@ -1558,7 +1580,7 @@ class D155(D101, D150):
         self.dspl = dspl
 
     def get_dspl(self):
-        """Return the display attribute value."""
+        """Return the display option."""
         return self._dspl.get(self.dspl, 'dspl_smbl_only')
 
 

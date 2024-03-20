@@ -336,11 +336,11 @@ class GPXWaypoints(GPX):
                 longitude = point.get_posn().as_degrees().lon
                 name = point.ident.decode(encoding='latin_1')
                 comment = point.cmnt.decode(encoding='latin_1')
-                if point.get_dict().get('alt') is not None and point.is_valid_alt() is True:
+                if point.get_dict().get('alt') is not None and point.is_valid_alt():
                     elevation = point.alt
                 else:
                     elevation = None
-                if point.get_dict().get('time') is not None and point.is_valid_time() is True:
+                if point.get_dict().get('time') is not None and point.is_valid_time():
                     time = point.get_datetime()
                 else:
                     time = None
@@ -361,13 +361,13 @@ class GPXWaypoints(GPX):
                 waypoint_extension = ET.Element(f'{{{gpxx}}}WaypointExtension')
                 # The 'dst' (D101, D102, D104, D107) and 'dist' (D108, D109,
                 # D100) fields both contain the proximity distance in meters
-                if point.get_dict().get('dst') is not None and point.is_valid_dst() is True:
+                if point.get_dict().get('dst') is not None and point.is_valid_dst():
                     proximity = ET.SubElement(waypoint_extension, f'{{{gpxx}}}Proximity')
                     proximity.text = str(point.dst)
-                if point.get_dict().get('dist') is not None  and point.is_valid_dist() is True:
+                if point.get_dict().get('dist') is not None  and point.is_valid_dist():
                     proximity = ET.SubElement(waypoint_extension, f'{{{gpxx}}}Proximity')
                     proximity.text = str(point.dist)
-                if point.get_dict().get('temp') is not None and point.is_valid_temp() is True:
+                if point.get_dict().get('temp') is not None and point.is_valid_temp():
                     temperature = ET.SubElement(waypoint_extension, f'{{{gpxx}}}Temperature')
                     temperature.text = str(point.temp)
                 if point.get_dict().get('dpth') and point.is_valid_dpth():
@@ -417,13 +417,13 @@ class GPXRoutes(GPX):
                     if point.get_posn().is_valid():
                         latitude = point.get_posn().as_degrees().lat
                         longitude = point.get_posn().as_degrees().lon
-                        if point.get_dict().get('alt') is not None and point.is_valid_alt() is True:
+                        if point.get_dict().get('alt') is not None and point.is_valid_alt():
                             elevation = point.alt
                         else:
                             elevation = None
                         name = point.ident.decode(encoding='latin_1')
                         comment = point.cmnt.decode(encoding='latin_1')
-                        if point.get_dict().get('time') is not None and point.is_valid_time() is True:
+                        if point.get_dict().get('time') is not None and point.is_valid_time():
                             time = point.get_datetime()
                         else:
                             time = None
@@ -496,14 +496,14 @@ class GPXTracks(GPX):
                     if len(gpx.tracks) == 0:
                         gpx_track = gpxpy.gpx.GPXTrack()
                         gpx.tracks.append(gpx_track)
-                    if point.get_dict().get('new_trk') is True or len(gpx_track.segments) == 0:
+                    if point.get_dict().get('new_trk') or len(gpx_track.segments) == 0:
                         gpx_segment = gpxpy.gpx.GPXTrackSegment()
                         gpx_track.segments.append(gpx_segment)
                     if point.get_posn().is_valid():
                         latitude = point.get_posn().as_degrees().lat
                         longitude = point.get_posn().as_degrees().lon
                         time = point.get_datetime()
-                        if point.is_valid_alt() is True:
+                        if point.is_valid_alt():
                             elevation = point.get_dict().get('alt')
                         else:
                             elevation = None
@@ -515,13 +515,13 @@ class GPXTracks(GPX):
                         if point.get_dict().get('heart_rate') is not None:
                             hr = ET.SubElement(track_point_extension, f'{{{gpxtpx}}}hr')
                             hr.text = str(point.heart_rate)
-                        if point.get_dict().get('dpth') is not None and point.is_valid_dpth() is True:
+                        if point.get_dict().get('dpth') is not None and point.is_valid_dpth():
                             depth = ET.SubElement(track_point_extension, f'{{{gpxtpx}}}depth')
                             depth.text = str(point.dpth)
                         if point.get_dict().get('cadence') is not None:
                             cad = ET.SubElement(track_point_extension, f'{{{gpxtpx}}}cad')
                             cad.text = str(point.cadence)
-                        if point.get_dict().get('temp') is not None and point.is_valid_temp() is True:
+                        if point.get_dict().get('temp') is not None and point.is_valid_temp():
                             atemp = ET.SubElement(track_point_extension, f'{{{gpxtpx}}}atemp')
                             atemp.text = str(point.temp)
                         gpx_point.extensions.append(track_point_extension)

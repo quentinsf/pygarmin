@@ -1014,9 +1014,9 @@ class D107(D103):
                ('color', 'B'),              # waypoint color
                ]
     _color = {0: 'clr_default_color',  # default waypoint color
-              1: 'clr_red',      # red
-              2: 'clr_green',    # green
-              3: 'clr_blue',     # blue
+              1: 'clr_red',            # red
+              2: 'clr_green',          # green
+              3: 'clr_blue',           # blue
               }
 
     def __init__(self, dst=0, color=0, **kwargs):
@@ -1025,8 +1025,13 @@ class D107(D103):
         self.color = color
 
     def get_color(self):
-        """Return the color value."""
+        """Return the color."""
         return self._color.get(self.color, 'clr_default_color')
+
+    def set_color(self, color):
+        """Set the color."""
+        color_value = next((key for key, value in self._color.items() if value == color), 0)
+        self.set_color_value(color_value)
 
     def is_valid_dst(self):
         """Return whether the proximity distance is valid.
@@ -1121,6 +1126,16 @@ class D108(D103):
     def get_color(self):
         """Return the color value."""
         return self._color.get(self.color, 'clr_default_color')
+
+    def set_color(self, color):
+        """Set the color.
+
+        If an invalid color value is received, the value will be
+        'clr_default_color'.
+
+        """
+        color_value = next((key for key, value in self._color.items() if value == color), 255)
+        self.set_color_value(color_value)
 
     def get_symbol(self):
         return Symbol(self.smbl)
@@ -1222,6 +1237,15 @@ class D109(D108):
         mask = pow(2, bit_size) - 1
         color_value = self.dspl_color >> shift & mask
         return color_value
+
+    def set_color(self, color):
+        """Set the color.
+
+        If an invalid color value is received, the value will be Black.
+
+        """
+        color_value = next((key for key, value in self._color.items() if value == color), 255)
+        self.set_color_value(color_value)
 
     def set_color_value(self, value):
         """Set the color value."""

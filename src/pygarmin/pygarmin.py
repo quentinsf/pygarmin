@@ -336,6 +336,8 @@ class Pygarmin:
         elif args.format == 'gpx':
             gpx_waypoints = GPX.GPXWaypoints(datatypes)
             args.filename.write(f"{gpx_waypoints.gpx.to_xml()}\n")
+        else:
+            sys.exit(f"Output format {args.format} is not supported")
 
     def put_waypoints(self, args):
         if args.format == 'garmin':
@@ -349,6 +351,8 @@ class Pygarmin:
             datatypes = self.gps.waypoint_transfer.datatypes
             gpx = GPX.GarminWaypoints(args.filename, datatypes)
             data = gpx.waypoints
+        else:
+            sys.exit(f"Output format {args.format} is not supported")
         if args.progress:
             with ProgressBar() as progress_bar:
                 self.gps.put_waypoints(data, callback=progress_bar.update_to)
@@ -383,6 +387,8 @@ class Pygarmin:
             elif args.format == 'gpx':
                 gpx_routes = GPX.GPXRoutes(routes)
                 args.filename.write(f"{gpx_routes.gpx.to_xml()}\n")
+            else:
+                sys.exit(f"Output format {args.format} is not supported")
 
     def put_routes(self, args):
         if args.format == 'garmin':
@@ -396,6 +402,8 @@ class Pygarmin:
             datatypes = self.gps.route_transfer.datatypes
             gpx = GPX.GarminRoutes(args.filename, datatypes)
             data = gpx.routes
+        else:
+            sys.exit(f"Output format {args.format} is not supported")
         if args.progress:
             with ProgressBar() as progress_bar:
                 self.gps.put_routes(data, callback=progress_bar.update_to)
@@ -430,6 +438,8 @@ class Pygarmin:
         elif args.format == 'gpx':
             gpx_tracks = GPX.GPXTracks(tracks)
             args.filename.write(f"{gpx_tracks.gpx.to_xml()}\n")
+        else:
+            sys.exit(f"Output format {args.format} is not supported")
 
     def put_tracks(self, args):
         if args.format == 'garmin':
@@ -443,6 +453,8 @@ class Pygarmin:
             datatypes = self.gps.track_log_transfer.datatypes
             gpx = GPX.GarminTracks(args.filename, datatypes)
             data = gpx.tracks
+        else:
+            sys.exit(f"Output format {args.format} is not supported")
         if args.progress:
             with ProgressBar() as progress_bar:
                 self.gps.put_tracks(data, callback=progress_bar.update_to)
@@ -467,6 +479,8 @@ class Pygarmin:
         elif args.format == 'gpx':
             gpx_proximities = GPX.GPXWaypoints(datatypes)
             args.filename.write(f"{gpx_proximities.gpx.to_xml()}\n")
+        else:
+            sys.exit(f"Output format {args.format} is not supported")
 
     def put_proximities(self, args):
         if args.format == 'garmin':
@@ -480,6 +494,8 @@ class Pygarmin:
             datatypes = self.gps.proximity_waypoint_transfer.datatypes
             gpx = GPX.GarminWaypoints(args.filename, datatypes)
             data = gpx.waypoints
+        else:
+            sys.exit(f"Output format {args.format} is not supported")
         if args.progress:
             with ProgressBar() as progress_bar:
                 self.gps.put_proximities(data, callback=progress_bar.update_to)
@@ -501,6 +517,8 @@ class Pygarmin:
         elif args.format == 'json':
             almanacs = [datatype.get_dict() for datatype in datatypes]
             json.dump(almanacs, args.filename, cls=BytesEncoder)
+        else:
+            sys.exit(f"Output format {args.format} is not supported")
 
     def get_time(self, args):
         time = self.gps.get_time()
@@ -510,6 +528,8 @@ class Pygarmin:
             args.filename.write(f"{repr(time)}\n")
         elif args.format == 'json':
             json.dump(time.get_dict(), args.filename, cls=BytesEncoder)
+        else:
+            sys.exit(f"Output format {args.format} is not supported")
 
     def get_position(self, args):
         position = self.gps.get_position()
@@ -519,6 +539,8 @@ class Pygarmin:
             args.filename.write(f"{repr(position)}\n")
         elif args.format == 'json':
             json.dump(position.get_dict(), args.filename, cls=BytesEncoder)
+        else:
+            sys.exit(f"Output format {args.format} is not supported")
 
     def pvt(self, args):
         def signal_handler(signal, frame):
@@ -545,6 +567,8 @@ class Pygarmin:
                     args.filename.write(f"{GPSD.SKY(pvt)}\n")
                 else:
                     mod_logger.log.warning(f"Unknown datatype {type(pvt).__name__}")
+            else:
+                sys.exit(f"Output format {args.format} is not supported")
             args.filename.flush()
 
     def get_laps(self, args):
@@ -558,6 +582,8 @@ class Pygarmin:
                 args.filename.write(f"{str(lap)}\n")
             elif args.format == 'garmin':
                 args.filename.write(f"{repr(lap)}\n")
+            else:
+                sys.exit(f"Output format {args.format} is not supported")
 
     def get_runs(self, args):
         if args.progress:
@@ -738,6 +764,8 @@ class Pygarmin:
                 fit = FIT.FITCourse(self.gps, course)
                 fit_file = fit.build()
                 data = fit_file.to_bytes()
+            else:
+                sys.exit(f"Output format {args.format} is not supported")
             if args.filename == sys.stdout:
                 _print(data)
             else:
@@ -776,6 +804,8 @@ class Pygarmin:
             args.filename.write(f"{str(fitness_user_profile)}\n")
         elif args.format == 'garmin':
             args.filename.write(f"{repr(fitness_user_profile)}\n")
+        else:
+            sys.exit(f"Output format {args.format} is not supported")
 
     def get_activities(self, args):
         if args.progress:

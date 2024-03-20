@@ -796,20 +796,24 @@ class Symbol(DataType):
         16402: 'sym_seaplane',                    # seaplane base
     }
 
-    def __init__(self, smbl=0):
+    def __init__(self, smbl=18):
         self.smbl = smbl
 
     def __str__(self):
         return f'{self.get_smbl()}'
 
     def get_smbl(self):
-        """Get the symbol value."""
-        return self._smbl.get(self.smbl)
+        """Get the symbol."""
+        return self._smbl.get(self.smbl, 'sym_wpt_dot')
 
-    def set_smbl(self, value):
-        """Set the symbol value."""
-        keys = [key for key, item in self._smbl.items() if item == value]
-        self.smbl = keys[0] if keys else 0
+    def set_smbl(self, symbol):
+        """Set the symbol.
+
+        If an invalid symbol is received, it will be substituted by a generic dot symbol.
+
+        """
+        smbl_value = next((key for key, item in self._smbl.items() if item == symbol), 18)
+        self.smbl = smbl_value
 
 
 class Wpt(DataType):

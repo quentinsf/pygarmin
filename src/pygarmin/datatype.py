@@ -1178,6 +1178,25 @@ class D109(D108):
                ('cross_road', 'n'),         # intersecting road label
                ]
 
+    _color = {0:  'clr_black',
+              1:  'clr_dark_red',
+              2:  'clr_dark_green',
+              3:  'clr_dark_yellow',
+              4:  'clr_dark_blue',
+              5:  'clr_dark_magenta',
+              6:  'clr_dark_cyan',
+              7:  'clr_light_gray',
+              8:  'clr_dark_gray',
+              9:  'clr_red',
+              10: 'clr_green',
+              11: 'clr_yellow',
+              12: 'clr_blue',
+              13: 'clr_magenta',
+              14: 'clr_cyan',
+              15: 'clr_white',
+              31: 'clr_default_color'
+              }
+
     def __init__(self, dtyp=1, dspl_color=0, attr=112, ete=4294967295, **kwargs):
         super().__init__(**kwargs)
         self.dtyp = dtyp
@@ -1194,16 +1213,10 @@ class D109(D108):
     # unused and must be 0.
     def get_color(self):
         color_value = self.get_color_value()
-        # According to the specification the default color value should be 0x1f,
-        # but this is an invalid value. It probably should be 0xff.
         return self._color.get(color_value, 'clr_default_color')
 
     def get_color_value(self):
-        """Return the color value.
-
-        If an invalid color value is received, the value will be Black.
-
-        """
+        """Return the color value."""
         bit_size = 5
         shift = 0
         mask = pow(2, bit_size) - 1

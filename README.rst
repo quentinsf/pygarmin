@@ -165,7 +165,7 @@ Here’s a simple Python program:
 
    #!/usr/bin/env python3
    import logging
-   from garmin import garmin, link, logger
+   from pygarmin import garmin, link, logger
 
    logger.log.addHandler(logging.StreamHandler())
    logger.log.setLevel(logging.INFO)

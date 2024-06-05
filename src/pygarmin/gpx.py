@@ -897,6 +897,7 @@ class GarminRoutes(Garmin):
         gpx = gpxpy.parse(xml_or_file)
         routes = []
         if gpx.routes:
+            mod_logger.log.info(f"Converting {len(gpx.routes)} route(s)")
             for route in gpx.routes:
                 if issubclass(datatypes[0], mod_datatype.RteHdr):
                     rte_hdr = datatypes[0]()
@@ -914,8 +915,10 @@ class GarminRoutes(Garmin):
                 else:
                     point_type = datatypes[0]
                     routes.append([])
+                mod_logger.log.info(f"Converting {len(route.points)} point(s)")
                 points = []
-                for point in route.points:
+                for idx, point in enumerate(route.points):
+                    mod_logger.log.info(f"Adding waypoint {idx+1}")
                     rte_wpt = point_type()
                     degree_posn = mod_datatype.DegreePosition(point.latitude, point.longitude)
                     posn = degree_posn.as_semicircles()
@@ -953,6 +956,7 @@ class GarminRoutes(Garmin):
                     points = list(self.join(points, rte_link))
                 routes[-1].extend(points)
         elif gpx.tracks:
+            mod_logger.log.info(f"Converting {len(gpx.tracks)} route(s)")
             for track in gpx.tracks:
                 if issubclass(datatypes[0], mod_datatype.RteHdr):
                     mod_logger.log.info(f"{datatypes[0]}, {mod_datatype.RteHdr}")
@@ -973,8 +977,9 @@ class GarminRoutes(Garmin):
                     routes.append([])
                 points = []
                 for segment in track.segments:
+                    mod_logger.log.info(f"Converting {sum([len(segment.points) for segment in track.segments])} point(s)")
                     for idx, point in enumerate(segment.points):
-                        mod_logger.log.info(f"Adding waypoint {idx}")
+                        mod_logger.log.info(f"Adding waypoint {idx+1}")
                         rte_wpt = point_type()
                         degree_posn = mod_datatype.DegreePosition(point.latitude, point.longitude)
                         posn = degree_posn.as_semicircles()

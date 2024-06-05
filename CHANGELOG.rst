@@ -1,6 +1,11 @@
 Changelog
 =========
 
+[2.0.0] 2024-06-06
+------------------
+- Fix example code in README
+- Increase the major version number because of the breaking change in version 1.2.2
+
 [1.2.2] 2024-06-05
 ------------------
 

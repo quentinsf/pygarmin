@@ -685,18 +685,19 @@ class A201(TransferProtocol):
 
     def put_data(self, routes, callback=None):
         packets = []
-        if all(isinstance(datatype, mod_datatype.DataType) for datatype in routes):
-            for datatype in routes:
-                if isinstance(datatype, mod_datatype.RteHdr):
-                    pid = self.gps.link.pid_rte_hdr
-                elif isinstance(datatype, mod_datatype.Wpt):
-                    pid = self.gps.link.pid_rte_wpt_data
-                elif isinstance(datatype, mod_datatype.RteLink):
-                    pid = self.gps.link.pid_rte_link_data
-                else:
-                    raise mod_error.ProtocolError("Invalid datatype: expected {self.datatypes[0].__name__}, {self.datatypes[1].__name__}, or {self.datatypes[2].__name__}")
-                packet = {'id': pid, 'data': datatype}
-                packets.append(packet)
+        if all(isinstance(datatype, mod_datatype.DataType) for route in routes for datatype in route):
+            for route in routes:
+                for datatype in route:
+                    if isinstance(datatype, mod_datatype.RteHdr):
+                        pid = self.gps.link.pid_rte_hdr
+                    elif isinstance(datatype, mod_datatype.Wpt):
+                        pid = self.gps.link.pid_rte_wpt_data
+                    elif isinstance(datatype, mod_datatype.RteLink):
+                        pid = self.gps.link.pid_rte_link_data
+                    else:
+                        raise mod_error.ProtocolError("Invalid datatype: expected {self.datatypes[0].__name__}, {self.datatypes[1].__name__}, or {self.datatypes[2].__name__}")
+                    packet = {'id': pid, 'data': datatype}
+                    packets.append(packet)
         elif all(isinstance(datatype, dict) for route in routes for datatype in route):
             for route in routes:
                 header = route[0]

@@ -945,10 +945,17 @@ class GarminRoutes(Garmin):
                         if subclass is not None:
                             rte_wpt.subclass = bytes.fromhex(subclass.text)
                     points.append(rte_wpt)
+                # The A201 route transfer protocol adds an undocumented proprietary
+                # waypoint link between waypoints
+                if any([issubclass(datatype, mod_datatype.RteLink) for datatype in datatypes]):
+                    rte_link = datatypes[2]()
+                    mod_logger.log.info(f"Linking waypoints")
+                    points = list(self.join(points, rte_link))
+                routes[-1].extend(points)
         elif gpx.tracks:
             for track in gpx.tracks:
-                if issubclass(datatypes[0], mod_datatype.TrkHdr):
-                    mod_logger.log.info(f"{datatypes[0]}, {mod_datatype.TrkHdr}")
+                if issubclass(datatypes[0], mod_datatype.RteHdr):
+                    mod_logger.log.info(f"{datatypes[0]}, {mod_datatype.RteHdr}")
                     rte_hdr = datatypes[0]()
                     point_type = datatypes[1]
                     mod_logger.log.info(f"Adding route {track.name}")
@@ -989,13 +996,13 @@ class GarminRoutes(Garmin):
                             if depth is not None:
                                 rte_wpt.dpth = depth
                         points.append(rte_wpt)
-        # The A201 route transfer protocol adds an undocumented proprietary
-        # waypoint link between waypoints
-        if any([issubclass(datatype, mod_datatype.RteLink) for datatype in datatypes]):
-            rte_link = datatypes[2]()
-            mod_logger.log.info(f"Linking waypoints")
-            points = list(self.join(points, rte_link))
-        routes[-1].extend(points)
+                # The A201 route transfer protocol adds an undocumented proprietary
+                # waypoint link between waypoints
+                if any([issubclass(datatype, mod_datatype.RteLink) for datatype in datatypes]):
+                    rte_link = datatypes[2]()
+                    mod_logger.log.info(f"Linking waypoints")
+                    points = list(self.join(points, rte_link))
+                routes[-1].extend(points)
         return routes
 
 

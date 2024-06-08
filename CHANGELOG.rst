@@ -1,6 +1,10 @@
 Changelog
 =========
 
+[2.0.1] 2024-06-08
+------------------
+Determine USB endpoints dynamically (fixes issue #9)
+
 [2.0.0] 2024-06-06
 ------------------
 - Fix example code in README

@@ -299,7 +299,6 @@ class USBLink(P000):
 
     """
     idVendor = 2334  # 0x091e
-    configuration_value = 1
     max_buffer_size = 4096
 
     # Packet Types
@@ -363,10 +362,13 @@ class USBLink(P000):
         # This prevents the configuration selection problem described in the
         # libusb documentation
         # (https://libusb.sourceforge.io/api-1.0/libusb_caveats.html#configsel).
-        cfg = self.dev.get_active_configuration()
-        if cfg.bConfigurationValue != self.configuration_value:
-            self.dev.set_configuration(self.configuration_value)
+        cfg_desired = 1
+        try:
             cfg = self.dev.get_active_configuration()
+        except usb.core.USBError:
+            cfg = None
+        if cfg is None or cfg.bConfigurationValue != cfg_desired:
+            self.dev.set_configuration(cfg_desired)
         return cfg
 
     @cached_property

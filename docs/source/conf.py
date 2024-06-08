@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.abspath('../../src'))
 project = 'Pygarmin'
 copyright = '2022, Folkert van der Beek'
 author = 'Folkert van der Beek'
-release = '2.0.0'
+release = '2.0.1'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

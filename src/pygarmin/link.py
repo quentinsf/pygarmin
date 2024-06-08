@@ -305,11 +305,6 @@ class USBLink(P000):
     USB_Protocol_Layer = 0  # 0x00
     Application_Layer = 20  # 0x14
 
-    # Endpoints
-    Bulk_OUT = 2        # 0x02
-    Interrupt_IN = 129  # 0x81
-    Bulk_IN = 131       # 0x83  # unused
-
     # USB Protocol Layer Packet Ids
     pid_data_available = 2  # unused
     pid_start_session = 5
@@ -318,6 +313,8 @@ class USBLink(P000):
     def __init__(self):
         self.timeout = 1
         self.max_retries = 5
+        self.ep_out = self.bulk_out.bEndpointAddress
+        self.ep_in = self.intr_in.bEndpointAddress
         self.start_session()
 
     def __del__(self):
@@ -383,27 +380,50 @@ class USBLink(P000):
         return intf
 
     @cached_property
-    def ep_in(self):
-        """Return the Interrupt IN instance.
-
-        This property will cause some USB traffic the first time it is accessed
-        and cache the resulting value for future use.
-
-        """
-        ep = usb.util.find_descriptor(self.intf, bEndpointAddress=self.Interrupt_IN)
-        return ep
-
-    @cached_property
-    def ep_out(self):
+    def bulk_out(self):
         """Return the Bulk OUT instance.
 
         This property will cause some USB traffic the first time it is accessed
         and cache the resulting value for future use.
 
         """
+        descr = usb.util.find_descriptor(self.intf, custom_match=lambda e: self._is_bulk_type(e) & self._is_ep_out(e))
+        return descr
 
-        ep = usb.util.find_descriptor(self.intf, bEndpointAddress=self.Bulk_OUT)
+    @cached_property
+    def intr_in(self):
+        """Return the Interrupt IN instance.
+
+        This property will cause some USB traffic the first time it is accessed
+        and cache the resulting value for future use.
+
+        """
+        descr = usb.util.find_descriptor(self.intf, custom_match=lambda e: self._is_intr_type(e) & self._is_ep_in(e))
+        return descr
+
+    @cached_property
+    def bulk_in(self):
+        """Return the Bulk IN instance.
+
+        This property will cause some USB traffic the first time it is accessed
+        and cache the resulting value for future use.
+
+        """
+        descr = usb.util.find_descriptor(self.intf, custom_match=lambda e: self._is_bulk_type(e) & self._is_ep_in(e))
+        ep = descr.bEndpointAddress
         return ep
+
+    def _is_bulk_type(self, ep):
+        return usb.util.endpoint_type(ep.bmAttributes) == usb.util.ENDPOINT_TYPE_BULK
+
+    def _is_intr_type(self, ep):
+        return usb.util.endpoint_type(ep.bmAttributes) == usb.util.ENDPOINT_TYPE_INTR
+
+    def _is_ep_out(self, ep):
+        return usb.util.endpoint_direction(ep.bEndpointAddress) == usb.util.ENDPOINT_OUT
+
+    def _is_ep_in(self, ep):
+        return usb.util.endpoint_direction(ep.bEndpointAddress) == usb.util.ENDPOINT_IN
 
     def unpack(self, buffer):
         """Unpack a raw USB packet.
@@ -463,12 +483,11 @@ class USBLink(P000):
 
     def read(self):
         """Read buffer."""
-        endpoint = self.Interrupt_IN
         size = self.max_buffer_size
         # The libusb timeout is specified in milliseconds
         timeout = self.timeout * 1000 if self.timeout else None
         try:
-            buffer = self.dev.read(endpoint, size, timeout=timeout)
+            buffer = self.dev.read(self.ep_in, size, timeout=timeout)
         except usb.core.USBError as e:
             raise mod_error.LinkError(e.strerror)
         # pyusb returns an array object, but we want a bytes object
@@ -476,11 +495,10 @@ class USBLink(P000):
 
     def write(self, buffer):
         """Write buffer."""
-        endpoint = self.Bulk_OUT
         # The libusb timeout is specified in milliseconds
         timeout = self.timeout * 1000 if self.timeout else None
         try:
-            self.dev.write(endpoint, buffer, timeout=timeout)
+            self.dev.write(self.ep_out, buffer, timeout=timeout)
         except usb.core.USBError as e:
             raise mod_error.LinkError(e.strerror)
 

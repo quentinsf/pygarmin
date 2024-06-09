@@ -81,7 +81,7 @@ class Garmin():
     need to be installed. To communicate with a Garmin device connected to the
     serial port ``/dev/ttyUSB0``, you could try this:
 
-    >>> from garmin import garmin, link
+    >>> from pygarmin import garmin, link
     >>> port = '/dev/ttyUSB0'
     >>> phys = link.SerialLink(port)
     >>> gps = garmin.Garmin(phys)
@@ -91,7 +91,7 @@ class Garmin():
     GNU/Linux, you probably should remove and blacklist the ``garmin_gps``
     kernel module.
 
-    >>> from garmin import garmin, link
+    >>> from pygarmin import garmin, link
     >>> phys = link.USBLink()
     >>> gps = garmin.Garmin(phys)
     >>> print(gps.product_data)

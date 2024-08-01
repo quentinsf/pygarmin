@@ -2215,6 +2215,11 @@ class Lap(DataType):
     def get_start_datetime(self):
         return Time(self.start_time).get_datetime()
 
+    def get_stop_datetime(self):
+        if self.get_start_datetime():
+            delta = timedelta(milliseconds=self.total_time * 10)
+            return self.get_start_datetime() + delta
+
     def get_begin(self):
         return Position(*self.begin)
 
@@ -2645,7 +2650,7 @@ class D1008(Workout):
 class D1009(Run):
     _quickworkout_fmt = QuickWorkout.get_format()
     _workout_fmt = Workout.get_format()
-    _fields = [('track_index', 'H'),      # Index of associated track
+    _fields = [('track_index', 'H'),      # Index of associated track. 0xFFFF if no associated track
                ('first_lap_index', 'H'),  # Index of first associated lap
                ('last_lap_index', 'H'),   # Index of last associated lap
                ('sport_type', 'B'),       # Same as D1000

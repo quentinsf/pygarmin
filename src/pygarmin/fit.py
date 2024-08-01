@@ -131,8 +131,8 @@ class FITActivity(FIT):
             run = session[0]
             laps = session[1]
             track = session[2]
-            start_timestamp = round(track[1].get_datetime().astimezone().timestamp() * 1000)
-            stop_timestamp = round(track[-1].get_datetime().astimezone().timestamp() * 1000)
+            start_timestamp = round(laps[0].get_start_datetime().astimezone().timestamp() * 1000)
+            stop_timestamp = round(laps[-1].get_stop_datetime().astimezone().timestamp() * 1000)
             timestamp = stop_timestamp
             total_time = sum([lap.total_time for lap in laps])
             total_distance = sum([lap.total_dist for lap in laps])

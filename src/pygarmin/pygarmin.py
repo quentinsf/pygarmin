@@ -610,13 +610,16 @@ class Pygarmin:
         for idx, run in enumerate(runs):
             mod_logger.log.info(f"Adding run {idx}")
             lap_indices = range(run.first_lap_index, run.last_lap_index + 1)
-            track_index = run.track_index
-            laps = [lap for lap in laps if lap.index in lap_indices]
-            for track in tracks:
-                if track[0].index == track_index:
-                    track = track
-                    break
-            result.append([run, laps, track])
+            track_index = run.get_track_index()
+            run_laps = [lap for lap in laps if lap.index in lap_indices]
+            if track_index:
+                for track in tracks:
+                    if track[0].index == track_index:
+                        run_track = track
+                        break
+            else:
+                run_track = []
+            result.append([run, run_laps, run_track])
         for idx, run in enumerate(result):
             if args.format == 'txt':
                 datatypes = []
@@ -643,8 +646,8 @@ class Pygarmin:
                 single_modulo = '(?<!%)%(?!%)'  # match a single % character
                 if os.path.isdir(args.filename):
                     # No filename is given, so use the start time by default
-                    track = run[2]
-                    stem = track[1].get_datetime().astimezone().isoformat()
+                    laps = run[1]
+                    stem = laps[0].get_start_datetime().astimezone().isoformat()
                     if args.format == 'fit':
                         suffix = '.fit'
                     elif args.format == 'txt' or args.format == 'garmin':
@@ -832,12 +835,15 @@ class Pygarmin:
         for idx, run in enumerate(runs):
             mod_logger.log.info(f"Adding run {idx}")
             lap_indices = range(run.first_lap_index, run.last_lap_index + 1)
-            track_index = run.track_index
+            track_index = run.get_track_index()
             run_laps = [lap for lap in laps if lap.index in lap_indices]
-            for track in tracks:
-                if track[0].index == track_index:
-                    run_track = track
-                    break
+            if track_index:
+                for track in tracks:
+                    if track[0].index == track_index:
+                        run_track = track
+                        break
+            else:
+                run_track = []
             result.append([run, run_laps, run_track])
         # Third, aggregate multisport runs
         activities = []
@@ -868,8 +874,8 @@ class Pygarmin:
                     if os.path.isdir(args.filename):
                         # No filename is given, so use the start time by default
                         first_session = activity[0]
-                        track = first_session[2]
-                        stem = track[1].get_datetime().astimezone().isoformat()
+                        laps = first_session[1]
+                        stem = laps[0].get_start_datetime().astimezone().isoformat()
                         suffix = '.fit'
                         filename = stem + suffix
                         path = os.path.join(args.filename, filename)

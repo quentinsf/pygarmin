@@ -1,6 +1,12 @@
 Changelog
 =========
 
+[2.0.2] 2024-08-01
+------------------
+- Fix export error for runs and activities
+- Fix scale of FIT time
+- Fix example code in Sphinx documentation
+
 [2.0.1] 2024-06-08
 ------------------
 Determine USB endpoints dynamically (fixes issue #9)

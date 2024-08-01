@@ -134,7 +134,8 @@ class FITActivity(FIT):
             start_timestamp = round(laps[0].get_start_datetime().astimezone().timestamp() * 1000)
             stop_timestamp = round(laps[-1].get_stop_datetime().astimezone().timestamp() * 1000)
             timestamp = stop_timestamp
-            total_time = sum([lap.total_time for lap in laps])
+            # Garmin describes total_time in hundredths of a second, FIT in seconds
+            total_time = round(sum([lap.total_time for lap in laps]) / 100)
             total_distance = sum([lap.total_dist for lap in laps])
             builder.add(self.start_event_message(start_timestamp))
             builder.add_all(self.lap_message(laps))
@@ -181,8 +182,8 @@ class FITActivity(FIT):
             message = LapMessage()
             message.message_index = lap.index
             message.start_time = round(lap.get_start_datetime().astimezone().timestamp()) * 1000
-            message.total_elapsed_time = lap.total_time
-            message.total_timer_time = lap.total_time
+            message.total_elapsed_time = round(lap.total_time / 100)
+            message.total_timer_time = round(lap.total_time / 100)
             message.timestamp = message.start_time + message.total_elapsed_time
             message.total_distance = lap.total_dist
             if lap.get_begin().is_valid():

@@ -261,7 +261,7 @@ class SerialLink(P000):
             mod_logger.log.debug("Received NAK packet")
             raise mod_error.LinkError("Packet was not received correctly")
         else:
-            raise GarminError("Received neither ACK nor NAK packet")
+            raise mod_error.GarminError("Received neither ACK nor NAK packet")
 
     def send_ack(self, pid):
         """Send an ACK packet."""

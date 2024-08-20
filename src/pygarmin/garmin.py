@@ -369,10 +369,10 @@ class Garmin():
         (https://www8.garmin.com/support/download_details.jsp?id=209).
 
         """
-        mod_logger.log.info("Request Product Id...")
+        mod_logger.log.info("Request Unit ID...")
         self.link.send_packet(self.link.pid_command_data,
                               self.command.cmnd_transfer_unit_id)
-        mod_logger.log.info("Expect Product Id packet")
+        mod_logger.log.info("Expect Unit ID packet")
         packet = self.link.expect_packet(self.link.pid_unit_id)
         unit_id = int.from_bytes(packet['data'], byteorder='little')
         return unit_id

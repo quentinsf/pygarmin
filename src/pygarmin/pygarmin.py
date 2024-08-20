@@ -247,6 +247,11 @@ class Pygarmin:
         info += f"Product ID: {self.gps.product_id}\n"
         info += f"Software version: {self.gps.software_version:.2f}\n"
         info += f"Product description: {self.gps.product_description}\n"
+        args.filename.write(info)
+
+    def unit_id(self, args):
+        info = "Unit ID\n"
+        info += "===================\n"
         info += f"Unit ID: {self.gps.unit_id}\n"
         args.filename.write(info)
 
@@ -1207,6 +1212,14 @@ info.add_argument('filename',
                   default=sys.stdout,
                   # Write output to <file> instead of stdout.
                   help="Set output file")
+unit_id = subparsers.add_parser('unit-id', help="Return unit ID")
+unit_id.set_defaults(command='unit_id')
+unit_id.add_argument('filename',
+                     nargs='?',
+                     type=argparse.FileType(mode='w'),
+                     default=sys.stdout,
+                     # Write output to <file> instead of stdout.
+                     help="Set output file")
 protocols = subparsers.add_parser('protocols', help="Return protocol capabilities")
 protocols.set_defaults(command='protocols')
 protocols.add_argument('filename',

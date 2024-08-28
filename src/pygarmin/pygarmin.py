@@ -1170,8 +1170,8 @@ parser = argparse.ArgumentParser(prog='pygarmin',
 """Command line application to communicate with a Garmin GPS device.
 
 Pygarmin can retrieve information from the device, such as the product
-description including the unit ID, the supported protocols, memory properties,
-and information on the installed maps. supports bi-directional transfer of
+description, the unit ID, the supported protocols, memory properties, and
+information on the installed maps. supports bi-directional transfer of
 waypoints, routes, track logs, proximity waypoints, maps and images such as
 custom waypoint icons. It is able to receive laps, runs, satellite almanac,
 current time, current position, and screenshots. It can continuously receive

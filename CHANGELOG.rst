@@ -1,6 +1,11 @@
 Changelog
 =========
 
+[2.0.3] 2024-08-29
+------------------
+- Fix module name of error
+- Provide own sub-command for unit ID in pygarmin application (fixes issue #14)
+
 [2.0.2] 2024-08-01
 ------------------
 - Fix export error for runs and activities
